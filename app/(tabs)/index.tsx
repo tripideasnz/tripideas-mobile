@@ -1,7 +1,6 @@
 import { Image } from 'expo-image';
 import { StyleSheet } from 'react-native';
 
-import { HelloWave } from '@/components/hello-wave';
 import ParallaxScrollView from '@/components/parallax-scroll-view';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -16,16 +15,29 @@ export default function HomeScreen() {
           style={styles.reactLogo}
         />
       }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome to TripIdeas Mobile!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">TripIdeas</ThemedText>
-        <ThemedText>
-          Discover places, build collections and create itineraries.
-        </ThemedText>
-      </ThemedView>
+     <ThemedView style={styles.titleContainer}>
+  <ThemedText type="title">TripIdeas</ThemedText>
+</ThemedView>
+
+<ThemedView style={styles.stepContainer}>
+  <ThemedText type="subtitle">
+    Discover New Zealand
+  </ThemedText>
+
+  <ThemedText>
+    Find great places to visit, save favourites, create collections and build travel itineraries.
+  </ThemedText>
+</ThemedView>
+
+<ThemedView style={styles.stepContainer}>
+  <ThemedText type="subtitle">
+    Coming Soon
+  </ThemedText>
+
+  <ThemedText>
+    Maps, collections, trip planning and AI-powered itinerary building.
+  </ThemedText>
+</ThemedView>
       
 
     </ParallaxScrollView>
