@@ -1,33 +1,9 @@
-import { Image } from 'expo-image';
-import { Link } from 'expo-router';
 import { useEffect, useState } from 'react';
-import {
-  Pressable,
-  ScrollView,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { ScrollView, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { PlaceCard, type PlaceCardData } from '@/components/place-card';
 import { sanityClient } from '@/sanity/client';
-
-type Slug = {
-  current?: string;
-};
-
-type PlacePage = {
-  _id?: string;
-  title?: string;
-  subtitle?: string;
-  excerpt?: string;
-  h3?: string;
-  imageAlt?: string;
-  imageUrl?: string;
-  preview?: string;
-  seoDescription?: string;
-  slug?: Slug;
-};
 
 const SEARCH_QUERY = `
 *[
@@ -58,24 +34,10 @@ const SEARCH_QUERY = `
 }
 `;
 
-function getPlaceHeading(place: PlacePage) {
-  return place.subtitle?.trim() || place.h3?.trim();
-}
-
-function getPlacePreview(place: PlacePage) {
-  const preview = place.excerpt?.trim() || place.preview?.trim();
-
-  if (preview && preview.length > 24) {
-    return preview;
-  }
-
-  return place.seoDescription?.trim() || preview;
-}
-
 export default function SearchScreen() {
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
-  const [results, setResults] = useState<PlacePage[]>([]);
+  const [results, setResults] = useState<PlaceCardData[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -103,7 +65,7 @@ export default function SearchScreen() {
     setErrorMessage(null);
 
     sanityClient
-      .fetch<PlacePage[]>(SEARCH_QUERY, { term: `*${debouncedQuery}*` })
+      .fetch<PlaceCardData[]>(SEARCH_QUERY, { term: `*${debouncedQuery}*` })
       .then((data) => {
         if (!isMounted) {
           return;
@@ -190,74 +152,5 @@ export default function SearchScreen() {
         )}
       </ScrollView>
     </SafeAreaView>
-  );
-}
-
-function PlaceCard({ place }: { place: PlacePage }) {
-  const heading = getPlaceHeading(place);
-  const preview = getPlacePreview(place);
-
-  return (
-    <Link
-      href={{
-        pathname: '/place/[slug]',
-        params: { slug: place.slug?.current ?? '' },
-      }}
-      asChild>
-      <Pressable
-        disabled={!place.slug?.current}
-        style={{
-          backgroundColor: '#fff',
-          borderRadius: 14,
-          elevation: 2,
-          marginBottom: 24,
-          overflow: 'hidden',
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.12,
-          shadowRadius: 12,
-        }}>
-        {place.imageUrl ? (
-          <Image
-            source={{ uri: place.imageUrl }}
-            accessibilityLabel={place.imageAlt ?? place.title ?? 'Place image'}
-            style={{ aspectRatio: 16 / 9, width: '100%' }}
-            contentFit="cover"
-          />
-        ) : null}
-
-        <View style={{ paddingHorizontal: 16, paddingVertical: 16 }}>
-          <Text numberOfLines={2} style={{ fontSize: 20, fontWeight: '700' }}>
-            {place.title ?? 'Untitled place'}
-          </Text>
-
-          {heading ? (
-            <Text
-              numberOfLines={1}
-              style={{
-                color: '#717171',
-                fontSize: 14,
-                fontWeight: '600',
-                marginTop: 6,
-              }}>
-              {heading}
-            </Text>
-          ) : null}
-
-          {preview ? (
-            <Text
-              numberOfLines={3}
-              style={{
-                color: '#4a4a4a',
-                fontSize: 15,
-                lineHeight: 21,
-                marginTop: 10,
-              }}>
-              {preview}
-            </Text>
-          ) : null}
-        </View>
-      </Pressable>
-    </Link>
   );
 }
