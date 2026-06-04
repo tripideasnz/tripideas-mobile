@@ -3,21 +3,20 @@ import { Link, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
+import {
+  ContentBlocks,
+  getBlockText,
+  getPlainText,
+  type ContentBlock,
+} from '@/components/content-blocks';
 import { sanityClient } from '@/sanity/client';
-
-type TextBlock = {
-  children?: {
-    text?: string;
-  }[];
-  style?: string;
-};
 
 type IslandArticle = {
   imageAlt?: string;
   imageUrl?: string;
   maori?: string;
   preview?: string;
-  textBlocks?: TextBlock[];
+  textBlocks?: ContentBlock[];
   title?: string;
 };
 
@@ -57,63 +56,6 @@ const ISLAND_QUERY = `
   )
 }
 `;
-
-function getBlockText(block: TextBlock) {
-  return (block.children ?? [])
-    .map((child) => child.text)
-    .filter(Boolean)
-    .join('');
-}
-
-function getPlainText(blocks?: TextBlock[]) {
-  return (blocks ?? []).map(getBlockText).filter(Boolean).join('\n\n');
-}
-
-function ContentBlocks({ blocks }: { blocks?: TextBlock[] }) {
-  const safeBlocks = (blocks ?? []).filter((block) => getBlockText(block));
-
-  if (safeBlocks.length === 0) {
-    return null;
-  }
-
-  return (
-    <>
-      {safeBlocks.map((block, index) => {
-        const text = getBlockText(block);
-
-        if (block.style === 'h3') {
-          return (
-            <Text
-              key={`${block.style}-${index}`}
-              style={{
-                color: '#111',
-                fontSize: 22,
-                fontWeight: '700',
-                lineHeight: 28,
-                marginBottom: 10,
-                marginTop: index === 0 ? 0 : 18,
-              }}>
-              {text}
-            </Text>
-          );
-        }
-
-        return (
-          <Text
-            key={`${block.style ?? 'normal'}-${index}`}
-            style={{
-              color: '#333',
-              fontSize: 17,
-              lineHeight: 25,
-              marginBottom: 16,
-            }}>
-            {text}
-          </Text>
-        );
-      })}
-    </>
-  );
-}
 
 export default function IslandScreen() {
   const { slug } = useLocalSearchParams<{ slug?: string | string[] }>();
