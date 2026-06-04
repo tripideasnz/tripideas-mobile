@@ -5,28 +5,8 @@ import { Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { sanityClient } from '@/sanity/client';
-
-type CoverContent = {
-  backgroundAlt?: string;
-  backgroundUrl?: string;
-  logoAlt?: string;
-  logoUrl?: string;
-};
-
-const COVER_QUERY = `
-{
-  "home": *[_type == "home"][0]{
-    "backgroundAlt": coalesce(heroImage.alt, mainImage.alt, image.alt),
-    "backgroundUrl": coalesce(heroImage.asset->url, mainImage.asset->url, image.asset->url),
-    "logoAlt": logo.alt,
-    "logoUrl": logo.asset->url
-  },
-  "islands": *[_type == "islands"][0]{
-    "backgroundAlt": coalesce(north.heroImage.alt, north.mainImage.alt, north.image.alt),
-    "backgroundUrl": coalesce(north.heroImage.asset->url, north.mainImage.asset->url, north.image.asset->url)
-  }
-}
-`;
+import { COVER_QUERY } from '@/sanity/queries';
+import type { CoverContent, CoverResponse } from '@/sanity/types';
 
 export default function CoverScreen() {
   const [cover, setCover] = useState<CoverContent | null>(null);
@@ -35,7 +15,7 @@ export default function CoverScreen() {
     let isMounted = true;
 
     sanityClient
-      .fetch<{ home?: CoverContent; islands?: CoverContent } | null>(COVER_QUERY)
+      .fetch<CoverResponse | null>(COVER_QUERY)
       .then((data) => {
         if (!isMounted) {
           return;

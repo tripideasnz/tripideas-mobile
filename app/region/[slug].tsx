@@ -3,43 +3,13 @@ import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text } from 'react-native';
 
 import { sanityClient } from '@/sanity/client';
-
-type Slug = {
-  current?: string;
-};
-
-type SubRegion = {
-  _id?: string;
-  name?: string;
-  slug?: Slug;
-};
-
-type Region = {
-  _id?: string;
-  name?: string;
-  maori?: string;
-  slug?: Slug;
-  subRegions?: SubRegion[];
-};
-
-const REGION_QUERY = `
-*[_type == "region" && slug.current == $slug][0]{
-  _id,
-  name,
-  maori,
-  slug,
-  "subRegions": *[_type == "subRegion" && region._ref == ^._id] | order(name asc){
-    _id,
-    name,
-    slug
-  }
-}
-`;
+import { REGION_QUERY } from '@/sanity/queries';
+import type { RegionDetail } from '@/sanity/types';
 
 export default function RegionScreen() {
   const { slug } = useLocalSearchParams<{ slug?: string | string[] }>();
   const selectedSlug = Array.isArray(slug) ? slug[0] : slug;
-  const [region, setRegion] = useState<Region | null>(null);
+  const [region, setRegion] = useState<RegionDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -57,7 +27,7 @@ export default function RegionScreen() {
     setErrorMessage(null);
 
     sanityClient
-      .fetch<Region | null>(REGION_QUERY, { slug: selectedSlug })
+      .fetch<RegionDetail | null>(REGION_QUERY, { slug: selectedSlug })
       .then((data) => {
         if (!isMounted) {
           return;

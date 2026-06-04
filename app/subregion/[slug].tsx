@@ -2,44 +2,17 @@ import { Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text } from 'react-native';
 
-import { PlaceCard, type PlaceCardData } from '@/components/place-card';
+import { PlaceCard } from '@/components/place-card';
 import { sanityClient } from '@/sanity/client';
-
-type SubRegion = {
-  _id?: string;
-  name?: string;
-  slug?: {
-    current?: string;
-  };
-  places?: PlaceCardData[];
-};
+import { SUBREGION_QUERY } from '@/sanity/queries';
+import type { SubRegionDetail } from '@/sanity/types';
 
 const PAGE_SIZE = 10;
-
-const SUBREGION_QUERY = `
-*[_type == "subRegion" && slug.current == $slug][0]{
-  _id,
-  name,
-  slug,
-  "places": *[_type == "page" && subRegion._ref == ^._id] | order(title asc){
-    _id,
-    title,
-    subtitle,
-    excerpt,
-    "h3": body[_type == "block" && style == "h3"][0].children[0].text,
-    "imageAlt": mainImage.alt,
-    "imageUrl": mainImage.asset->url,
-    "preview": body[_type == "block" && style == "normal"][0].children[0].text,
-    "seoDescription": seo.description,
-    slug
-  }
-}
-`;
 
 export default function SubRegionScreen() {
   const { slug } = useLocalSearchParams<{ slug?: string | string[] }>();
   const selectedSlug = Array.isArray(slug) ? slug[0] : slug;
-  const [subRegion, setSubRegion] = useState<SubRegion | null>(null);
+  const [subRegion, setSubRegion] = useState<SubRegionDetail | null>(null);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -59,7 +32,7 @@ export default function SubRegionScreen() {
     setVisibleCount(PAGE_SIZE);
 
     sanityClient
-      .fetch<SubRegion | null>(SUBREGION_QUERY, { slug: selectedSlug })
+      .fetch<SubRegionDetail | null>(SUBREGION_QUERY, { slug: selectedSlug })
       .then((data) => {
         if (!isMounted) {
           return;

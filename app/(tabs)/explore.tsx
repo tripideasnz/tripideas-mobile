@@ -4,35 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PlaceCard, type PlaceCardData } from '@/components/place-card';
 import { sanityClient } from '@/sanity/client';
-
-const SEARCH_QUERY = `
-*[
-  _type == "page" &&
-  slug.current != null &&
-  (
-    title match $term ||
-    subtitle match $term ||
-    body[_type == "block" && style == "h3"].children[].text match $term ||
-    tags[]->name match $term ||
-    tags[]->title match $term ||
-    seo.keywords[] match $term ||
-    seo.description match $term ||
-    subRegion->name match $term ||
-    subRegion->region->name match $term
-  )
-] | order(title asc)[0...30]{
-  _id,
-  title,
-  subtitle,
-  excerpt,
-  "h3": body[_type == "block" && style == "h3"][0].children[0].text,
-  "imageAlt": mainImage.alt,
-  "imageUrl": mainImage.asset->url,
-  "preview": body[_type == "block" && style == "normal"][0].children[0].text,
-  "seoDescription": seo.description,
-  slug
-}
-`;
+import { SEARCH_QUERY } from '@/sanity/queries';
 
 export default function SearchScreen() {
   const [query, setQuery] = useState('');

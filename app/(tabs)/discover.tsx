@@ -5,65 +5,11 @@ import { Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { sanityClient } from '@/sanity/client';
-
-type Region = {
-  _id?: string;
-  _key?: string;
-  maori?: string;
-  name?: string;
-  slug?: {
-    current?: string;
-  };
-};
-
-type Island = {
-  imageAlt?: string;
-  imageUrl?: string;
-  maori?: string;
-  preview?: string;
-  regions?: Region[];
-  slug: 'north' | 'south';
-  title?: string;
-};
-
-type IslandsResponse = {
-  north?: Omit<Island, 'slug'>;
-  south?: Omit<Island, 'slug'>;
-};
-
-const ISLANDS_QUERY = `
-*[_type == "islands"][0]{
-  north{
-    title,
-    maori,
-    "imageAlt": coalesce(heroImage.alt, mainImage.alt, image.alt),
-    "imageUrl": coalesce(heroImage.asset->url, mainImage.asset->url, image.asset->url),
-    "preview": description[_type == "block" && style == "normal"][0].children[0].text,
-    regions[]->{
-      _id,
-      name,
-      maori,
-      slug
-    }
-  },
-  south{
-    title,
-    maori,
-    "imageAlt": coalesce(heroImage.alt, mainImage.alt, image.alt),
-    "imageUrl": coalesce(heroImage.asset->url, mainImage.asset->url, image.asset->url),
-    "preview": description[_type == "block" && style == "normal"][0].children[0].text,
-    regions[]->{
-      _id,
-      name,
-      maori,
-      slug
-    }
-  }
-}
-`;
+import { ISLANDS_QUERY } from '@/sanity/queries';
+import type { IslandsResponse, IslandSummary } from '@/sanity/types';
 
 export default function DiscoverScreen() {
-  const [islands, setIslands] = useState<Island[] | null>(null);
+  const [islands, setIslands] = useState<IslandSummary[] | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -79,7 +25,7 @@ export default function DiscoverScreen() {
           [
             data?.north ? { ...data.north, slug: 'north' as const } : null,
             data?.south ? { ...data.south, slug: 'south' as const } : null,
-          ].filter(Boolean) as Island[],
+          ].filter(Boolean) as IslandSummary[],
         );
       })
       .catch((error) => {
@@ -126,7 +72,7 @@ export default function DiscoverScreen() {
   );
 }
 
-function IslandCard({ island }: { island: Island }) {
+function IslandCard({ island }: { island: IslandSummary }) {
   return (
     <View
       style={{

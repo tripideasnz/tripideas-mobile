@@ -7,72 +7,10 @@ import {
   ContentBlocks,
   getBlockText,
   getPlainText,
-  type ContentBlock,
 } from '@/components/content-blocks';
 import { sanityClient } from '@/sanity/client';
-
-type Slug = {
-  current?: string;
-};
-
-type Coordinates = {
-  lat?: number;
-  lng?: number;
-};
-
-type RegionContext = {
-  name?: string;
-  maori?: string;
-  slug?: Slug;
-};
-
-type SubRegionContext = {
-  name?: string;
-  slug?: Slug;
-  region?: RegionContext;
-};
-
-type PlacePage = {
-  _id?: string;
-  title?: string;
-  subtitle?: string;
-  excerpt?: string;
-  h3?: string;
-  imageAlt?: string;
-  imageUrl?: string;
-  preview?: string;
-  seoDescription?: string;
-  textBlocks?: ContentBlock[];
-  coordinates?: Coordinates;
-  subRegion?: SubRegionContext;
-  slug?: Slug;
-};
-
-const PLACE_QUERY = `
-*[_type == "page" && slug.current == $slug][0]{
-  _id,
-  title,
-  subtitle,
-  excerpt,
-  "h3": body[_type == "block" && style == "h3"][0].children[0].text,
-  "imageAlt": mainImage.alt,
-  "imageUrl": mainImage.asset->url,
-  "preview": body[_type == "block" && style == "normal"][0].children[0].text,
-  "textBlocks": body[_type == "block" && style in ["normal", "h3"]],
-  "seoDescription": seo.description,
-  coordinates,
-  subRegion->{
-    name,
-    slug,
-    region->{
-      name,
-      maori,
-      slug
-    }
-  },
-  slug
-}
-`;
+import { PLACE_QUERY } from '@/sanity/queries';
+import type { PlacePage } from '@/sanity/types';
 
 function getPlaceHeading(place: PlacePage) {
   return place.subtitle?.trim() || place.h3?.trim();

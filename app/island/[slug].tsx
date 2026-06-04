@@ -7,55 +7,10 @@ import {
   ContentBlocks,
   getBlockText,
   getPlainText,
-  type ContentBlock,
 } from '@/components/content-blocks';
 import { sanityClient } from '@/sanity/client';
-
-type IslandArticle = {
-  imageAlt?: string;
-  imageUrl?: string;
-  maori?: string;
-  preview?: string;
-  textBlocks?: ContentBlock[];
-  title?: string;
-};
-
-type IslandResponse = {
-  island?: IslandArticle;
-};
-
-const ISLAND_QUERY = `
-*[_type == "islands"][0]{
-  "island": select(
-    $slug == "north" => north{
-      title,
-      maori,
-      "imageAlt": coalesce(article->mainImage.alt, heroImage.alt, mainImage.alt, image.alt),
-      "imageUrl": coalesce(article->mainImage.asset->url, heroImage.asset->url, mainImage.asset->url, image.asset->url),
-      "preview": coalesce(
-        article->excerpt,
-        article->seo.description,
-        article->body[_type == "block" && style == "normal"][0].children[0].text,
-        description[_type == "block" && style == "normal"][0].children[0].text
-      ),
-      "textBlocks": coalesce(article->body[_type == "block" && style in ["normal", "h3"]], description[_type == "block" && style in ["normal", "h3"]])
-    },
-    $slug == "south" => south{
-      title,
-      maori,
-      "imageAlt": coalesce(article->mainImage.alt, heroImage.alt, mainImage.alt, image.alt),
-      "imageUrl": coalesce(article->mainImage.asset->url, heroImage.asset->url, mainImage.asset->url, image.asset->url),
-      "preview": coalesce(
-        article->excerpt,
-        article->seo.description,
-        article->body[_type == "block" && style == "normal"][0].children[0].text,
-        description[_type == "block" && style == "normal"][0].children[0].text
-      ),
-      "textBlocks": coalesce(article->body[_type == "block" && style in ["normal", "h3"]], description[_type == "block" && style in ["normal", "h3"]])
-    }
-  )
-}
-`;
+import { ISLAND_QUERY } from '@/sanity/queries';
+import type { IslandArticle, IslandResponse } from '@/sanity/types';
 
 export default function IslandScreen() {
   const { slug } = useLocalSearchParams<{ slug?: string | string[] }>();

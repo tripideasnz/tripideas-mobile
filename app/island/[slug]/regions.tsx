@@ -3,49 +3,8 @@ import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import { sanityClient } from '@/sanity/client';
-
-type Region = {
-  _id?: string;
-  maori?: string;
-  name?: string;
-  slug?: {
-    current?: string;
-  };
-};
-
-type IslandRegions = {
-  regions?: Region[];
-  title?: string;
-};
-
-type IslandRegionsResponse = {
-  island?: IslandRegions;
-};
-
-const ISLAND_REGIONS_QUERY = `
-*[_type == "islands"][0]{
-  "island": select(
-    $slug == "north" => north{
-      title,
-      regions[]->{
-        _id,
-        name,
-        maori,
-        slug
-      }
-    },
-    $slug == "south" => south{
-      title,
-      regions[]->{
-        _id,
-        name,
-        maori,
-        slug
-      }
-    }
-  )
-}
-`;
+import { ISLAND_REGIONS_QUERY } from '@/sanity/queries';
+import type { IslandRegions, IslandRegionsResponse } from '@/sanity/types';
 
 export default function IslandRegionsScreen() {
   const { slug } = useLocalSearchParams<{ slug?: string | string[] }>();
