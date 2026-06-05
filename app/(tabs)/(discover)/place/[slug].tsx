@@ -1,5 +1,6 @@
-import { Stack, useLocalSearchParams } from 'expo-router';
 import { Image } from 'expo-image';
+import * as Linking from 'expo-linking';
+import { Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
@@ -8,6 +9,7 @@ import {
   getBlockText,
   getPlainText,
 } from '@/components/content-blocks';
+import { PlaceMapPreview } from '@/components/place-map-preview';
 import { SavePlaceButton } from '@/components/save-place-button';
 import { useSavedPlaces } from '@/saved/provider';
 import { sanityClient } from '@/sanity/client';
@@ -43,15 +45,15 @@ function getContextText(place: PlacePage) {
   return regionName || subRegionName;
 }
 
-function getMarkerText(place: PlacePage) {
-  const lat = place.coordinates?.lat;
-  const lng = place.coordinates?.lng;
+function getCoordinates(place: PlacePage | null) {
+  const lat = place?.coordinates?.lat;
+  const lng = place?.coordinates?.lng;
 
   if (typeof lat === 'number' && typeof lng === 'number') {
-    return `Location marker: ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+    return { latitude: lat, longitude: lng };
   }
 
-  return 'Location marker: not available';
+  return null;
 }
 
 export default function PlaceScreen() {
@@ -62,6 +64,7 @@ export default function PlaceScreen() {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [mapMessage, setMapMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (!selectedSlug) {
@@ -75,6 +78,7 @@ export default function PlaceScreen() {
 
     setIsLoading(true);
     setErrorMessage(null);
+    setMapMessage(null);
     setIsExpanded(false);
 
     sanityClient
@@ -114,10 +118,10 @@ export default function PlaceScreen() {
   const hasBodyBlocks = (place?.textBlocks ?? []).some((block) => getBlockText(block));
   const canExpand = Boolean(fullText && preview && fullText !== preview);
   const contextText = place ? getContextText(place) : undefined;
-  const markerText = place ? getMarkerText(place) : undefined;
   const placeId = place?._id;
   const canSavePlace = Boolean(placeId);
   const placeIsSaved = isSaved(placeId);
+  const coordinates = getCoordinates(place);
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: '#fff' }}>
@@ -225,23 +229,90 @@ export default function PlaceScreen() {
               </Pressable>
             ) : null}
 
-            <View
-              style={{
-                borderColor: '#ddd',
-                borderRadius: 8,
-                borderWidth: 1,
-                padding: 14,
-              }}>
-              <Text style={{ fontSize: 15, fontWeight: '700', marginBottom: 6 }}>
-                Map diagnostics
-              </Text>
-              <Text style={{ color: '#4a4a4a', fontSize: 14 }}>
-                {markerText}
-              </Text>
-              <Text style={{ color: '#4a4a4a', fontSize: 14, marginTop: 4 }}>
-                Slug: {place.slug?.current ?? selectedSlug ?? 'Unknown'}
-              </Text>
-            </View>
+            {coordinates ? (
+              <View style={{ marginBottom: 24 }}>
+                <Text
+                  style={{
+                    fontSize: 22,
+                    fontWeight: '700',
+                    marginBottom: 12,
+                  }}>
+                  Location
+                </Text>
+                <PlaceMapPreview
+                  latitude={coordinates.latitude}
+                  longitude={coordinates.longitude}
+                  title={place.title ?? 'Selected place'}
+                />
+                <Pressable
+                  onPress={async () => {
+                    const query = encodeURIComponent(
+                      `${coordinates.latitude},${coordinates.longitude}`
+                    );
+
+                    try {
+                      await Linking.openURL(
+                        `https://www.google.com/maps/search/?api=1&query=${query}`
+                      );
+                    } catch (error) {
+                      console.error(error);
+                      setMapMessage('Unable to open maps right now.');
+                    }
+                  }}
+                  style={{
+                    alignItems: 'center',
+                    backgroundColor: '#111',
+                    borderRadius: 10,
+                    marginTop: 12,
+                    paddingVertical: 14,
+                  }}>
+                  <Text
+                    style={{
+                      color: '#fff',
+                      fontSize: 16,
+                      fontWeight: '700',
+                    }}>
+                    Show on Google Maps
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: true }}
+                  disabled
+                  style={{
+                    alignItems: 'center',
+                    borderColor: '#d8d8d8',
+                    borderRadius: 10,
+                    borderWidth: 1,
+                    marginTop: 10,
+                    paddingVertical: 14,
+                  }}>
+                  <Text
+                    style={{
+                      color: '#717171',
+                      fontSize: 16,
+                      fontWeight: '700',
+                    }}>
+                    Show on TripIdeas Map
+                  </Text>
+                  <Text style={{ color: '#717171', fontSize: 13, marginTop: 3 }}>
+                    Coming soon
+                  </Text>
+                </Pressable>
+
+                {mapMessage ? (
+                  <Text
+                    style={{
+                      color: '#717171',
+                      fontSize: 14,
+                      marginTop: 10,
+                    }}>
+                    {mapMessage}
+                  </Text>
+                ) : null}
+              </View>
+            ) : null}
           </View>
         </>
       )}
