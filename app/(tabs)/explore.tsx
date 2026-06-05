@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react';
 import { ScrollView, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { PlaceCard, type PlaceCardData } from '@/components/place-card';
+import { PlaceCard } from '@/components/place-card';
 import { sanityClient } from '@/sanity/client';
 import { SEARCH_QUERY } from '@/sanity/queries';
+import type { PlaceCardData } from '@/types/content';
 
 export default function SearchScreen() {
   const [query, setQuery] = useState('');

@@ -1,9 +1,7 @@
 import type { ContentBlock } from '@/components/content-blocks';
-import type { PlaceCardData } from '@/components/place-card';
+import type { PlaceCardData, Slug } from '@/types/content';
 
-export type Slug = {
-  current?: string;
-};
+export type { PlaceCardData, Slug };
 
 export type CoverContent = {
   backgroundAlt?: string;

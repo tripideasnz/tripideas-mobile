@@ -190,3 +190,18 @@ export const SEARCH_QUERY = `
   slug
 }
 `;
+
+export const PLACE_CARDS_BY_IDS_QUERY = `
+*[_type == "page" && _id in $ids]{
+  _id,
+  title,
+  subtitle,
+  excerpt,
+  "h3": body[_type == "block" && style == "h3"][0].children[0].text,
+  "imageAlt": mainImage.alt,
+  "imageUrl": mainImage.asset->url,
+  "preview": body[_type == "block" && style == "normal"][0].children[0].text,
+  "seoDescription": seo.description,
+  slug
+}
+`;

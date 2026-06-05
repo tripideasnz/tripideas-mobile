@@ -2,20 +2,7 @@ import { Image } from 'expo-image';
 import { Link } from 'expo-router';
 import { Pressable, Text, View } from 'react-native';
 
-export type PlaceCardData = {
-  _id?: string;
-  title?: string;
-  subtitle?: string;
-  excerpt?: string;
-  h3?: string;
-  imageAlt?: string;
-  imageUrl?: string;
-  preview?: string;
-  seoDescription?: string;
-  slug?: {
-    current?: string;
-  };
-};
+import type { PlaceCardData } from '@/types/content';
 
 function getPlaceHeading(place: PlaceCardData) {
   return place.subtitle?.trim() || place.h3?.trim();
