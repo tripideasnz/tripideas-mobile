@@ -8,6 +8,8 @@ import {
   getBlockText,
   getPlainText,
 } from '@/components/content-blocks';
+import { SavePlaceButton } from '@/components/save-place-button';
+import { useSavedPlaces } from '@/saved/provider';
 import { sanityClient } from '@/sanity/client';
 import { PLACE_QUERY } from '@/sanity/queries';
 import type { PlacePage } from '@/sanity/types';
@@ -55,6 +57,7 @@ function getMarkerText(place: PlacePage) {
 export default function PlaceScreen() {
   const { slug } = useLocalSearchParams<{ slug?: string | string[] }>();
   const selectedSlug = Array.isArray(slug) ? slug[0] : slug;
+  const { isSaved, toggleSavedPlace } = useSavedPlaces();
   const [place, setPlace] = useState<PlacePage | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -112,6 +115,9 @@ export default function PlaceScreen() {
   const canExpand = Boolean(fullText && preview && fullText !== preview);
   const contextText = place ? getContextText(place) : undefined;
   const markerText = place ? getMarkerText(place) : undefined;
+  const placeId = place?._id;
+  const canSavePlace = Boolean(placeId);
+  const placeIsSaved = isSaved(placeId);
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: '#fff' }}>
@@ -147,9 +153,36 @@ export default function PlaceScreen() {
               </Text>
             ) : null}
 
-            <Text style={{ fontSize: 34, fontWeight: '700', marginBottom: 8 }}>
-              {place.title ?? 'Untitled place'}
-            </Text>
+            <View
+              style={{
+                alignItems: 'flex-start',
+                flexDirection: 'row',
+                gap: 12,
+                justifyContent: 'space-between',
+                marginBottom: 8,
+              }}>
+              <Text
+                style={{
+                  flex: 1,
+                  fontSize: 34,
+                  fontWeight: '700',
+                }}>
+                {place.title ?? 'Untitled place'}
+              </Text>
+
+              {canSavePlace ? (
+                <SavePlaceButton
+                  isSaved={placeIsSaved}
+                  onPress={() => {
+                    void toggleSavedPlace(placeId);
+                  }}
+                  style={{
+                    borderColor: '#111',
+                    borderWidth: 1,
+                  }}
+                />
+              ) : null}
+            </View>
 
             {heading ? (
               <Text
