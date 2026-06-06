@@ -19,6 +19,14 @@ export default function RootLayout() {
             options={{ headerShown: false, title: '' }}
           />
           <Stack.Screen name="trips/[tripId]" options={{ title: 'My Trip' }} />
+          <Stack.Screen
+            name="trips/[tripId]/map"
+            options={{ title: 'Trip Map' }}
+          />
+          <Stack.Screen
+            name="trips/[tripId]/shared"
+            options={{ title: 'Shared Trip Preview' }}
+          />
           <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
         </Stack>
       </MyTripsProvider>

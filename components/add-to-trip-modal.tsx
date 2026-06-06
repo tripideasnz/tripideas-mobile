@@ -33,7 +33,11 @@ export function AddToTripModal({
           <Pressable
             accessibilityRole="button"
             onPress={onClose}
-            style={{ paddingHorizontal: 4, paddingVertical: 8 }}>
+            style={({ pressed }) => ({
+              opacity: pressed ? 0.45 : 1,
+              paddingHorizontal: 4,
+              paddingVertical: 8,
+            })}>
             <Text style={{ fontSize: 16, fontWeight: '700' }}>Done</Text>
           </Pressable>
         </View>
@@ -52,17 +56,16 @@ export function AddToTripModal({
               return (
                 <Pressable
                   accessibilityRole="button"
-                  disabled={alreadyAdded}
                   key={trip.id}
                   onPress={() => onSelectTrip(trip.id)}
-                  style={{
+                  style={({ pressed }) => ({
                     borderColor: '#e2e2e2',
                     borderRadius: 12,
                     borderWidth: 1,
                     marginBottom: 12,
-                    opacity: alreadyAdded ? 0.55 : 1,
+                    opacity: pressed ? 0.55 : alreadyAdded ? 0.75 : 1,
                     padding: 16,
-                  }}>
+                  })}>
                   <Text style={{ fontSize: 18, fontWeight: '700' }}>
                     {trip.name}
                   </Text>

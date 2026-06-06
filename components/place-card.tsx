@@ -20,7 +20,13 @@ function getPlacePreview(place: PlaceCardData) {
   return place.seoDescription?.trim() || preview;
 }
 
-export function PlaceCard({ place }: { place: PlaceCardData }) {
+export function PlaceCard({
+  place,
+  showSaveButton = true,
+}: {
+  place: PlaceCardData;
+  showSaveButton?: boolean;
+}) {
   const router = useRouter();
   const { isSaved, toggleSavedPlace } = useSavedPlaces();
   const heading = getPlaceHeading(place);
@@ -64,7 +70,7 @@ export function PlaceCard({ place }: { place: PlaceCardData }) {
           />
         ) : null}
 
-        {canSavePlace ? (
+        {canSavePlace && showSaveButton ? (
           <SavePlaceButton
             isSaved={placeIsSaved}
             onPress={(event) => {

@@ -150,6 +150,7 @@ export const PLACE_QUERY = `
   "seoDescription": seo.description,
   coordinates,
   subRegion->{
+    _id,
     name,
     slug,
     region->{
@@ -157,6 +158,23 @@ export const PLACE_QUERY = `
       maori,
       slug
     }
+  },
+  "nearbyPlaces": *[
+    _type == "page" &&
+    _id != ^._id &&
+    slug.current != null &&
+    subRegion._ref == ^.subRegion._ref
+  ] | order(title asc)[0...4]{
+    _id,
+    title,
+    subtitle,
+    excerpt,
+    "h3": body[_type == "block" && style == "h3"][0].children[0].text,
+    "imageAlt": mainImage.alt,
+    "imageUrl": mainImage.asset->url,
+    "preview": body[_type == "block" && style == "normal"][0].children[0].text,
+    "seoDescription": seo.description,
+    slug
   },
   slug
 }
@@ -194,6 +212,7 @@ export const SEARCH_QUERY = `
 export const PLACE_CARDS_BY_IDS_QUERY = `
 *[_type == "page" && _id in $ids]{
   _id,
+  coordinates,
   title,
   subtitle,
   excerpt,

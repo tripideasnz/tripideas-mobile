@@ -1,6 +1,13 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import {
+  Alert,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AddToTripModal } from '@/components/add-to-trip-modal';
@@ -121,14 +128,14 @@ export default function SavedScreen() {
                   setNewTripName('');
                 }
               }}
-              style={{
+              style={({ pressed }) => ({
                 alignItems: 'center',
                 backgroundColor: '#111',
                 borderRadius: 10,
                 justifyContent: 'center',
-                opacity: newTripName.trim() ? 1 : 0.4,
+                opacity: !newTripName.trim() ? 0.4 : pressed ? 0.7 : 1,
                 paddingHorizontal: 18,
-              }}>
+              })}>
               <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>
                 Create
               </Text>
@@ -150,13 +157,14 @@ export default function SavedScreen() {
                     params: { tripId: trip.id },
                   })
                 }
-                style={{
+                style={({ pressed }) => ({
                   borderColor: '#e2e2e2',
                   borderRadius: 12,
                   borderWidth: 1,
                   marginBottom: 10,
+                  opacity: pressed ? 0.65 : 1,
                   padding: 16,
-                }}>
+                })}>
                 <Text style={{ fontSize: 18, fontWeight: '700' }}>
                   {trip.name}
                 </Text>
@@ -195,15 +203,16 @@ export default function SavedScreen() {
                   <Pressable
                     accessibilityRole="button"
                     onPress={() => setSelectedPlaceId(place._id ?? null)}
-                    style={{
+                    style={({ pressed }) => ({
                       alignItems: 'center',
                       borderColor: '#111',
                       borderRadius: 10,
                       borderWidth: 1,
                       marginBottom: 16,
                       marginTop: -12,
+                      opacity: pressed ? 0.55 : 1,
                       paddingVertical: 12,
-                    }}>
+                    })}>
                     <Text style={{ fontSize: 16, fontWeight: '700' }}>
                       Add to trip
                     </Text>
@@ -226,8 +235,19 @@ export default function SavedScreen() {
             return;
           }
 
+          const selectedTrip = trips.find((trip) => trip.id === tripId);
+          const alreadyAdded = selectedTrip?.places.some(
+            (place) => place.placeId === selectedPlaceId
+          );
+
+          if (alreadyAdded) {
+            Alert.alert('This place is already in that trip');
+            return;
+          }
+
           await addPlaceToTrip(tripId, selectedPlaceId);
           setSelectedPlaceId(null);
+          Alert.alert('Added to My Trip');
         }}
         placeId={selectedPlaceId}
         trips={trips}

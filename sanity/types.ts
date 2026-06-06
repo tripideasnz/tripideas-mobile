@@ -1,7 +1,7 @@
 import type { ContentBlock } from '@/components/content-blocks';
-import type { PlaceCardData, Slug } from '@/types/content';
+import type { Coordinates, PlaceCardData, Slug } from '@/types/content';
 
-export type { PlaceCardData, Slug };
+export type { Coordinates, PlaceCardData, Slug };
 
 export type CoverContent = {
   backgroundAlt?: string;
@@ -79,11 +79,6 @@ export type SubRegionDetail = {
   places?: PlaceCardData[];
 };
 
-export type Coordinates = {
-  lat?: number;
-  lng?: number;
-};
-
 export type RegionContext = {
   name?: string;
   maori?: string;
@@ -91,6 +86,7 @@ export type RegionContext = {
 };
 
 export type SubRegionContext = {
+  _id?: string;
   name?: string;
   slug?: Slug;
   region?: RegionContext;
@@ -99,5 +95,6 @@ export type SubRegionContext = {
 export type PlacePage = PlaceCardData & {
   textBlocks?: ContentBlock[];
   coordinates?: Coordinates;
+  nearbyPlaces?: PlaceCardData[];
   subRegion?: SubRegionContext;
 };

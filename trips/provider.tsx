@@ -17,6 +17,7 @@ type MyTripsContextValue = {
   deleteTrip: (tripId: string) => Promise<void>;
   getTrip: (tripId?: string | null) => MyTrip | undefined;
   isLoading: boolean;
+  removePlaceFromTrip: (tripId: string, placeId: string) => Promise<void>;
   renameTrip: (tripId: string, name: string) => Promise<void>;
   trips: MyTrip[];
   updatePlaceNote: (
@@ -179,6 +180,25 @@ export function MyTripsProvider({ children }: PropsWithChildren) {
     [persistUpdate]
   );
 
+  const removePlaceFromTrip = useCallback(
+    async (tripId: string, placeId: string) => {
+      await persistUpdate((currentTrips) =>
+        currentTrips.map((trip) =>
+          trip.id === tripId
+            ? {
+                ...trip,
+                places: trip.places.filter(
+                  (place) => place.placeId !== placeId
+                ),
+                updatedAt: new Date().toISOString(),
+              }
+            : trip
+        )
+      );
+    },
+    [persistUpdate]
+  );
+
   const updatePlaceNote = useCallback(
     async (tripId: string, placeId: string, note: string) => {
       await persistUpdate((currentTrips) =>
@@ -210,6 +230,7 @@ export function MyTripsProvider({ children }: PropsWithChildren) {
       deleteTrip,
       getTrip,
       isLoading,
+      removePlaceFromTrip,
       renameTrip,
       trips,
       updatePlaceNote,
@@ -221,6 +242,7 @@ export function MyTripsProvider({ children }: PropsWithChildren) {
       deleteTrip,
       getTrip,
       isLoading,
+      removePlaceFromTrip,
       renameTrip,
       trips,
       updatePlaceNote,
