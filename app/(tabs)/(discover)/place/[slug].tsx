@@ -1,6 +1,6 @@
 import { Image } from 'expo-image';
 import * as Linking from 'expo-linking';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
@@ -10,6 +10,7 @@ import {
   getPlainText,
 } from '@/components/content-blocks';
 import { PlaceMapPreview } from '@/components/place-map-preview';
+import { PlaceCard } from '@/components/place-card';
 import { SavePlaceButton } from '@/components/save-place-button';
 import { useSavedPlaces } from '@/saved/provider';
 import { sanityClient } from '@/sanity/client';
@@ -59,6 +60,7 @@ function getCoordinates(place: PlacePage | null) {
 export default function PlaceScreen() {
   const { slug } = useLocalSearchParams<{ slug?: string | string[] }>();
   const selectedSlug = Array.isArray(slug) ? slug[0] : slug;
+  const router = useRouter();
   const { isSaved, toggleSavedPlace } = useSavedPlaces();
   const [place, setPlace] = useState<PlacePage | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -122,6 +124,21 @@ export default function PlaceScreen() {
   const canSavePlace = Boolean(placeId);
   const placeIsSaved = isSaved(placeId);
   const coordinates = getCoordinates(place);
+  const nearbyPlaces = (place?.nearbyPlaces ?? []).filter(Boolean).slice(0, 4);
+  const openTripIdeasMap = () => {
+    if (!coordinates) {
+      return;
+    }
+
+    router.push({
+      pathname: '/map',
+      params: {
+        lat: String(coordinates.latitude),
+        lng: String(coordinates.longitude),
+        title,
+      },
+    });
+  };
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: '#fff' }}>
@@ -242,6 +259,7 @@ export default function PlaceScreen() {
                 <PlaceMapPreview
                   latitude={coordinates.latitude}
                   longitude={coordinates.longitude}
+                  onPress={openTripIdeasMap}
                   title={place.title ?? 'Selected place'}
                 />
                 <Pressable
@@ -278,8 +296,7 @@ export default function PlaceScreen() {
 
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityState={{ disabled: true }}
-                  disabled
+                  onPress={openTripIdeasMap}
                   style={{
                     alignItems: 'center',
                     borderColor: '#d8d8d8',
@@ -296,9 +313,6 @@ export default function PlaceScreen() {
                     }}>
                     Show on TripIdeas Map
                   </Text>
-                  <Text style={{ color: '#717171', fontSize: 13, marginTop: 3 }}>
-                    Coming soon
-                  </Text>
                 </Pressable>
 
                 {mapMessage ? (
@@ -313,6 +327,30 @@ export default function PlaceScreen() {
                 ) : null}
               </View>
             ) : null}
+
+            <View style={{ marginBottom: 8 }}>
+              <Text
+                style={{
+                  fontSize: 22,
+                  fontWeight: '700',
+                  marginBottom: 12,
+                }}>
+                Nearby Places
+              </Text>
+
+              {nearbyPlaces.length > 0 ? (
+                nearbyPlaces.map((nearbyPlace, index) => (
+                  <PlaceCard
+                    key={nearbyPlace._id ?? nearbyPlace.slug?.current ?? index}
+                    place={nearbyPlace}
+                  />
+                ))
+              ) : (
+                <Text style={{ color: '#717171', fontSize: 16 }}>
+                  No nearby places found yet.
+                </Text>
+              )}
+            </View>
           </View>
         </>
       )}

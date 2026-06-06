@@ -25,7 +25,18 @@ export const ISLANDS_QUERY = `
       _id,
       name,
       maori,
-      slug
+      slug,
+      "imageAlt": coalesce(heroImage.alt, mainImage.alt, image.alt),
+      "imageUrl": coalesce(heroImage.asset->url, mainImage.asset->url, image.asset->url),
+      "subRegions": *[_type == "subRegion" && region._ref == ^._id] | order(name asc){
+        _id,
+        name,
+        maori,
+        slug,
+        "imageAlt": coalesce(heroImage.alt, mainImage.alt, image.alt),
+        "imageUrl": coalesce(heroImage.asset->url, mainImage.asset->url, image.asset->url),
+        "placeCount": count(*[_type == "page" && subRegion._ref == ^._id])
+      }
     }
   },
   south{
@@ -38,7 +49,18 @@ export const ISLANDS_QUERY = `
       _id,
       name,
       maori,
-      slug
+      slug,
+      "imageAlt": coalesce(heroImage.alt, mainImage.alt, image.alt),
+      "imageUrl": coalesce(heroImage.asset->url, mainImage.asset->url, image.asset->url),
+      "subRegions": *[_type == "subRegion" && region._ref == ^._id] | order(name asc){
+        _id,
+        name,
+        maori,
+        slug,
+        "imageAlt": coalesce(heroImage.alt, mainImage.alt, image.alt),
+        "imageUrl": coalesce(heroImage.asset->url, mainImage.asset->url, image.asset->url),
+        "placeCount": count(*[_type == "page" && subRegion._ref == ^._id])
+      }
     }
   }
 }

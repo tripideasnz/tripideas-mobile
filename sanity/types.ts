@@ -18,14 +18,21 @@ export type CoverResponse = {
 export type Region = {
   _id?: string;
   _key?: string;
+  imageAlt?: string;
+  imageUrl?: string;
   maori?: string;
   name?: string;
   slug?: Slug;
+  subRegions?: SubRegionSummary[];
 };
 
 export type SubRegionSummary = {
   _id?: string;
+  imageAlt?: string;
+  imageUrl?: string;
+  maori?: string;
   name?: string;
+  placeCount?: number;
   slug?: Slug;
 };
 

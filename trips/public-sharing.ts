@@ -121,19 +121,11 @@ export function buildPublicTripOpenGraphData(
 export async function createPublicTripShare(
   snapshot: PublicTripSnapshot
 ): Promise<CreatePublicTripShareResult> {
-  console.log('[public-trip-share] endpoint', PUBLIC_TRIP_SHARE_API_URL);
-  console.log('[public-trip-share] fetch starting');
-
   try {
     const response = await fetch(PUBLIC_TRIP_SHARE_API_URL, {
       body: JSON.stringify(snapshot),
       headers: { 'Content-Type': 'application/json' },
       method: 'POST',
-    });
-
-    console.log('[public-trip-share] response received', {
-      ok: response.ok,
-      status: response.status,
     });
 
     if (!response.ok) {
@@ -164,11 +156,7 @@ export async function createPublicTripShare(
       status: 'created',
       url: data.url,
     };
-  } catch (error) {
-    console.log('[public-trip-share] fetch threw', {
-      message: error instanceof Error ? error.message : 'Unknown fetch error',
-      name: error instanceof Error ? error.name : undefined,
-    });
+  } catch {
     return { reason: 'request-failed', status: 'unavailable' };
   }
 }

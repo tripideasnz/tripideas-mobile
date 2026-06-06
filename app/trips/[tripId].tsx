@@ -202,7 +202,7 @@ export default function TripDetailScreen() {
           headerBackVisible: false,
           headerLeft: () => (
             <Pressable
-              accessibilityLabel="Back to Saved Places"
+              accessibilityLabel="Back to Saved"
               accessibilityRole="button"
               hitSlop={8}
               onPress={() => router.replace('/saved')}
@@ -511,7 +511,7 @@ export default function TripDetailScreen() {
             })
           ) : (
             <Text style={{ color: '#717171', fontSize: 16 }}>
-              No places in this trip yet. Add one from Saved Places.
+              No places in this trip yet. Add one from Favourites.
             </Text>
           )}
 

@@ -1,3 +1,4 @@
+import { getTripImages } from '@/trips/images';
 import type { MyTrip } from '@/trips/types';
 import type { PlaceCardData } from '@/types/content';
 
@@ -25,19 +26,6 @@ export type TripShareCardData = {
   title: string;
 };
 
-function getOrderedPlaces(trip: MyTrip, places: PlaceCardData[]) {
-  const placesById = new Map(
-    places
-      .filter((place) => place._id)
-      .map((place) => [place._id as string, place])
-  );
-
-  return trip.places.flatMap((tripPlace) => {
-    const place = placesById.get(tripPlace.placeId);
-    return place ? [place] : [];
-  });
-}
-
 function getShortNote(note: string) {
   const trimmedNote = note.trim();
 
@@ -54,17 +42,14 @@ export function buildTripShareCardData({
   trip,
   places,
 }: BuildTripShareCardDataOptions): TripShareCardData {
-  const orderedPlaces = getOrderedPlaces(trip, places);
-  const heroPlace = orderedPlaces.find((place) => place.imageUrl);
+  const tripImages = getTripImages(trip, places);
+  const heroImage = tripImages[0];
   const note = getShortNote(trip.note);
 
   return {
-    coverImageAlt:
-      heroPlace?.imageAlt ?? heroPlace?.title ?? `${trip.name} trip image`,
-    coverImageUrl: heroPlace?.imageUrl,
-    galleryImageUrls: orderedPlaces
-      .flatMap((place) => (place.imageUrl ? [place.imageUrl] : []))
-      .slice(0, 4),
+    coverImageAlt: heroImage?.alt,
+    coverImageUrl: heroImage?.url,
+    galleryImageUrls: tripImages.map((image) => image.url).slice(0, 4),
     logoAlt,
     logoUrl,
     note: note || undefined,

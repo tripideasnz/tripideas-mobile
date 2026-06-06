@@ -23,9 +23,11 @@ function getPlacePreview(place: PlaceCardData) {
 export function PlaceCard({
   place,
   showSaveButton = true,
+  showSnippet = false,
 }: {
   place: PlaceCardData;
   showSaveButton?: boolean;
+  showSnippet?: boolean;
 }) {
   const router = useRouter();
   const { isSaved, toggleSavedPlace } = useSavedPlaces();
@@ -91,7 +93,7 @@ export function PlaceCard({
           {place.title ?? 'Untitled place'}
         </Text>
 
-        {heading ? (
+        {showSnippet && heading ? (
           <Text
             numberOfLines={1}
             style={{
@@ -104,7 +106,7 @@ export function PlaceCard({
           </Text>
         ) : null}
 
-        {preview ? (
+        {showSnippet && preview ? (
           <Text
             numberOfLines={3}
             style={{

@@ -16,7 +16,9 @@ export function SavePlaceButton({
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={isSaved ? 'Remove from saved places' : 'Save place'}
+      accessibilityLabel={
+        isSaved ? 'Remove from favourites' : 'Add to favourites'
+      }
       hitSlop={8}
       onPress={onPress}
       style={({ pressed }) => [
