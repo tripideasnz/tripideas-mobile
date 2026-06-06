@@ -89,12 +89,14 @@ export function buildPublicTripSnapshot({
 
       return {
         coordinates,
-        imageAlt: place?.imageAlt,
+        imageAlt:
+          typeof place?.imageAlt === 'string' ? place.imageAlt : undefined,
         imageUrl: place?.imageUrl,
         note: tripPlace.note,
         placeId: tripPlace.placeId,
         slug: place?.slug?.current,
-        subtitle: place?.subtitle,
+        subtitle:
+          typeof place?.subtitle === 'string' ? place.subtitle : undefined,
         title: place?.title?.trim() || 'Untitled place',
       };
     }),
@@ -119,11 +121,19 @@ export function buildPublicTripOpenGraphData(
 export async function createPublicTripShare(
   snapshot: PublicTripSnapshot
 ): Promise<CreatePublicTripShareResult> {
+  console.log('[public-trip-share] endpoint', PUBLIC_TRIP_SHARE_API_URL);
+  console.log('[public-trip-share] fetch starting');
+
   try {
     const response = await fetch(PUBLIC_TRIP_SHARE_API_URL, {
       body: JSON.stringify(snapshot),
       headers: { 'Content-Type': 'application/json' },
       method: 'POST',
+    });
+
+    console.log('[public-trip-share] response received', {
+      ok: response.ok,
+      status: response.status,
     });
 
     if (!response.ok) {
@@ -155,7 +165,10 @@ export async function createPublicTripShare(
       url: data.url,
     };
   } catch (error) {
-    console.error(error);
+    console.log('[public-trip-share] fetch threw', {
+      message: error instanceof Error ? error.message : 'Unknown fetch error',
+      name: error instanceof Error ? error.name : undefined,
+    });
     return { reason: 'request-failed', status: 'unavailable' };
   }
 }
