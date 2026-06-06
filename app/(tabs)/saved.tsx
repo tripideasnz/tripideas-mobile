@@ -1,17 +1,29 @@
+import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ScrollView, Text } from 'react-native';
+import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AddToTripModal } from '@/components/add-to-trip-modal';
 import { PlaceCard } from '@/components/place-card';
 import { useSavedPlaces } from '@/saved/provider';
 import { fetchPlaceCardsByIds } from '@/sanity/place-cards';
+import { useMyTrips } from '@/trips/provider';
 import type { PlaceCardData } from '@/types/content';
 
 export default function SavedScreen() {
+  const router = useRouter();
   const { isLoading: isLoadingSavedIds, savedPlaceIds } = useSavedPlaces();
+  const {
+    addPlaceToTrip,
+    createTrip,
+    isLoading: isLoadingTrips,
+    trips,
+  } = useMyTrips();
   const [places, setPlaces] = useState<PlaceCardData[]>([]);
   const [isLoadingPlaces, setIsLoadingPlaces] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [newTripName, setNewTripName] = useState('');
+  const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
 
   useEffect(() => {
     if (isLoadingSavedIds) {
@@ -70,6 +82,102 @@ export default function SavedScreen() {
           Saved
         </Text>
 
+        <View style={{ marginBottom: 32 }}>
+          <Text style={{ fontSize: 24, fontWeight: '700', marginBottom: 12 }}>
+            My Trips
+          </Text>
+
+          <View style={{ flexDirection: 'row', gap: 10, marginBottom: 16 }}>
+            <TextInput
+              accessibilityLabel="New trip name"
+              onChangeText={setNewTripName}
+              onSubmitEditing={async () => {
+                const trip = await createTrip(newTripName);
+
+                if (trip) {
+                  setNewTripName('');
+                }
+              }}
+              placeholder="New trip name"
+              returnKeyType="done"
+              style={{
+                borderColor: '#d8d8d8',
+                borderRadius: 10,
+                borderWidth: 1,
+                flex: 1,
+                fontSize: 16,
+                paddingHorizontal: 14,
+                paddingVertical: 12,
+              }}
+              value={newTripName}
+            />
+            <Pressable
+              accessibilityRole="button"
+              disabled={!newTripName.trim()}
+              onPress={async () => {
+                const trip = await createTrip(newTripName);
+
+                if (trip) {
+                  setNewTripName('');
+                }
+              }}
+              style={{
+                alignItems: 'center',
+                backgroundColor: '#111',
+                borderRadius: 10,
+                justifyContent: 'center',
+                opacity: newTripName.trim() ? 1 : 0.4,
+                paddingHorizontal: 18,
+              }}>
+              <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>
+                Create
+              </Text>
+            </Pressable>
+          </View>
+
+          {isLoadingTrips ? (
+            <Text style={{ color: '#717171', fontSize: 16 }}>
+              Loading trips...
+            </Text>
+          ) : trips.length > 0 ? (
+            trips.map((trip) => (
+              <Pressable
+                accessibilityRole="button"
+                key={trip.id}
+                onPress={() =>
+                  router.push({
+                    pathname: '/trips/[tripId]',
+                    params: { tripId: trip.id },
+                  })
+                }
+                style={{
+                  borderColor: '#e2e2e2',
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  marginBottom: 10,
+                  padding: 16,
+                }}>
+                <Text style={{ fontSize: 18, fontWeight: '700' }}>
+                  {trip.name}
+                </Text>
+                <Text
+                  style={{ color: '#717171', fontSize: 14, marginTop: 5 }}>
+                  {trip.places.length}{' '}
+                  {trip.places.length === 1 ? 'place' : 'places'}
+                </Text>
+              </Pressable>
+            ))
+          ) : (
+            <Text style={{ color: '#717171', fontSize: 16 }}>
+              No trips yet. Create one for places you want to group together.
+            </Text>
+          )}
+        </View>
+
+        <Text style={{ fontSize: 24, fontWeight: '700', marginBottom: 12 }}>
+          Saved Places
+        </Text>
+
         {isLoading ? (
           <Text style={{ color: '#717171', fontSize: 16 }}>
             Loading saved places...
@@ -77,18 +185,53 @@ export default function SavedScreen() {
         ) : errorMessage ? (
           <Text style={{ color: '#717171', fontSize: 16 }}>{errorMessage}</Text>
         ) : places.length > 0 ? (
-          places.map((place, index) => (
-            <PlaceCard
-              key={place._id ?? place.slug?.current ?? index}
-              place={place}
-            />
-          ))
+          places.map((place, index) => {
+            const key = place._id ?? place.slug?.current ?? index;
+
+            return (
+              <View key={key} style={{ marginBottom: 8 }}>
+                <PlaceCard place={place} />
+                {place._id ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => setSelectedPlaceId(place._id ?? null)}
+                    style={{
+                      alignItems: 'center',
+                      borderColor: '#111',
+                      borderRadius: 10,
+                      borderWidth: 1,
+                      marginBottom: 16,
+                      marginTop: -12,
+                      paddingVertical: 12,
+                    }}>
+                    <Text style={{ fontSize: 16, fontWeight: '700' }}>
+                      Add to trip
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            );
+          })
         ) : (
           <Text style={{ color: '#717171', fontSize: 16 }}>
             No saved places yet.
           </Text>
         )}
       </ScrollView>
+
+      <AddToTripModal
+        onClose={() => setSelectedPlaceId(null)}
+        onSelectTrip={async (tripId) => {
+          if (!selectedPlaceId) {
+            return;
+          }
+
+          await addPlaceToTrip(tripId, selectedPlaceId);
+          setSelectedPlaceId(null);
+        }}
+        placeId={selectedPlaceId}
+        trips={trips}
+      />
     </SafeAreaView>
   );
 }
