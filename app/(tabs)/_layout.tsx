@@ -1,6 +1,7 @@
 import { Tabs } from 'expo-router';
 import React from 'react';
 
+import { BrandLogo } from '@/components/brand-logo';
 import { HapticTab } from '@/components/haptic-tab';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
@@ -20,8 +21,11 @@ export default function TabLayout() {
         name="(discover)"
         options={{
           title: 'Discover',
-          tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name="house.fill" color={color} />
+          tabBarIcon: ({ focused }) => (
+            <BrandLogo
+              kind="icon"
+              style={{ height: 30, opacity: focused ? 1 : 0.5 }}
+            />
           ),
         }}
       />

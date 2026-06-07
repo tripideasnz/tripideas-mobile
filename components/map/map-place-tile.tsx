@@ -1,14 +1,13 @@
-import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { Pressable, Text, View } from 'react-native';
 
-import { SavePlaceButton } from '@/components/save-place-button';
-import { useSavedPlaces } from '@/saved/provider';
+import { PlaceCardActions } from '@/components/place-card-actions';
+import { MediaFrame } from '@/components/ui/media-frame';
+import { Palette, Radius, Space, Type } from '@/constants/design';
 import type { MapPlace } from '@/sanity/types';
 
 export function MapPlaceTile({ place }: { place: MapPlace }) {
   const router = useRouter();
-  const { isSaved, toggleSavedPlace } = useSavedPlaces();
   const placeId = place._id;
   const canOpenPlace = Boolean(place.slug?.current);
   const location = [place.subRegion?.name, place.subRegion?.region?.name]
@@ -32,45 +31,36 @@ export function MapPlaceTile({ place }: { place: MapPlace }) {
         opacity: pressed ? 0.72 : 1,
         width: '48%',
       })}>
-      <View
-        style={{
-          aspectRatio: 4 / 3,
-          backgroundColor: '#e8e8e5',
-          borderRadius: 10,
-          overflow: 'hidden',
-        }}>
+      <View>
         {place.imageUrl ? (
-          <Image
+          <MediaFrame
             accessibilityLabel={place.imageAlt ?? place.title ?? 'Place image'}
-            contentFit="cover"
             source={{ uri: place.imageUrl }}
-            style={{ height: '100%', width: '100%' }}
+            radius={Radius.control}
           />
         ) : (
           <View
             style={{
               alignItems: 'center',
-              flex: 1,
+              aspectRatio: 4 / 3,
+              backgroundColor: Palette.surfaceMuted,
+              borderRadius: Radius.control,
               justifyContent: 'center',
             }}>
-            <Text style={{ color: '#858585', fontSize: 13 }}>No image</Text>
+            <Text style={{ color: Palette.textMuted, ...Type.caption }}>
+              No image
+            </Text>
           </View>
         )}
 
         {placeId ? (
-          <SavePlaceButton
-            isSaved={isSaved(placeId)}
-            onPress={(event) => {
-              event.stopPropagation();
-              void toggleSavedPlace(placeId);
-            }}
-            style={{
+          <PlaceCardActions
+            buttonStyle={{
               height: 36,
-              position: 'absolute',
-              right: 8,
-              top: 8,
               width: 36,
             }}
+            placeId={placeId}
+            style={{ left: 8, right: 8, top: 8 }}
           />
         ) : null}
       </View>
@@ -81,14 +71,18 @@ export function MapPlaceTile({ place }: { place: MapPlace }) {
           fontSize: 15,
           fontWeight: '700',
           lineHeight: 19,
-          marginTop: 8,
+          marginTop: Space.sm,
         }}>
         {place.title}
       </Text>
       {location ? (
         <Text
           numberOfLines={1}
-          style={{ color: '#717171', fontSize: 12, marginTop: 2 }}>
+          style={{
+            color: Palette.textMuted,
+            fontSize: 12,
+            marginTop: Space.xs,
+          }}>
           {location}
         </Text>
       ) : null}

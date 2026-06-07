@@ -1,6 +1,7 @@
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { Pressable, ScrollView, Text } from 'react-native';
+import { ScrollView } from 'react-native';
 
+import { AppChip } from '@/components/ui/app-chip';
+import { Space } from '@/constants/design';
 export type MapActiveFilter = {
   id: string;
   label: string;
@@ -21,32 +22,17 @@ export function MapActiveFilters({
 
   return (
     <ScrollView
-      contentContainerStyle={{ gap: 8, paddingHorizontal: 3 }}
+      contentContainerStyle={{ gap: Space.sm, paddingHorizontal: Space.xs }}
       horizontal
       showsHorizontalScrollIndicator={false}>
       {filters.map((filter) => (
-        <Pressable
+        <AppChip
           accessibilityLabel={`Remove ${filter.label} filter`}
-          accessibilityRole="button"
+          icon="close"
           key={filter.id}
+          label={filter.label}
           onPress={() => onRemove(filter.id)}
-          style={({ pressed }) => ({
-            alignItems: 'center',
-            backgroundColor: '#f0f0ee',
-            borderColor: '#d8d8d5',
-            borderRadius: 999,
-            borderWidth: 1,
-            flexDirection: 'row',
-            gap: 5,
-            opacity: pressed ? 0.6 : 1,
-            paddingHorizontal: 11,
-            paddingVertical: 7,
-          })}>
-          <Text style={{ fontSize: 13, fontWeight: '700' }}>
-            {filter.label}
-          </Text>
-          <MaterialIcons color="#4a4a4a" name="close" size={16} />
-        </Pressable>
+        />
       ))}
     </ScrollView>
   );

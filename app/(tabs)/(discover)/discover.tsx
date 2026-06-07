@@ -1,10 +1,27 @@
 import { Image } from 'expo-image';
 import { Link } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import {
+  LayoutChangeEvent,
+  Pressable,
+  ScrollView,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AppBrandHeader } from '@/components/app-brand-header';
+import { CardSurface } from '@/components/ui/card-surface';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { MediaFrame } from '@/components/ui/media-frame';
+import {
+  Palette,
+  Radius,
+  Screen,
+  Space,
+  Type,
+} from '@/constants/design';
 import { sanityClient } from '@/sanity/client';
 import { ISLANDS_QUERY } from '@/sanity/queries';
 import type {
@@ -16,6 +33,31 @@ import type {
 
 export default function DiscoverScreen() {
   const [islands, setIslands] = useState<IslandSummary[] | null>(null);
+  const [cardsAreaHeight, setCardsAreaHeight] = useState(0);
+  const { height: windowHeight, width: windowWidth } = useWindowDimensions();
+  const horizontalContentWidth = windowWidth - Screen.gutter * 2;
+  const fallbackCardsAreaHeight = Math.max(420, windowHeight - 230);
+  const availableCardsHeight = cardsAreaHeight || fallbackCardsAreaHeight;
+  const cardGap = Space.lg;
+  const cardHeight = Math.min(
+    330,
+    Math.max(196, (availableCardsHeight - cardGap) / 2)
+  );
+  const titleAreaHeight = Math.min(92, Math.max(70, cardHeight * 0.28));
+  const imageHeight = Math.max(126, cardHeight - titleAreaHeight);
+  const expandedImageHeight = horizontalContentWidth / 2.05;
+  const titleFontSize = Math.min(24, Math.max(20, cardHeight * 0.075));
+  const titleLineHeight = Math.round(titleFontSize * 1.22);
+  const maoriFontSize = Math.min(15, Math.max(13, cardHeight * 0.045));
+  const maoriLineHeight = Math.round(maoriFontSize * 1.3);
+
+  const handleCardsAreaLayout = (event: LayoutChangeEvent) => {
+    const nextHeight = event.nativeEvent.layout.height;
+
+    if (Math.abs(nextHeight - cardsAreaHeight) > 1) {
+      setCardsAreaHeight(nextHeight);
+    }
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -48,28 +90,40 @@ export default function DiscoverScreen() {
   }, []);
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: Palette.background }}>
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{
-          paddingBottom: 32,
-          paddingHorizontal: 20,
-          paddingTop: 20,
+          flexGrow: 1,
+          paddingBottom: Screen.bottom,
+          paddingHorizontal: Screen.gutter,
+          paddingTop: Space.lg,
         }}>
-        <View style={{ marginBottom: 18 }}>
-          <Text style={{ fontSize: 34, fontWeight: '700', marginBottom: 8 }}>
-            TripIdeas
-          </Text>
-
-          <Text style={{ color: '#4a4a4a', fontSize: 18, lineHeight: 25 }}>
-            Explore New Zealand by island, region, and sub-region.
-          </Text>
-        </View>
+        <AppBrandHeader
+          compact
+          subtitle="Choose an island to explore Aotearoa."
+        />
 
         {!islands ? (
           <Text>Loading...</Text>
         ) : islands.length > 0 ? (
-          islands.map((island) => <IslandCard key={island.slug} island={island} />)
+          <View
+            onLayout={handleCardsAreaLayout}
+            style={{ flex: 1, justifyContent: 'center' }}>
+            {islands.map((island) => (
+              <IslandCard
+                cardHeight={cardHeight}
+                expandedImageHeight={expandedImageHeight}
+                imageHeight={imageHeight}
+                key={island.slug}
+                island={island}
+                maoriFontSize={maoriFontSize}
+                maoriLineHeight={maoriLineHeight}
+                titleFontSize={titleFontSize}
+                titleLineHeight={titleLineHeight}
+              />
+            ))}
+          </View>
         ) : (
           <Text>Islands not found.</Text>
         )}
@@ -78,31 +132,40 @@ export default function DiscoverScreen() {
   );
 }
 
-function IslandCard({ island }: { island: IslandSummary }) {
+function IslandCard({
+  cardHeight,
+  expandedImageHeight,
+  imageHeight,
+  island,
+  maoriFontSize,
+  maoriLineHeight,
+  titleFontSize,
+  titleLineHeight,
+}: {
+  cardHeight: number;
+  expandedImageHeight: number;
+  imageHeight: number;
+  island: IslandSummary;
+  maoriFontSize: number;
+  maoriLineHeight: number;
+  titleFontSize: number;
+  titleLineHeight: number;
+}) {
   const [isOpen, setIsOpen] = useState(false);
   const regions = (island.regions ?? []).filter(Boolean);
 
   return (
-    <View
+    <CardSurface
       style={{
-        backgroundColor: '#fff',
-        borderRadius: 14,
-        borderColor: '#e2e2e2',
-        borderWidth: 1,
-        elevation: 2,
-        marginBottom: 16,
-        overflow: 'hidden',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.12,
-        shadowRadius: 12,
+        height: isOpen ? undefined : cardHeight,
+        marginBottom: Space.lg,
       }}>
       {island.imageUrl ? (
-        <Image
+        <MediaFrame
           accessibilityLabel={island.imageAlt ?? island.title ?? 'Island image'}
-          contentFit="cover"
           source={{ uri: island.imageUrl }}
-          style={{ aspectRatio: 16 / 9, width: '100%' }}
+          radius={0}
+          style={{ height: isOpen ? expandedImageHeight : imageHeight }}
         />
       ) : null}
 
@@ -113,27 +176,35 @@ function IslandCard({ island }: { island: IslandSummary }) {
         style={({ pressed }) => ({
           alignItems: 'center',
           flexDirection: 'row',
+          flex: isOpen ? undefined : 1,
           opacity: pressed ? 0.65 : 1,
-          padding: 18,
+          paddingHorizontal: Space.lg,
+          paddingVertical: isOpen ? Space.md : Space.sm,
         })}>
         <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 24, fontWeight: '700' }}>
+          <Text
+            style={{
+              fontSize: titleFontSize,
+              fontWeight: '700',
+              lineHeight: titleLineHeight,
+            }}>
             {island.title}
           </Text>
           {island.maori ? (
             <Text
               style={{
-                color: '#717171',
-                fontSize: 15,
-                fontWeight: '600',
-                marginTop: 4,
+                color: Palette.textMuted,
+                fontSize: maoriFontSize,
+                fontWeight: '700',
+                lineHeight: maoriLineHeight,
+                marginTop: Space.xs,
               }}>
               {island.maori}
             </Text>
           ) : null}
         </View>
         <IconSymbol
-          color="#4a4a4a"
+          color={Palette.textBody}
           name="chevron.right"
           size={20}
           style={{ transform: [{ rotate: isOpen ? '90deg' : '0deg' }] }}
@@ -141,7 +212,7 @@ function IslandCard({ island }: { island: IslandSummary }) {
       </Pressable>
 
       {isOpen ? (
-        <View style={{ borderTopColor: '#e2e2e2', borderTopWidth: 1 }}>
+        <View style={{ borderTopColor: Palette.border, borderTopWidth: 1 }}>
           {regions.length > 0 ? (
             regions.map((region, index) => (
               <RegionSection
@@ -150,13 +221,13 @@ function IslandCard({ island }: { island: IslandSummary }) {
               />
             ))
           ) : (
-            <Text style={{ color: '#717171', padding: 18 }}>
+            <Text style={{ color: Palette.textMuted, padding: Space.lg }}>
               No regions found.
             </Text>
           )}
         </View>
       ) : null}
-    </View>
+    </CardSurface>
   );
 }
 
@@ -165,7 +236,7 @@ function RegionSection({ region }: { region: Region }) {
   const subRegions = (region.subRegions ?? []).filter(Boolean);
 
   return (
-    <View style={{ borderBottomColor: '#ededed', borderBottomWidth: 1 }}>
+    <View style={{ borderBottomColor: Palette.border, borderBottomWidth: 1 }}>
       <Pressable
         accessibilityRole="button"
         accessibilityState={{ expanded: isOpen }}
@@ -174,8 +245,8 @@ function RegionSection({ region }: { region: Region }) {
           alignItems: 'center',
           flexDirection: 'row',
           opacity: pressed ? 0.65 : 1,
-          paddingHorizontal: 18,
-          paddingVertical: 15,
+          paddingHorizontal: Space.lg,
+          paddingVertical: Space.md,
         })}>
         {region.imageUrl ? (
           <Image
@@ -183,25 +254,30 @@ function RegionSection({ region }: { region: Region }) {
             contentFit="cover"
             source={{ uri: region.imageUrl }}
             style={{
-              borderRadius: 8,
+              borderRadius: Radius.small,
               height: 52,
-              marginRight: 12,
+              marginRight: Space.md,
               width: 52,
             }}
           />
         ) : null}
         <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 18, fontWeight: '700' }}>
+          <Text style={Type.cardTitle}>
             {region.name}
           </Text>
           {region.maori ? (
-            <Text style={{ color: '#717171', fontSize: 14, marginTop: 3 }}>
+            <Text
+              style={{
+                color: Palette.textMuted,
+                ...Type.label,
+                marginTop: Space.xs,
+              }}>
               {region.maori}
             </Text>
           ) : null}
         </View>
         <IconSymbol
-          color="#717171"
+          color={Palette.textMuted}
           name="chevron.right"
           size={18}
           style={{ transform: [{ rotate: isOpen ? '90deg' : '0deg' }] }}
@@ -211,8 +287,8 @@ function RegionSection({ region }: { region: Region }) {
       {isOpen ? (
         <View
           style={{
-            backgroundColor: '#f8f8f8',
-            paddingHorizontal: 18,
+            backgroundColor: Palette.surfaceMuted,
+            paddingHorizontal: Space.lg,
           }}>
           {subRegions.length > 0 ? (
             subRegions.map((subRegion, index) => (
@@ -222,7 +298,7 @@ function RegionSection({ region }: { region: Region }) {
               />
             ))
           ) : (
-            <Text style={{ color: '#717171', paddingVertical: 14 }}>
+            <Text style={{ color: Palette.textMuted, paddingVertical: 14 }}>
               No sub-regions found.
             </Text>
           )}
@@ -247,7 +323,7 @@ function SubRegionLink({ subRegion }: { subRegion: SubRegionSummary }) {
         disabled={!subRegion.slug?.current}
         style={({ pressed }) => ({
           alignItems: 'center',
-          borderBottomColor: '#e2e2e2',
+          borderBottomColor: Palette.border,
           borderBottomWidth: 1,
           flexDirection: 'row',
           opacity: pressed ? 0.6 : 1,
@@ -261,29 +337,39 @@ function SubRegionLink({ subRegion }: { subRegion: SubRegionSummary }) {
             contentFit="cover"
             source={{ uri: subRegion.imageUrl }}
             style={{
-              borderRadius: 7,
+              borderRadius: Radius.small,
               height: 44,
-              marginRight: 12,
+              marginRight: Space.md,
               width: 44,
             }}
           />
         ) : null}
         <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 16, fontWeight: '600' }}>
+          <Text style={Type.bodyStrong}>
             {subRegion.name}
           </Text>
           {subRegion.maori ? (
-            <Text style={{ color: '#717171', fontSize: 13, marginTop: 3 }}>
+            <Text
+              style={{
+                color: Palette.textMuted,
+                ...Type.caption,
+                marginTop: Space.xs,
+              }}>
               {subRegion.maori}
             </Text>
           ) : null}
         </View>
         {placeCount !== null ? (
-          <Text style={{ color: '#717171', fontSize: 14, marginRight: 8 }}>
+          <Text
+            style={{
+              color: Palette.textMuted,
+              ...Type.label,
+              marginRight: Space.sm,
+            }}>
             {placeCount}
           </Text>
         ) : null}
-        <IconSymbol color="#717171" name="chevron.right" size={16} />
+        <IconSymbol color={Palette.textMuted} name="chevron.right" size={16} />
       </Pressable>
     </Link>
   );

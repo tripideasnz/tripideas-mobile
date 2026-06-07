@@ -4,7 +4,6 @@ import {
   Keyboard,
   Pressable,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -14,6 +13,8 @@ import {
   type MapActiveFilter,
 } from '@/components/map/map-active-filters';
 import { MapPlaceTile } from '@/components/map/map-place-tile';
+import { AppTextInput } from '@/components/ui/app-text-input';
+import { Palette, Radius, Space, Type } from '@/constants/design';
 import type { MapPlace } from '@/sanity/types';
 
 type MapTileViewProps = {
@@ -45,14 +46,16 @@ export function MapTileView({
   };
 
   return (
-    <SafeAreaView style={{ backgroundColor: '#fff', flex: 1 }} edges={['top']}>
+    <SafeAreaView
+      style={{ backgroundColor: Palette.background, flex: 1 }}
+      edges={['top']}>
       <View
         style={{
           alignItems: 'center',
           flexDirection: 'row',
           justifyContent: 'space-between',
-          paddingHorizontal: 16,
-          paddingVertical: 10,
+          paddingHorizontal: Space.lg,
+          paddingVertical: Space.md,
         }}>
         <Pressable
           accessibilityLabel="Return to map"
@@ -65,10 +68,10 @@ export function MapTileView({
             opacity: pressed ? 0.55 : 1,
             width: 42,
           })}>
-          <MaterialIcons color="#111" name="keyboard-arrow-down" size={28} />
+          <MaterialIcons color={Palette.text} name="keyboard-arrow-down" size={28} />
         </Pressable>
 
-        <Text style={{ fontSize: 15, fontWeight: '800' }}>
+        <Text style={Type.label}>
           {isLoading
             ? 'Loading places...'
             : `${places.length} ${places.length === 1 ? 'place' : 'places'} in view`}
@@ -79,8 +82,8 @@ export function MapTileView({
           onPress={onRegionsPress}
           style={({ pressed }) => ({
             alignItems: 'center',
-            borderColor: '#dedede',
-            borderRadius: 999,
+            borderColor: Palette.border,
+            borderRadius: Radius.pill,
             borderWidth: 1,
             flexDirection: 'row',
             gap: 5,
@@ -88,20 +91,25 @@ export function MapTileView({
             paddingHorizontal: 11,
             paddingVertical: 8,
           })}>
-          <MaterialIcons color="#111" name="tune" size={17} />
-          <Text style={{ fontSize: 13, fontWeight: '700' }}>Regions</Text>
+          <MaterialIcons color={Palette.text} name="tune" size={17} />
+          <Text style={Type.label}>Regions</Text>
           {selectedFilterCount > 0 ? (
             <View
               style={{
                 alignItems: 'center',
-                backgroundColor: '#111',
-                borderRadius: 999,
+                backgroundColor: Palette.primary,
+                borderRadius: Radius.pill,
                 height: 18,
                 justifyContent: 'center',
                 minWidth: 18,
                 paddingHorizontal: 5,
               }}>
-              <Text style={{ color: '#fff', fontSize: 11, fontWeight: '800' }}>
+              <Text
+                style={{
+                  color: Palette.textOnPrimary,
+                  fontSize: 11,
+                  fontWeight: '800',
+                }}>
                 {selectedFilterCount}
               </Text>
             </View>
@@ -109,28 +117,28 @@ export function MapTileView({
         </Pressable>
       </View>
 
-      <TextInput
+      <AppTextInput
         autoCapitalize="none"
         autoCorrect={false}
         onChangeText={onQueryChange}
         placeholder="Search for trip ideas"
         returnKeyType="search"
         style={{
-          backgroundColor: '#f7f7f7',
-          borderColor: '#dedede',
-          borderRadius: 999,
-          borderWidth: 1,
-          fontSize: 15,
-          marginBottom: 14,
-          marginHorizontal: 16,
-          paddingHorizontal: 16,
-          paddingVertical: 10,
+          backgroundColor: Palette.surfaceMuted,
+          borderRadius: Radius.pill,
+          marginBottom: Space.lg,
+          marginHorizontal: Space.lg,
+          minHeight: 44,
         }}
         value={query}
       />
 
       {activeFilters.length > 0 ? (
-        <View style={{ marginBottom: 14, paddingHorizontal: 16 }}>
+        <View
+          style={{
+            marginBottom: Space.lg,
+            paddingHorizontal: Space.lg,
+          }}>
           <MapActiveFilters
             filters={activeFilters}
             onRemove={onRemoveFilter}
@@ -140,14 +148,14 @@ export function MapTileView({
 
       <FlatList
         columnWrapperStyle={{
-          gap: 12,
-          marginBottom: 16,
+          gap: Space.md,
+          marginBottom: Space.lg,
         }}
         data={places}
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{
-          paddingBottom: 32,
-          paddingHorizontal: 16,
+          paddingBottom: Space.xxxl,
+          paddingHorizontal: Space.lg,
         }}
         keyExtractor={(place, index) =>
           place._id ?? place.slug?.current ?? `place-${index}`
@@ -156,8 +164,8 @@ export function MapTileView({
           !isLoading ? (
             <Text
               style={{
-                color: '#717171',
-                fontSize: 16,
+                color: Palette.textMuted,
+                ...Type.body,
                 paddingTop: 30,
                 textAlign: 'center',
               }}>

@@ -102,8 +102,17 @@ export type SubRegionContext = {
 export type PlacePage = PlaceCardData & {
   textBlocks?: ContentBlock[];
   coordinates?: Coordinates;
+  galleryCollections?: {
+    images?: PlaceGalleryImage[];
+  }[];
   nearbyPlaces?: PlaceCardData[];
   subRegion?: SubRegionContext;
+};
+
+export type PlaceGalleryImage = {
+  _key?: string;
+  alt?: string;
+  url: string;
 };
 
 export type MapPlace = PlaceCardData & {

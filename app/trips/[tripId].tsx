@@ -1,4 +1,6 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { HeaderBackButton } from '@react-navigation/elements';
 import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
@@ -6,12 +8,16 @@ import {
   ScrollView,
   Share,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 
 import { PlaceCard } from '@/components/place-card';
+import { TripImageCollage } from '@/components/trip-image-collage';
+import { AppTextInput } from '@/components/ui/app-text-input';
+import { CardSurface } from '@/components/ui/card-surface';
+import { Palette, Radius, Screen, Space, Type } from '@/constants/design';
 import { fetchPlaceCardsByIds } from '@/sanity/place-cards';
+import { getTripImages } from '@/trips/images';
 import { useMyTrips } from '@/trips/provider';
 import {
   buildPublicTripSnapshot,
@@ -40,6 +46,7 @@ export default function TripDetailScreen() {
   } = useMyTrips();
   const trip = getTrip(selectedTripId);
   const [name, setName] = useState('');
+  const [isEditingName, setIsEditingName] = useState(false);
   const [tripNote, setTripNote] = useState('');
   const [placeNotes, setPlaceNotes] = useState<Record<string, string>>({});
   const [places, setPlaces] = useState<PlaceCardData[]>([]);
@@ -56,9 +63,11 @@ export default function TripDetailScreen() {
     trip && trimmedName && trimmedName !== trip.name
   );
   const isTripNoteDirty = Boolean(trip && tripNote !== trip.note);
+  const tripImages = trip ? getTripImages(trip, places).slice(0, 4) : [];
 
   useEffect(() => {
     setName(trip?.name ?? '');
+    setIsEditingName(false);
     setTripNote(trip?.note ?? '');
     setPlaceNotes(
       Object.fromEntries(
@@ -107,15 +116,18 @@ export default function TripDetailScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [placeIdsKey, selectedTripId]);
 
-  const title = trip?.name ?? 'My Trip';
-
   const saveName = async () => {
     if (!trip || !isNameDirty) {
       return;
     }
 
     await renameTrip(trip.id, trimmedName);
-    Alert.alert('Saved');
+    setIsEditingName(false);
+  };
+
+  const cancelNameEdit = () => {
+    setName(trip?.name ?? '');
+    setIsEditingName(false);
   };
 
   const saveTripNote = async () => {
@@ -191,30 +203,23 @@ export default function TripDetailScreen() {
 
   return (
     <ScrollView
-      style={{ flex: 1, backgroundColor: '#fff' }}
+      style={{ flex: 1, backgroundColor: Palette.background }}
       contentContainerStyle={{
-        paddingBottom: 40,
-        paddingHorizontal: 24,
-        paddingTop: 20,
+        paddingBottom: Space.huge,
+        paddingHorizontal: Screen.gutter,
+        paddingTop: Screen.top,
       }}>
       <Stack.Screen
         options={{
           headerBackVisible: false,
-          headerLeft: () => (
-            <Pressable
+          headerLeft: (props) => (
+            <HeaderBackButton
+              {...props}
               accessibilityLabel="Back to Saved"
-              accessibilityRole="button"
-              hitSlop={8}
               onPress={() => router.replace('/saved')}
-              style={({ pressed }) => ({
-                opacity: pressed ? 0.45 : 1,
-                paddingHorizontal: 4,
-                paddingVertical: 8,
-              })}>
-              <Text style={{ color: '#007aff', fontSize: 17 }}>Back</Text>
-            </Pressable>
+            />
           ),
-          title,
+          title: '',
         }}
       />
 
@@ -226,54 +231,110 @@ export default function TripDetailScreen() {
         </Text>
       ) : (
         <>
-          <Text style={{ fontSize: 14, fontWeight: '700', marginBottom: 7 }}>
-            Trip name
-          </Text>
-          <View style={{ flexDirection: 'row', gap: 10, marginBottom: 20 }}>
-            <TextInput
-              accessibilityLabel="Trip name"
-              onChangeText={setName}
-              onSubmitEditing={() => void saveName()}
-              returnKeyType="done"
-              style={{
-                borderColor: '#d8d8d8',
-                borderRadius: 10,
-                borderWidth: 1,
-                flex: 1,
-                fontSize: 18,
-                fontWeight: '700',
-                paddingHorizontal: 14,
-                paddingVertical: 12,
-              }}
-              value={name}
-            />
-            <Pressable
-              accessibilityRole="button"
-              disabled={!isNameDirty}
-              onPress={() => void saveName()}
-              style={({ pressed }) => ({
-                alignItems: 'center',
-                backgroundColor: isNameDirty ? '#111' : '#d8d8d8',
-                borderRadius: 10,
-                justifyContent: 'center',
-                opacity: pressed ? 0.7 : 1,
-                paddingHorizontal: 18,
-              })}>
-              <Text
+          {isEditingName ? (
+            <View style={{ marginBottom: Space.xxl }}>
+              <AppTextInput
+                accessibilityLabel="Trip name"
+                autoFocus
+                onChangeText={setName}
+                onSubmitEditing={() => void saveName()}
+                returnKeyType="done"
                 style={{
-                  color: isNameDirty ? '#fff' : '#717171',
-                  fontSize: 16,
-                  fontWeight: '700',
+                  ...Type.title,
+                  minHeight: 58,
+                  paddingHorizontal: Space.md,
+                  paddingVertical: Space.sm,
+                }}
+                value={name}
+              />
+              <View
+                style={{
+                  flexDirection: 'row',
+                  gap: Space.sm,
+                  marginTop: Space.sm,
                 }}>
-                Save
-              </Text>
-            </Pressable>
-          </View>
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={!isNameDirty}
+                  onPress={() => void saveName()}
+                  style={({ pressed }) => ({
+                    alignItems: 'center',
+                    backgroundColor: isNameDirty
+                      ? Palette.primary
+                      : Palette.border,
+                    borderRadius: Radius.control,
+                    flex: 1,
+                    opacity: pressed ? 0.7 : 1,
+                    paddingVertical: Space.md,
+                  })}>
+                  <Text
+                    style={{
+                      color: isNameDirty
+                        ? Palette.textOnPrimary
+                        : Palette.textMuted,
+                      ...Type.label,
+                    }}>
+                    Save
+                  </Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={cancelNameEdit}
+                  style={({ pressed }) => ({
+                    alignItems: 'center',
+                    borderColor: Palette.border,
+                    borderRadius: Radius.control,
+                    borderWidth: 1,
+                    flex: 1,
+                    opacity: pressed ? 0.55 : 1,
+                    paddingVertical: Space.md,
+                  })}>
+                  <Text style={Type.label}>Cancel</Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : (
+            <View
+              style={{
+                alignItems: 'center',
+                flexDirection: 'row',
+                gap: Space.sm,
+                marginBottom: Space.xxl,
+              }}>
+              <Text style={{ flex: 1, ...Type.title }}>{trip.name}</Text>
+              <Pressable
+                accessibilityLabel="Edit trip name"
+                accessibilityRole="button"
+                hitSlop={8}
+                onPress={() => setIsEditingName(true)}
+                style={({ pressed }) => ({
+                  alignItems: 'center',
+                  height: 40,
+                  justifyContent: 'center',
+                  opacity: pressed ? 0.5 : 1,
+                  width: 40,
+                })}>
+                <MaterialIcons color={Palette.text} name="edit" size={22} />
+              </Pressable>
+            </View>
+          )}
 
-          <Text style={{ fontSize: 14, fontWeight: '700', marginBottom: 7 }}>
+          {tripImages.length > 0 ? (
+            <TripImageCollage
+              images={tripImages}
+              style={{
+                aspectRatio: 16 / 9,
+                borderRadius: Radius.card,
+                marginBottom: Space.xxl,
+                width: '100%',
+              }}
+            />
+          ) : null}
+
+          <Text style={{ ...Type.label, marginBottom: Space.sm }}>
             Trip note
           </Text>
-          <TextInput
+          <AppTextInput
             accessibilityLabel="Trip note"
             multiline
             onChangeText={setTripNote}
@@ -366,7 +427,7 @@ export default function TripDetailScreen() {
             </Pressable>
           </View>
 
-          <Text style={{ fontSize: 24, fontWeight: '700', marginBottom: 14 }}>
+          <Text style={{ ...Type.section, marginBottom: Space.lg }}>
             Places
           </Text>
 
@@ -391,19 +452,21 @@ export default function TripDetailScreen() {
                 Boolean(placeId) && draftPlaceNote !== savedPlaceNote;
 
               return (
-                <View key={placeId ?? place.slug?.current ?? index}>
-                  <PlaceCard place={place} />
+                <CardSurface
+                  key={placeId ?? place.slug?.current ?? index}
+                  style={{ marginBottom: Space.xxl }}>
+                  <PlaceCard embedded place={place} />
                   {placeId ? (
-                    <View style={{ marginBottom: 24, marginTop: -12 }}>
-                      <Text
-                        style={{
-                          fontSize: 14,
-                          fontWeight: '700',
-                          marginBottom: 7,
-                        }}>
-                        Your note
+                    <View
+                      style={{
+                        borderTopColor: Palette.border,
+                        borderTopWidth: 1,
+                        padding: Space.lg,
+                      }}>
+                      <Text style={{ ...Type.label, marginBottom: Space.sm }}>
+                        Note for {place.title ?? 'this place'}
                       </Text>
-                      <TextInput
+                      <AppTextInput
                         accessibilityLabel={`Note for ${
                           place.title ?? 'place'
                         }`}
@@ -506,7 +569,7 @@ export default function TripDetailScreen() {
                       </View>
                     </View>
                   ) : null}
-                </View>
+                </CardSurface>
               );
             })
           ) : (

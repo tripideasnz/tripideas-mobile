@@ -9,10 +9,17 @@ import {
   getBlockText,
   getPlainText,
 } from '@/components/content-blocks';
+import { PlaceCardActions } from '@/components/place-card-actions';
+import { PlacePhotoCarousel } from '@/components/place-photo-carousel';
 import { PlaceMapPreview } from '@/components/place-map-preview';
 import { PlaceCard } from '@/components/place-card';
-import { SavePlaceButton } from '@/components/save-place-button';
-import { useSavedPlaces } from '@/saved/provider';
+import { AppButton } from '@/components/ui/app-button';
+import {
+  Palette,
+  Screen,
+  Space,
+  Type,
+} from '@/constants/design';
 import { sanityClient } from '@/sanity/client';
 import { PLACE_QUERY } from '@/sanity/queries';
 import type { PlacePage } from '@/sanity/types';
@@ -61,7 +68,6 @@ export default function PlaceScreen() {
   const { slug } = useLocalSearchParams<{ slug?: string | string[] }>();
   const selectedSlug = Array.isArray(slug) ? slug[0] : slug;
   const router = useRouter();
-  const { isSaved, toggleSavedPlace } = useSavedPlaces();
   const [place, setPlace] = useState<PlacePage | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -120,9 +126,11 @@ export default function PlaceScreen() {
   const hasBodyBlocks = (place?.textBlocks ?? []).some((block) => getBlockText(block));
   const canExpand = Boolean(fullText && preview && fullText !== preview);
   const contextText = place ? getContextText(place) : undefined;
+  const galleryImages =
+    place?.galleryCollections?.flatMap(
+      (collection) => collection.images ?? []
+    ) ?? [];
   const placeId = place?._id;
-  const canSavePlace = Boolean(placeId);
-  const placeIsSaved = isSaved(placeId);
   const coordinates = getCoordinates(place);
   const nearbyPlaces = (place?.nearbyPlaces ?? []).filter(Boolean).slice(0, 4);
   const openTripIdeasMap = () => {
@@ -141,7 +149,7 @@ export default function PlaceScreen() {
   };
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: '#fff' }}>
+    <ScrollView style={{ flex: 1, backgroundColor: Palette.background }}>
       <Stack.Screen options={{ title }} />
 
       {isLoading ? (
@@ -161,14 +169,18 @@ export default function PlaceScreen() {
             />
           ) : null}
 
-          <View style={{ padding: 24 }}>
+          <View
+            style={{
+              paddingBottom: Space.huge,
+              paddingHorizontal: Screen.gutter,
+              paddingTop: Screen.top,
+            }}>
             {contextText ? (
               <Text
                 style={{
-                  color: '#717171',
-                  fontSize: 14,
-                  fontWeight: '600',
-                  marginBottom: 10,
+                  color: Palette.textMuted,
+                  ...Type.label,
+                  marginBottom: Space.md,
                 }}>
                 {contextText}
               </Text>
@@ -185,22 +197,19 @@ export default function PlaceScreen() {
               <Text
                 style={{
                   flex: 1,
-                  fontSize: 34,
-                  fontWeight: '700',
+                  ...Type.display,
                 }}>
                 {place.title}
               </Text>
 
-              {canSavePlace ? (
-                <SavePlaceButton
-                  isSaved={placeIsSaved}
-                  onPress={() => {
-                    void toggleSavedPlace(placeId);
-                  }}
-                  style={{
-                    borderColor: '#111',
+              {placeId ? (
+                <PlaceCardActions
+                  buttonStyle={{
+                    borderColor: Palette.text,
                     borderWidth: 1,
                   }}
+                  inline
+                  placeId={placeId}
                 />
               ) : null}
             </View>
@@ -208,14 +217,18 @@ export default function PlaceScreen() {
             {heading ? (
               <Text
                 style={{
-                  color: '#717171',
-                  fontSize: 18,
-                  fontWeight: '600',
-                  marginBottom: 18,
+                  color: Palette.textMuted,
+                  ...Type.cardTitle,
+                  marginBottom: Space.xl,
                 }}>
                 {heading}
               </Text>
             ) : null}
+
+            <PlacePhotoCarousel
+              images={galleryImages}
+              placeTitle={place.title}
+            />
 
             {isExpanded && hasBodyBlocks ? (
               <View style={{ marginBottom: 8 }}>
@@ -224,10 +237,9 @@ export default function PlaceScreen() {
             ) : displayText ? (
               <Text
                 style={{
-                  color: '#333',
-                  fontSize: 17,
-                  lineHeight: 25,
-                  marginBottom: 24,
+                  color: Palette.textBody,
+                  ...Type.body,
+                  marginBottom: Space.xxl,
                 }}>
                 {displayText}
               </Text>
@@ -240,7 +252,7 @@ export default function PlaceScreen() {
                   alignSelf: 'flex-start',
                   marginBottom: 24,
                 }}>
-                <Text style={{ fontSize: 16, fontWeight: '700' }}>
+                <Text style={Type.bodyStrong}>
                   {isExpanded ? 'Show less' : 'Read more'}
                 </Text>
               </Pressable>
@@ -250,9 +262,8 @@ export default function PlaceScreen() {
               <View style={{ marginBottom: 24 }}>
                 <Text
                   style={{
-                    fontSize: 22,
-                    fontWeight: '700',
-                    marginBottom: 12,
+                    ...Type.section,
+                    marginBottom: Space.md,
                   }}>
                   Location
                 </Text>
@@ -262,7 +273,8 @@ export default function PlaceScreen() {
                   onPress={openTripIdeasMap}
                   title={place.title}
                 />
-                <Pressable
+                <AppButton
+                  label="Show on Google Maps"
                   onPress={async () => {
                     const query = encodeURIComponent(
                       `${coordinates.latitude},${coordinates.longitude}`
@@ -277,43 +289,16 @@ export default function PlaceScreen() {
                       setMapMessage('Unable to open maps right now.');
                     }
                   }}
-                  style={{
-                    alignItems: 'center',
-                    backgroundColor: '#111',
-                    borderRadius: 10,
-                    marginTop: 12,
-                    paddingVertical: 14,
-                  }}>
-                  <Text
-                    style={{
-                      color: '#fff',
-                      fontSize: 16,
-                      fontWeight: '700',
-                    }}>
-                    Show on Google Maps
-                  </Text>
-                </Pressable>
+                  style={{ marginTop: Space.md }}
+                />
 
-                <Pressable
+                <AppButton
                   accessibilityRole="button"
+                  label="Show on TripIdeas.nz Map"
                   onPress={openTripIdeasMap}
-                  style={{
-                    alignItems: 'center',
-                    borderColor: '#d8d8d8',
-                    borderRadius: 10,
-                    borderWidth: 1,
-                    marginTop: 10,
-                    paddingVertical: 14,
-                  }}>
-                  <Text
-                    style={{
-                      color: '#717171',
-                      fontSize: 16,
-                      fontWeight: '700',
-                    }}>
-                    Show on TripIdeas Map
-                  </Text>
-                </Pressable>
+                  style={{ marginTop: Space.md }}
+                  variant="secondary"
+                />
 
                 {mapMessage ? (
                   <Text
@@ -331,9 +316,8 @@ export default function PlaceScreen() {
             <View style={{ marginBottom: 8 }}>
               <Text
                 style={{
-                  fontSize: 22,
-                  fontWeight: '700',
-                  marginBottom: 12,
+                  ...Type.section,
+                  marginBottom: Space.md,
                 }}>
                 Nearby Places
               </Text>

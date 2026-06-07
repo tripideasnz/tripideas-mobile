@@ -167,6 +167,13 @@ export const PLACE_QUERY = `
   "h3": body[_type == "block" && style == "h3"][0].children[0].text,
   "imageAlt": mainImage.alt,
   "imageUrl": mainImage.asset->url,
+  "galleryCollections": body[_type == "imageCollection"]{
+    "images": images[]{
+      _key,
+      alt,
+      "url": asset->url
+    }
+  },
   "preview": body[_type == "block" && style == "normal"][0].children[0].text,
   "textBlocks": body[_type == "block" && style in ["normal", "h3"]],
   "seoDescription": seo.description,

@@ -1,13 +1,13 @@
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Linking, Pressable, ScrollView, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { BrandLogo } from '@/components/brand-logo';
 import { PlaceCard } from '@/components/place-card';
 import { TripShareCard } from '@/components/trip-share-card';
-import {
-  fetchTripIdeasBranding,
-  type TripIdeasBranding,
-} from '@/sanity/branding';
+import { Palette, Radius, Screen, Space, Type } from '@/constants/design';
 import { fetchPlaceCardsByIds } from '@/sanity/place-cards';
 import { useMyTrips } from '@/trips/provider';
 import { buildTripShareCardData } from '@/trips/share';
@@ -22,7 +22,6 @@ export default function SharedTripPreviewScreen() {
   const { getTrip, isLoading: isLoadingTrips } = useMyTrips();
   const trip = getTrip(selectedTripId);
   const [places, setPlaces] = useState<PlaceCardData[]>([]);
-  const [branding, setBranding] = useState<TripIdeasBranding>({});
   const [isLoadingPlaces, setIsLoadingPlaces] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -42,34 +41,10 @@ export default function SharedTripPreviewScreen() {
   );
   const shareCardData = trip
     ? buildTripShareCardData({
-        logoAlt: branding.logoAlt,
-        logoUrl: branding.logoUrl,
         places,
         trip,
       })
     : null;
-
-  useEffect(() => {
-    let isMounted = true;
-
-    fetchTripIdeasBranding()
-      .then((data) => {
-        if (isMounted) {
-          setBranding(data);
-        }
-      })
-      .catch((error) => {
-        console.error(error);
-
-        if (isMounted) {
-          setBranding({});
-        }
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
 
   useEffect(() => {
     if (!trip || placeIds.length === 0) {
@@ -112,141 +87,168 @@ export default function SharedTripPreviewScreen() {
   }, [placeIdsKey, selectedTripId]);
 
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: '#fff' }}
-      contentContainerStyle={{
-        paddingBottom: 40,
-        paddingHorizontal: 24,
-        paddingTop: 20,
-      }}>
-      <Stack.Screen
-        options={{ title: trip?.name ?? 'Shared Trip Preview' }}
-      />
+    <SafeAreaView style={{ backgroundColor: Palette.background, flex: 1 }}>
+      <Stack.Screen options={{ headerShown: false }} />
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{
+          paddingBottom: Screen.bottom,
+          paddingHorizontal: Screen.gutter,
+          paddingTop: Space.lg,
+        }}>
+        <View
+          style={{
+            alignItems: 'center',
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            marginBottom: Space.xxl,
+          }}>
+          <BrandLogo style={{ height: 42 }} />
+          <Pressable
+            accessibilityLabel="Close trip preview"
+            accessibilityRole="button"
+            hitSlop={10}
+            onPress={() => router.back()}
+            style={({ pressed }) => ({
+              alignItems: 'center',
+              backgroundColor: Palette.surfaceMuted,
+              borderRadius: Radius.pill,
+              height: 36,
+              justifyContent: 'center',
+              opacity: pressed ? 0.55 : 1,
+              width: 36,
+            })}>
+            <MaterialIcons color={Palette.text} name="close" size={22} />
+          </Pressable>
+        </View>
 
-      {isLoadingTrips || isLoadingPlaces ? (
-        <Text style={{ color: '#717171', fontSize: 16 }}>
-          Loading shared trip...
-        </Text>
-      ) : !trip || !selectedTripId ? (
-        <Text style={{ color: '#717171', fontSize: 16 }}>
-          This shared trip could not be found on this device.
-        </Text>
-      ) : (
-        <>
-          <Text
-            style={{
-              color: '#717171',
-              fontSize: 14,
-              fontWeight: '700',
-              marginBottom: 8,
-              textTransform: 'uppercase',
-            }}>
-            Read-only preview
+        {isLoadingTrips || isLoadingPlaces ? (
+          <Text style={{ color: Palette.textMuted, ...Type.body }}>
+            Loading shared trip...
           </Text>
-          {shareCardData ? <TripShareCard data={shareCardData} /> : null}
-
-          <View style={{ flexDirection: 'row', gap: 10 }}>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() =>
-                router.push({
-                  pathname: '/trips/[tripId]/map',
-                  params: { tripId: trip.id },
-                })
-              }
-              style={({ pressed }) => ({
-                alignItems: 'center',
-                borderColor: '#111',
-                borderRadius: 10,
-                borderWidth: 1,
-                flex: 1,
-                opacity: pressed ? 0.55 : 1,
-                paddingVertical: 12,
-              })}>
-              <Text style={{ fontSize: 16, fontWeight: '700' }}>
-                Show on Map
-              </Text>
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityState={{ disabled: true }}
-              disabled
+        ) : !trip || !selectedTripId ? (
+          <Text style={{ color: Palette.textMuted, ...Type.body }}>
+            This shared trip could not be found on this device.
+          </Text>
+        ) : (
+          <>
+            <Text
               style={{
-                alignItems: 'center',
-                backgroundColor: '#d8d8d8',
-                borderRadius: 10,
-                flex: 1,
-                paddingVertical: 12,
+                color: Palette.textMuted,
+                ...Type.label,
+                marginBottom: Space.sm,
+                textTransform: 'uppercase',
               }}>
-              <Text
-                style={{ color: '#717171', fontSize: 16, fontWeight: '700' }}>
-                Save to My Trips
+              Read-only trip
+            </Text>
+            {shareCardData ? <TripShareCard data={shareCardData} /> : null}
+
+            <View style={{ flexDirection: 'row', gap: Space.sm }}>
+              <Pressable
+                accessibilityRole="link"
+                onPress={() => void Linking.openURL('https://tripideas.nz')}
+                style={({ pressed }) => ({
+                  alignItems: 'center',
+                  backgroundColor: Palette.primary,
+                  borderRadius: Radius.control,
+                  flex: 1,
+                  opacity: pressed ? 0.72 : 1,
+                  paddingHorizontal: Space.sm,
+                  paddingVertical: Space.md,
+                })}>
+                <Text
+                  style={{
+                    color: Palette.textOnPrimary,
+                    ...Type.label,
+                    textAlign: 'center',
+                  }}>
+                  Open on TripIdeas.nz
+                </Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ disabled: true }}
+                disabled
+                style={{
+                  alignItems: 'center',
+                  backgroundColor: Palette.surfaceMuted,
+                  borderColor: Palette.border,
+                  borderRadius: Radius.control,
+                  borderWidth: 1,
+                  flex: 1,
+                  paddingHorizontal: Space.sm,
+                  paddingVertical: Space.md,
+                }}>
+                <Text
+                  style={{
+                    color: Palette.textMuted,
+                    ...Type.label,
+                    textAlign: 'center',
+                  }}>
+                  Open in app
+                </Text>
+              </Pressable>
+            </View>
+            <Text
+              style={{
+                color: Palette.textMuted,
+                ...Type.caption,
+                marginBottom: Space.xxxl,
+                marginTop: Space.sm,
+              }}>
+              App opening will be available when shared-trip deep links are
+              ready.
+            </Text>
+
+            <Text style={{ ...Type.section, marginBottom: Space.lg }}>
+              Places
+            </Text>
+
+            {errorMessage ? (
+              <Text style={{ color: Palette.textMuted, ...Type.body }}>
+                {errorMessage}
               </Text>
-            </Pressable>
-          </View>
-          <Text
-            style={{
-              color: '#717171',
-              fontSize: 13,
-              lineHeight: 18,
-              marginBottom: 28,
-              marginTop: 8,
-            }}>
-            Saving shared trips will be added when account sync is available.
-          </Text>
+            ) : trip.places.length === 0 ? (
+              <Text style={{ color: Palette.textMuted, ...Type.body }}>
+                This trip has no places yet.
+              </Text>
+            ) : (
+              trip.places.map((tripPlace) => {
+                const place = placesById.get(tripPlace.placeId);
 
-          <Text style={{ fontSize: 24, fontWeight: '700', marginBottom: 14 }}>
-            Places
-          </Text>
+                if (!place) {
+                  return null;
+                }
 
-          {errorMessage ? (
-            <Text style={{ color: '#717171', fontSize: 16 }}>
-              {errorMessage}
-            </Text>
-          ) : trip.places.length === 0 ? (
-            <Text style={{ color: '#717171', fontSize: 16 }}>
-              This trip has no places yet.
-            </Text>
-          ) : (
-            trip.places.map((tripPlace, index) => {
-              const place = placesById.get(tripPlace.placeId);
-
-              if (!place) {
-                return null;
-              }
-
-              return (
-                <View key={tripPlace.placeId}>
-                  <PlaceCard place={place} showSaveButton={false} />
-                  {tripPlace.note.trim() ? (
-                    <View
-                      style={{
-                        backgroundColor: '#f5f5f5',
-                        borderRadius: 10,
-                        marginBottom: 24,
-                        marginTop: -12,
-                        padding: 14,
-                      }}>
-                      <Text
+                return (
+                  <View key={tripPlace.placeId}>
+                    <PlaceCard place={place} showSaveButton={false} />
+                    {tripPlace.note.trim() ? (
+                      <View
                         style={{
-                          fontSize: 14,
-                          fontWeight: '700',
-                          marginBottom: 5,
+                          backgroundColor: Palette.surfaceMuted,
+                          borderRadius: Radius.control,
+                          marginBottom: Space.xxl,
+                          marginTop: -12,
+                          padding: Space.md,
                         }}>
-                        Trip note
-                      </Text>
-                      <Text
-                        style={{ color: '#333', fontSize: 15, lineHeight: 21 }}>
-                        {tripPlace.note}
-                      </Text>
-                    </View>
-                  ) : null}
-                </View>
-              );
-            })
-          )}
-        </>
-      )}
-    </ScrollView>
+                        <Text
+                          style={{ ...Type.label, marginBottom: Space.xs }}>
+                          Trip note
+                        </Text>
+                        <Text
+                          style={{ color: Palette.textBody, ...Type.body }}>
+                          {tripPlace.note}
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+                );
+              })
+            )}
+          </>
+        )}
+      </ScrollView>
+    </SafeAreaView>
   );
 }

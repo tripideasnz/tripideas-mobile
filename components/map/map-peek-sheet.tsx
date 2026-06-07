@@ -6,7 +6,6 @@ import {
   Pressable,
   ScrollView,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 
@@ -14,6 +13,14 @@ import {
   MapActiveFilters,
   type MapActiveFilter,
 } from '@/components/map/map-active-filters';
+import { AppTextInput } from '@/components/ui/app-text-input';
+import {
+  Palette,
+  Radius,
+  Shadow,
+  Space,
+  Type,
+} from '@/constants/design';
 import type { MapPlace } from '@/sanity/types';
 
 type MapPeekSheetProps = {
@@ -54,17 +61,13 @@ export function MapPeekSheet({
   return (
     <View
       style={{
-        backgroundColor: '#fff',
-        borderTopLeftRadius: 18,
-        borderTopRightRadius: 18,
-        elevation: 12,
-        paddingBottom: 12,
-        paddingHorizontal: 12,
-        paddingTop: 4,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: -3 },
-        shadowOpacity: 0.18,
-        shadowRadius: 9,
+        ...Shadow.sheet,
+        backgroundColor: Palette.surface,
+        borderTopLeftRadius: Radius.sheet,
+        borderTopRightRadius: Radius.sheet,
+        paddingBottom: Space.md,
+        paddingHorizontal: Space.md,
+        paddingTop: Space.xs,
       }}>
       <Pressable
         accessibilityLabel={
@@ -81,7 +84,7 @@ export function MapPeekSheet({
         <View
           style={{
             backgroundColor: '#c9c9c9',
-            borderRadius: 999,
+            borderRadius: Radius.pill,
             height: 4,
             width: 42,
           }}
@@ -90,26 +93,22 @@ export function MapPeekSheet({
 
       {isMinimised ? null : (
         <>
-          <TextInput
+          <AppTextInput
             autoCapitalize="none"
             autoCorrect={false}
             onChangeText={onQueryChange}
             placeholder="Search for trip ideas"
             returnKeyType="search"
             style={{
-              backgroundColor: '#f7f7f7',
-              borderColor: '#dedede',
-              borderRadius: 999,
-              borderWidth: 1,
-              fontSize: 15,
-              paddingHorizontal: 16,
-              paddingVertical: 10,
+              backgroundColor: Palette.surfaceMuted,
+              borderRadius: Radius.pill,
+              minHeight: 44,
             }}
             value={query}
           />
 
           {activeFilters.length > 0 ? (
-            <View style={{ paddingTop: 10 }}>
+            <View style={{ paddingTop: Space.md }}>
               <MapActiveFilters
                 filters={activeFilters}
                 onRemove={onRemoveFilter}
@@ -123,10 +122,10 @@ export function MapPeekSheet({
               flexDirection: 'row',
               justifyContent: 'space-between',
               paddingHorizontal: 3,
-              paddingVertical: 10,
+              paddingVertical: Space.md,
             }}>
             <Text
-              style={{ color: '#4a4a4a', fontSize: 14, fontWeight: '600' }}>
+              style={{ color: Palette.textBody, ...Type.label }}>
               {isLoading
                 ? 'Loading places...'
                 : `${resultCount} ${
@@ -134,13 +133,17 @@ export function MapPeekSheet({
                   } in view`}
             </Text>
             <View
-              style={{ alignItems: 'center', flexDirection: 'row', gap: 12 }}>
+              style={{
+                alignItems: 'center',
+                flexDirection: 'row',
+                gap: Space.md,
+              }}>
               <Pressable
                 accessibilityRole="button"
                 onPress={handlePress}
                 style={({ pressed }) => ({ opacity: pressed ? 0.55 : 1 })}>
                 <Text
-                  style={{ color: '#111', fontSize: 14, fontWeight: '800' }}>
+                  style={{ color: Palette.text, ...Type.label }}>
                   List view
                 </Text>
               </Pressable>
@@ -151,7 +154,7 @@ export function MapPeekSheet({
                 onPress={minimiseTray}
                 style={({ pressed }) => ({ opacity: pressed ? 0.55 : 1 })}>
                 <MaterialIcons
-                  color="#111"
+                  color={Palette.text}
                   name="keyboard-arrow-down"
                   size={25}
                 />
@@ -161,7 +164,7 @@ export function MapPeekSheet({
 
           {places.length > 0 ? (
             <ScrollView
-              contentContainerStyle={{ gap: 10 }}
+              contentContainerStyle={{ gap: Space.md }}
               horizontal
               showsHorizontalScrollIndicator={false}>
               {places.slice(0, 4).map((place, index) => (
@@ -185,8 +188,8 @@ export function MapPeekSheet({
                   <View
                     style={{
                       aspectRatio: 4 / 3,
-                      backgroundColor: '#e8e8e5',
-                      borderRadius: 8,
+                      backgroundColor: Palette.surfaceMuted,
+                      borderRadius: Radius.small,
                       overflow: 'hidden',
                     }}>
                     {place.imageUrl ? (
@@ -202,13 +205,21 @@ export function MapPeekSheet({
                   </View>
                   <Text
                     numberOfLines={1}
-                    style={{ fontSize: 13, fontWeight: '700', marginTop: 6 }}>
+                    style={{
+                      ...Type.label,
+                      fontSize: 13,
+                      marginTop: Space.sm,
+                    }}>
                     {place.title}
                   </Text>
                   {place.subRegion?.name ? (
                     <Text
                       numberOfLines={1}
-                      style={{ color: '#717171', fontSize: 11, marginTop: 1 }}>
+                      style={{
+                        color: Palette.textMuted,
+                        fontSize: 11,
+                        marginTop: 2,
+                      }}>
                       {place.subRegion.name}
                     </Text>
                   ) : null}

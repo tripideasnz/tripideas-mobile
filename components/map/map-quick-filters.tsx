@@ -1,6 +1,8 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { Pressable, ScrollView, Text } from 'react-native';
+import { ScrollView } from 'react-native';
 
+import { AppChip } from '@/components/ui/app-chip';
+import { Space } from '@/constants/design';
 type MapQuickFiltersProps = {
   isActivitiesSelected: boolean;
   isRegionsSelected: boolean;
@@ -20,7 +22,7 @@ export function MapQuickFilters({
 }: MapQuickFiltersProps) {
   return (
     <ScrollView
-      contentContainerStyle={{ gap: 8, paddingHorizontal: 12 }}
+      contentContainerStyle={{ gap: Space.sm, paddingHorizontal: Space.md }}
       horizontal
       showsHorizontalScrollIndicator={false}>
       <FilterChip
@@ -57,40 +59,12 @@ function FilterChip({
   onPress: () => void;
 }) {
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ selected: isSelected }}
+    <AppChip
+      elevated
+      icon={icon}
+      label={label}
       onPress={onPress}
-      style={({ pressed }) => ({
-        alignItems: 'center',
-        backgroundColor: isSelected ? '#111' : 'rgba(255,255,255,0.96)',
-        borderColor: isSelected ? '#111' : '#dedede',
-        borderRadius: 999,
-        borderWidth: 1,
-        elevation: 3,
-        flexDirection: 'row',
-        gap: 6,
-        opacity: pressed ? 0.72 : 1,
-        paddingHorizontal: 13,
-        paddingVertical: 9,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.12,
-        shadowRadius: 5,
-      })}>
-      <MaterialIcons
-        color={isSelected ? '#fff' : '#111'}
-        name={icon}
-        size={17}
-      />
-      <Text
-        style={{
-          color: isSelected ? '#fff' : '#111',
-          fontSize: 14,
-          fontWeight: '700',
-        }}>
-        {label}
-      </Text>
-    </Pressable>
+      selected={isSelected}
+    />
   );
 }

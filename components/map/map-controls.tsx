@@ -1,6 +1,7 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Pressable, View } from 'react-native';
 
+import { Palette, Radius, Shadow } from '@/constants/design';
 type MapControlsProps = {
   onLayersPress: () => void;
   onRecenterPress: () => void;
@@ -13,23 +14,19 @@ export function MapControls({
   return (
     <View
       style={{
+        ...Shadow.floating,
         backgroundColor: 'rgba(255,255,255,0.96)',
-        borderColor: '#dedede',
-        borderRadius: 14,
+        borderColor: Palette.border,
+        borderRadius: Radius.card,
         borderWidth: 1,
-        elevation: 3,
         overflow: 'hidden',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.14,
-        shadowRadius: 5,
       }}>
       <ControlButton
         accessibilityLabel="Map layers"
         icon="layers"
         onPress={onLayersPress}
       />
-      <View style={{ backgroundColor: '#e2e2e2', height: 1 }} />
+      <View style={{ backgroundColor: Palette.border, height: 1 }} />
       <ControlButton
         accessibilityLabel="Recenter map"
         icon="my-location"
@@ -60,7 +57,7 @@ function ControlButton({
         opacity: pressed ? 0.55 : 1,
         width: 48,
       })}>
-      <MaterialIcons color="#111" name={icon} size={23} />
+      <MaterialIcons color={Palette.text} name={icon} size={23} />
     </Pressable>
   );
 }

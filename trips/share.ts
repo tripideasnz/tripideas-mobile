@@ -61,50 +61,17 @@ export function buildTripShareCardData({
 export function buildTripShareMessage({
   shareUrl,
   trip,
-  places,
 }: BuildTripShareMessageOptions) {
-  const placesById = new Map(
-    places
-      .filter((place) => place._id)
-      .map((place) => [place._id as string, place])
-  );
-  const lines = ['TripIdeas', trip.name];
+  const lines = ['TripIdeas.nz', trip.name];
 
   if (trip.note.trim()) {
     lines.push('', getShortNote(trip.note));
   }
 
-  lines.push(
-    '',
-    `${trip.places.length} ${
-      trip.places.length === 1 ? 'place' : 'places'
-    }`
-  );
-
-  if (trip.places.length > 0) {
-    lines.push('', 'Trip places');
-
-    trip.places.forEach((tripPlace, index) => {
-      const place = placesById.get(tripPlace.placeId);
-      const placeTitle = place?.title?.trim();
-
-      if (placeTitle) {
-        lines.push(`${index + 1}. ${placeTitle}`);
-      }
-
-      if (tripPlace.note.trim()) {
-        lines.push(`   ${tripPlace.note.trim()}`);
-      }
-    });
-  }
-
   if (shareUrl) {
-    lines.push('', `View this trip: ${shareUrl}`);
+    lines.push('', shareUrl);
   } else {
-    lines.push(
-      '',
-      'Shared from TripIdeas. Public trip links are not available yet.'
-    );
+    lines.push('', 'Public trip link unavailable.');
   }
 
   return lines.join('\n');

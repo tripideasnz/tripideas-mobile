@@ -25,7 +25,7 @@ export default function RootLayout() {
           />
           <Stack.Screen
             name="trips/[tripId]/shared"
-            options={{ title: 'Shared Trip Preview' }}
+            options={{ headerShown: false, title: 'Shared Trip Preview' }}
           />
           <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
         </Stack>

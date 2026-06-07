@@ -1,5 +1,8 @@
 import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
 
+import { AppText } from '@/components/ui/app-text';
+import { CardSurface } from '@/components/ui/card-surface';
+import { Palette, Space, Type } from '@/constants/design';
 import type { MyTrip } from '@/trips/types';
 
 type AddToTripModalProps = {
@@ -21,15 +24,20 @@ export function AddToTripModal({
       onRequestClose={onClose}
       presentationStyle="pageSheet"
       visible={Boolean(placeId)}>
-      <View style={{ flex: 1, backgroundColor: '#fff', padding: 24 }}>
+      <View
+        style={{
+          backgroundColor: Palette.background,
+          flex: 1,
+          padding: Space.xxl,
+        }}>
         <View
           style={{
             alignItems: 'center',
             flexDirection: 'row',
             justifyContent: 'space-between',
-            marginBottom: 24,
+            marginBottom: Space.xxl,
           }}>
-          <Text style={{ fontSize: 28, fontWeight: '700' }}>Add to My Trip</Text>
+          <AppText variant="title">Add to My Trip</AppText>
           <Pressable
             accessibilityRole="button"
             onPress={onClose}
@@ -43,9 +51,9 @@ export function AddToTripModal({
         </View>
 
         {trips.length === 0 ? (
-          <Text style={{ color: '#717171', fontSize: 16, lineHeight: 23 }}>
+          <AppText color={Palette.textMuted}>
             Create a trip from the Saved screen first, then add this place.
-          </Text>
+          </AppText>
         ) : (
           <ScrollView>
             {trips.map((trip) => {
@@ -59,24 +67,24 @@ export function AddToTripModal({
                   key={trip.id}
                   onPress={() => onSelectTrip(trip.id)}
                   style={({ pressed }) => ({
-                    borderColor: '#e2e2e2',
-                    borderRadius: 12,
-                    borderWidth: 1,
-                    marginBottom: 12,
+                    marginBottom: Space.md,
                     opacity: pressed ? 0.55 : alreadyAdded ? 0.75 : 1,
-                    padding: 16,
                   })}>
-                  <Text style={{ fontSize: 18, fontWeight: '700' }}>
-                    {trip.name}
-                  </Text>
-                  <Text
-                    style={{ color: '#717171', fontSize: 14, marginTop: 5 }}>
-                    {alreadyAdded
-                      ? 'Already in this trip'
-                      : `${trip.places.length} ${
-                          trip.places.length === 1 ? 'place' : 'places'
-                        }`}
-                  </Text>
+                  <CardSurface style={{ padding: Space.lg }}>
+                    <Text style={Type.cardTitle}>{trip.name}</Text>
+                    <Text
+                      style={{
+                        color: Palette.textMuted,
+                        ...Type.label,
+                        marginTop: Space.xs,
+                      }}>
+                      {alreadyAdded
+                        ? 'Already in this trip'
+                        : `${trip.places.length} ${
+                            trip.places.length === 1 ? 'place' : 'places'
+                          }`}
+                    </Text>
+                  </CardSurface>
                 </Pressable>
               );
             })}

@@ -3,22 +3,23 @@ import { Pressable } from 'react-native';
 import type { GestureResponderEvent, ViewStyle } from 'react-native';
 
 import { Palette, Radius } from '@/constants/design';
-type SavePlaceButtonProps = {
-  isSaved: boolean;
+
+type AddPlaceToTripButtonProps = {
+  isInTrip: boolean;
   onPress: (event: GestureResponderEvent) => void;
   style?: ViewStyle;
 };
 
-export function SavePlaceButton({
-  isSaved,
+export function AddPlaceToTripButton({
+  isInTrip,
   onPress,
   style,
-}: SavePlaceButtonProps) {
+}: AddPlaceToTripButtonProps) {
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={
-        isSaved ? 'Remove from favourites' : 'Add to favourites'
+        isInTrip ? 'Add to another trip' : 'Add to trip'
       }
       hitSlop={8}
       onPress={onPress}
@@ -35,9 +36,9 @@ export function SavePlaceButton({
         style,
       ]}>
       <MaterialIcons
-        name={isSaved ? 'favorite' : 'favorite-border'}
+        name={isInTrip ? 'folder' : 'folder-open'}
         size={25}
-        color={isSaved ? Palette.favourite : Palette.text}
+        color={isInTrip ? Palette.trip : Palette.text}
       />
     </Pressable>
   );

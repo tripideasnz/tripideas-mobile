@@ -1,6 +1,7 @@
 import MapView, { Marker } from 'react-native-maps';
 import { Pressable, Text, View } from 'react-native';
 
+import { Radius, Shadow, Space, Type } from '@/constants/design';
 type PlaceMapPreviewProps = {
   latitude: number;
   longitude: number;
@@ -16,13 +17,13 @@ export function PlaceMapPreview({
 }: PlaceMapPreviewProps) {
   return (
     <Pressable
-      accessibilityLabel="Open this place on the TripIdeas map"
+      accessibilityLabel="Open this place on the TripIdeas.nz map"
       accessibilityRole="button"
       disabled={!onPress}
       onPress={onPress}
       style={{
-        borderRadius: 14,
-        elevation: 1,
+        ...Shadow.card,
+        borderRadius: Radius.card,
         height: 220,
         overflow: 'hidden',
         zIndex: 1,
@@ -45,17 +46,17 @@ export function PlaceMapPreview({
       <View
         pointerEvents="none"
         style={{
-          backgroundColor: 'rgba(255,255,255,0.92)',
-          borderRadius: 999,
+          backgroundColor: 'rgba(255,255,255,0.94)',
+          borderRadius: Radius.pill,
           bottom: 12,
           elevation: 2,
           left: 12,
-          paddingHorizontal: 12,
-          paddingVertical: 7,
+          paddingHorizontal: Space.md,
+          paddingVertical: Space.sm,
           position: 'absolute',
           zIndex: 2,
         }}>
-        <Text style={{ fontSize: 13, fontWeight: '700' }}>Map preview</Text>
+        <Text style={Type.label}>Map preview</Text>
       </View>
     </Pressable>
   );

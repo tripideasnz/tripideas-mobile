@@ -1,8 +1,12 @@
 import { useEffect, useState } from 'react';
-import { ScrollView, Text, TextInput, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AppText } from '@/components/ui/app-text';
+import { AppTextInput } from '@/components/ui/app-text-input';
+import { StatusText } from '@/components/ui/status-text';
 import { PlaceCard } from '@/components/place-card';
+import { Palette, Screen, Space } from '@/constants/design';
 import { sanityClient } from '@/sanity/client';
 import { SEARCH_QUERY } from '@/sanity/queries';
 import type { PlaceCardData } from '@/types/content';
@@ -68,49 +72,43 @@ export default function SearchScreen() {
   const hasSearched = debouncedQuery.length > 0;
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: Palette.background }}>
       <ScrollView
         style={{ flex: 1 }}
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{
-          paddingBottom: 32,
-          paddingHorizontal: 24,
-          paddingTop: 20,
+          paddingBottom: Screen.bottom,
+          paddingHorizontal: Screen.gutter,
+          paddingTop: Screen.top,
         }}>
-        <Text style={{ fontSize: 34, fontWeight: '700', marginBottom: 8 }}>
+        <AppText style={{ marginBottom: Space.sm }} variant="display">
           Search
-        </Text>
+        </AppText>
 
-        <Text style={{ color: '#4a4a4a', fontSize: 16, marginBottom: 18 }}>
+        <AppText
+          color={Palette.textBody}
+          style={{ marginBottom: Space.xl }}>
           Find places by name, tags, region, or keywords.
-        </Text>
+        </AppText>
 
-        <TextInput
+        <AppTextInput
           value={query}
           onChangeText={setQuery}
           placeholder="Search places, beaches, walks, regions..."
           autoCapitalize="none"
           autoCorrect={false}
           returnKeyType="search"
-          style={{
-            borderColor: '#d8d8d8',
-            borderRadius: 12,
-            borderWidth: 1,
-            fontSize: 17,
-            marginBottom: 20,
-            paddingHorizontal: 14,
-            paddingVertical: 12,
-          }}
+          style={{ marginBottom: Space.xl }}
         />
 
         {!hasSearched ? (
-          <Text style={{ color: '#717171', fontSize: 16 }}>
+          <StatusText>
             Search places, beaches, walks, regions...
-          </Text>
+          </StatusText>
         ) : errorMessage ? (
-          <Text style={{ color: '#717171', fontSize: 16 }}>{errorMessage}</Text>
+          <StatusText>{errorMessage}</StatusText>
         ) : isSearching ? (
-          <Text style={{ color: '#717171', fontSize: 16 }}>Searching...</Text>
+          <StatusText>Searching...</StatusText>
         ) : results.length > 0 ? (
           <View>
             {results.map((place, index) => (
@@ -121,7 +119,7 @@ export default function SearchScreen() {
             ))}
           </View>
         ) : (
-          <Text style={{ color: '#717171', fontSize: 16 }}>No places found.</Text>
+          <StatusText>No places found.</StatusText>
         )}
       </ScrollView>
     </SafeAreaView>

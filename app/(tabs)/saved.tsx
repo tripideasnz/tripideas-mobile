@@ -1,21 +1,29 @@
-import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Alert,
   Pressable,
   ScrollView,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { AddToTripModal } from '@/components/add-to-trip-modal';
 import { PlaceCard } from '@/components/place-card';
+import { TripImageCollage } from '@/components/trip-image-collage';
+import { AppButton } from '@/components/ui/app-button';
+import { AppText } from '@/components/ui/app-text';
+import { AppTextInput } from '@/components/ui/app-text-input';
+import { StatusText } from '@/components/ui/status-text';
+import {
+  Palette,
+  Radius,
+  Screen,
+  Space,
+  Type,
+} from '@/constants/design';
 import { useSavedPlaces } from '@/saved/provider';
 import { fetchPlaceCardsByIds } from '@/sanity/place-cards';
-import { getTripThumbnail } from '@/trips/images';
+import { getTripImages } from '@/trips/images';
 import { useMyTrips } from '@/trips/provider';
 import type { PlaceCardData } from '@/types/content';
 
@@ -23,7 +31,6 @@ export default function SavedScreen() {
   const router = useRouter();
   const { isLoading: isLoadingSavedIds, savedPlaceIds } = useSavedPlaces();
   const {
-    addPlaceToTrip,
     createTrip,
     isLoading: isLoadingTrips,
     trips,
@@ -34,7 +41,6 @@ export default function SavedScreen() {
   const [isLoadingTripPlaces, setIsLoadingTripPlaces] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [newTripName, setNewTripName] = useState('');
-  const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
   const tripPlaceIds = useMemo(
     () =>
       Array.from(
@@ -130,25 +136,30 @@ export default function SavedScreen() {
   const isLoading = isLoadingSavedIds || isLoadingPlaces;
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: Palette.background }}>
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{
-          paddingBottom: 32,
-          paddingHorizontal: 24,
-          paddingTop: 20,
+          paddingBottom: Screen.bottom,
+          paddingHorizontal: Screen.gutter,
+          paddingTop: Screen.top,
         }}>
-        <Text style={{ fontSize: 34, fontWeight: '700', marginBottom: 18 }}>
+        <AppText style={{ marginBottom: Space.xl }} variant="display">
           Saved
-        </Text>
+        </AppText>
 
-        <View style={{ marginBottom: 32 }}>
-          <Text style={{ fontSize: 24, fontWeight: '700', marginBottom: 12 }}>
+        <View style={{ marginBottom: Space.xxxl }}>
+          <AppText style={{ marginBottom: Space.md }} variant="section">
             My Trips
-          </Text>
+          </AppText>
 
-          <View style={{ flexDirection: 'row', gap: 10, marginBottom: 16 }}>
-            <TextInput
+          <View
+            style={{
+              flexDirection: 'row',
+              gap: Space.md,
+              marginBottom: Space.lg,
+            }}>
+            <AppTextInput
               accessibilityLabel="New trip name"
               onChangeText={setNewTripName}
               onSubmitEditing={async () => {
@@ -158,22 +169,14 @@ export default function SavedScreen() {
                   setNewTripName('');
                 }
               }}
-              placeholder="New trip name"
+              placeholder="Add new trip"
               returnKeyType="done"
-              style={{
-                borderColor: '#d8d8d8',
-                borderRadius: 10,
-                borderWidth: 1,
-                flex: 1,
-                fontSize: 16,
-                paddingHorizontal: 14,
-                paddingVertical: 12,
-              }}
+              style={{ flex: 1 }}
               value={newTripName}
             />
-            <Pressable
-              accessibilityRole="button"
+            <AppButton
               disabled={!newTripName.trim()}
+              label="Create"
               onPress={async () => {
                 const trip = await createTrip(newTripName);
 
@@ -181,27 +184,14 @@ export default function SavedScreen() {
                   setNewTripName('');
                 }
               }}
-              style={({ pressed }) => ({
-                alignItems: 'center',
-                backgroundColor: '#111',
-                borderRadius: 10,
-                justifyContent: 'center',
-                opacity: !newTripName.trim() ? 0.4 : pressed ? 0.7 : 1,
-                paddingHorizontal: 18,
-              })}>
-              <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>
-                Create
-              </Text>
-            </Pressable>
+            />
           </View>
 
           {isLoadingTrips || isLoadingTripPlaces ? (
-            <Text style={{ color: '#717171', fontSize: 16 }}>
-              Loading trips...
-            </Text>
+            <StatusText>Loading trips...</StatusText>
           ) : trips.length > 0 ? (
             trips.map((trip) => {
-              const thumbnail = getTripThumbnail(trip, tripPlaces);
+              const tripImages = getTripImages(trip, tripPlaces).slice(0, 4);
 
               return (
                 <Pressable
@@ -214,54 +204,36 @@ export default function SavedScreen() {
                     })
                   }
                   style={({ pressed }) => ({
-                    borderColor: '#e2e2e2',
-                    borderRadius: 12,
+                    borderColor: Palette.border,
+                    borderRadius: Radius.card,
                     borderWidth: 1,
                     flexDirection: 'row',
-                    marginBottom: 10,
+                    marginBottom: Space.md,
                     opacity: pressed ? 0.65 : 1,
                     overflow: 'hidden',
                   })}>
-                  {thumbnail ? (
-                    <Image
-                      accessibilityLabel={thumbnail.alt}
-                      contentFit="cover"
-                      source={{ uri: thumbnail.url }}
-                      style={{ height: 92, width: 112 }}
-                    />
-                  ) : (
-                    <View
-                      style={{
-                        alignItems: 'center',
-                        backgroundColor: '#e8ecef',
-                        height: 92,
-                        justifyContent: 'center',
-                        width: 112,
-                      }}>
-                      <Text
-                        style={{
-                          color: '#59636b',
-                          fontSize: 13,
-                          fontWeight: '700',
-                        }}>
-                        My Trip
-                      </Text>
-                    </View>
-                  )}
+                  <TripImageCollage
+                    images={tripImages}
+                    style={{ height: 92, width: 112 }}
+                  />
 
                   <View
                     style={{
                       flex: 1,
                       justifyContent: 'center',
-                      padding: 16,
+                      padding: Space.lg,
                     }}>
                     <Text
                       numberOfLines={2}
-                      style={{ fontSize: 18, fontWeight: '700' }}>
+                      style={Type.cardTitle}>
                       {trip.name}
                     </Text>
                     <Text
-                      style={{ color: '#717171', fontSize: 14, marginTop: 5 }}>
+                      style={{
+                        color: Palette.textMuted,
+                        ...Type.label,
+                        marginTop: Space.xs,
+                      }}>
                       {trip.places.length}{' '}
                       {trip.places.length === 1 ? 'place' : 'places'}
                     </Text>
@@ -270,82 +242,30 @@ export default function SavedScreen() {
               );
             })
           ) : (
-            <Text style={{ color: '#717171', fontSize: 16 }}>
+            <StatusText>
               No trips yet. Create one for places you want to group together.
-            </Text>
+            </StatusText>
           )}
         </View>
 
-        <Text style={{ fontSize: 24, fontWeight: '700', marginBottom: 12 }}>
+        <AppText style={{ marginBottom: Space.md }} variant="section">
           Favourites
-        </Text>
+        </AppText>
 
         {isLoading ? (
-          <Text style={{ color: '#717171', fontSize: 16 }}>
-            Loading favourites...
-          </Text>
+          <StatusText>Loading favourites...</StatusText>
         ) : errorMessage ? (
-          <Text style={{ color: '#717171', fontSize: 16 }}>{errorMessage}</Text>
+          <StatusText>{errorMessage}</StatusText>
         ) : places.length > 0 ? (
           places.map((place, index) => {
             const key = place._id ?? place.slug?.current ?? index;
 
-            return (
-              <View key={key} style={{ marginBottom: 8 }}>
-                <PlaceCard place={place} />
-                {place._id ? (
-                  <Pressable
-                    accessibilityRole="button"
-                    onPress={() => setSelectedPlaceId(place._id ?? null)}
-                    style={({ pressed }) => ({
-                      alignItems: 'center',
-                      borderColor: '#111',
-                      borderRadius: 10,
-                      borderWidth: 1,
-                      marginBottom: 16,
-                      marginTop: -12,
-                      opacity: pressed ? 0.55 : 1,
-                      paddingVertical: 12,
-                    })}>
-                    <Text style={{ fontSize: 16, fontWeight: '700' }}>
-                      Add to trip
-                    </Text>
-                  </Pressable>
-                ) : null}
-              </View>
-            );
+            return <PlaceCard key={key} place={place} />;
           })
         ) : (
-          <Text style={{ color: '#717171', fontSize: 16 }}>
-            No favourites yet.
-          </Text>
+          <StatusText>No favourites yet.</StatusText>
         )}
       </ScrollView>
-
-      <AddToTripModal
-        onClose={() => setSelectedPlaceId(null)}
-        onSelectTrip={async (tripId) => {
-          if (!selectedPlaceId) {
-            return;
-          }
-
-          const selectedTrip = trips.find((trip) => trip.id === tripId);
-          const alreadyAdded = selectedTrip?.places.some(
-            (place) => place.placeId === selectedPlaceId
-          );
-
-          if (alreadyAdded) {
-            Alert.alert('This place is already in that trip');
-            return;
-          }
-
-          await addPlaceToTrip(tripId, selectedPlaceId);
-          setSelectedPlaceId(null);
-          Alert.alert('Added to My Trip');
-        }}
-        placeId={selectedPlaceId}
-        trips={trips}
-      />
     </SafeAreaView>
   );
 }
