@@ -175,7 +175,7 @@ export default function TripMapScreen() {
                     }}
                     key={place._id ?? place.slug?.current ?? index}
                     onPress={() => setSelectedPlaceId(place._id ?? null)}
-                    title={place.title ?? 'Untitled place'}
+                    title={place.title}
                   />
                 ))}
               </MapView>

@@ -40,10 +40,7 @@ export function PlaceMapPreview({
         rotateEnabled={false}
         zoomEnabled={false}
         style={{ flex: 1 }}>
-        <Marker
-          coordinate={{ latitude, longitude }}
-          title={title ?? 'Selected place'}
-        />
+        <Marker coordinate={{ latitude, longitude }} title={title} />
       </MapView>
       <View
         pointerEvents="none"

@@ -1,5 +1,10 @@
 import { sanityClient } from '@/sanity/client';
-import { PLACE_CARDS_BY_IDS_QUERY } from '@/sanity/queries';
+import {
+  MAP_NAVIGATION_QUERY,
+  MAP_PLACES_QUERY,
+  PLACE_CARDS_BY_IDS_QUERY,
+} from '@/sanity/queries';
+import type { MapNavigationResponse, MapPlace } from '@/sanity/types';
 import type { PlaceCardData } from '@/types/content';
 
 export async function fetchPlaceCardsByIds(ids: string[]) {
@@ -23,4 +28,17 @@ export async function fetchPlaceCardsByIds(ids: string[]) {
     const place = placesById.get(id);
     return place ? [place] : [];
   });
+}
+
+export async function fetchMapPlaces() {
+  const places = await sanityClient.fetch<MapPlace[]>(MAP_PLACES_QUERY);
+
+  return (places ?? []).filter(Boolean);
+}
+
+export async function fetchMapNavigation() {
+  const navigation =
+    await sanityClient.fetch<MapNavigationResponse | null>(MAP_NAVIGATION_QUERY);
+
+  return navigation ?? {};
 }

@@ -71,7 +71,7 @@ export default function RegionScreen() {
       ) : (
         <>
           <Text style={{ fontSize: 32, fontWeight: '700', marginBottom: 8 }}>
-            {region.name ?? 'Untitled region'}
+            {region.name}
           </Text>
 
           {region.maori ? (
@@ -101,7 +101,7 @@ export default function RegionScreen() {
                     borderBottomColor: '#ddd',
                   }}>
                   <Text style={{ fontSize: 17 }}>
-                    {subRegion.name ?? 'Untitled subregion'}
+                    {subRegion.name}
                   </Text>
                 </Pressable>
               </Link>

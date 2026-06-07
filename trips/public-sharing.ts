@@ -97,7 +97,7 @@ export function buildPublicTripSnapshot({
         slug: place?.slug?.current,
         subtitle:
           typeof place?.subtitle === 'string' ? place.subtitle : undefined,
-        title: place?.title?.trim() || 'Untitled place',
+        title: place?.title?.trim() ?? '',
       };
     }),
     sourceTripId: trip.id,

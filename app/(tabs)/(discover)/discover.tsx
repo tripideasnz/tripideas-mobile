@@ -118,7 +118,7 @@ function IslandCard({ island }: { island: IslandSummary }) {
         })}>
         <View style={{ flex: 1 }}>
           <Text style={{ fontSize: 24, fontWeight: '700' }}>
-            {island.title ?? 'Untitled island'}
+            {island.title}
           </Text>
           {island.maori ? (
             <Text
@@ -192,7 +192,7 @@ function RegionSection({ region }: { region: Region }) {
         ) : null}
         <View style={{ flex: 1 }}>
           <Text style={{ fontSize: 18, fontWeight: '700' }}>
-            {region.name ?? 'Untitled region'}
+            {region.name}
           </Text>
           {region.maori ? (
             <Text style={{ color: '#717171', fontSize: 14, marginTop: 3 }}>
@@ -270,7 +270,7 @@ function SubRegionLink({ subRegion }: { subRegion: SubRegionSummary }) {
         ) : null}
         <View style={{ flex: 1 }}>
           <Text style={{ fontSize: 16, fontWeight: '600' }}>
-            {subRegion.name ?? 'Untitled sub-region'}
+            {subRegion.name}
           </Text>
           {subRegion.maori ? (
             <Text style={{ color: '#717171', fontSize: 13, marginTop: 3 }}>

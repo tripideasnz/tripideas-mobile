@@ -105,3 +105,42 @@ export type PlacePage = PlaceCardData & {
   nearbyPlaces?: PlaceCardData[];
   subRegion?: SubRegionContext;
 };
+
+export type MapPlace = PlaceCardData & {
+  subRegion?: {
+    _id?: string;
+    name?: string;
+    slug?: Slug;
+    region?: {
+      _id?: string;
+      name?: string;
+      slug?: Slug;
+    };
+  };
+};
+
+export type MapNavigationSubRegion = {
+  _id?: string;
+  maori?: string;
+  name?: string;
+  slug?: Slug;
+};
+
+export type MapNavigationRegion = {
+  _id?: string;
+  maori?: string;
+  name?: string;
+  slug?: Slug;
+  subRegions?: MapNavigationSubRegion[];
+};
+
+export type MapNavigationIsland = {
+  maori?: string;
+  regions?: MapNavigationRegion[];
+  title?: string;
+};
+
+export type MapNavigationResponse = {
+  north?: MapNavigationIsland;
+  south?: MapNavigationIsland;
+};

@@ -90,7 +90,7 @@ export function PlaceCard({
 
       <View style={{ paddingHorizontal: 16, paddingVertical: 16 }}>
         <Text numberOfLines={2} style={{ fontSize: 20, fontWeight: '700' }}>
-          {place.title ?? 'Untitled place'}
+          {place.title}
         </Text>
 
         {showSnippet && heading ? (

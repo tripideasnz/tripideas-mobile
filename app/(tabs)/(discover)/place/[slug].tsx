@@ -188,7 +188,7 @@ export default function PlaceScreen() {
                   fontSize: 34,
                   fontWeight: '700',
                 }}>
-                {place.title ?? 'Untitled place'}
+                {place.title}
               </Text>
 
               {canSavePlace ? (
@@ -260,7 +260,7 @@ export default function PlaceScreen() {
                   latitude={coordinates.latitude}
                   longitude={coordinates.longitude}
                   onPress={openTripIdeasMap}
-                  title={place.title ?? 'Selected place'}
+                  title={place.title}
                 />
                 <Pressable
                   onPress={async () => {

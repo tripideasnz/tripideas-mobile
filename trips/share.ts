@@ -86,7 +86,11 @@ export function buildTripShareMessage({
 
     trip.places.forEach((tripPlace, index) => {
       const place = placesById.get(tripPlace.placeId);
-      lines.push(`${index + 1}. ${place?.title?.trim() || 'Untitled place'}`);
+      const placeTitle = place?.title?.trim();
+
+      if (placeTitle) {
+        lines.push(`${index + 1}. ${placeTitle}`);
+      }
 
       if (tripPlace.note.trim()) {
         lines.push(`   ${tripPlace.note.trim()}`);

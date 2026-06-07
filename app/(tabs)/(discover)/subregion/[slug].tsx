@@ -78,7 +78,7 @@ export default function SubRegionScreen() {
       ) : (
         <>
           <Text style={{ fontSize: 32, fontWeight: '700', marginBottom: 8 }}>
-            {subRegion.name ?? 'Untitled subregion'}
+            {subRegion.name}
           </Text>
 
           <Text style={{ fontSize: 20, fontWeight: '700', marginBottom: 12 }}>

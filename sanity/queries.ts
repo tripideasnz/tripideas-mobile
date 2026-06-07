@@ -227,6 +227,16 @@ export const SEARCH_QUERY = `
   "imageUrl": mainImage.asset->url,
   "preview": body[_type == "block" && style == "normal"][0].children[0].text,
   "seoDescription": seo.description,
+  subRegion->{
+    _id,
+    name,
+    slug,
+    region->{
+      _id,
+      name,
+      slug
+    }
+  },
   slug
 }
 `;
@@ -243,6 +253,86 @@ export const PLACE_CARDS_BY_IDS_QUERY = `
   "imageUrl": mainImage.asset->url,
   "preview": body[_type == "block" && style == "normal"][0].children[0].text,
   "seoDescription": seo.description,
+  subRegion->{
+    _id,
+    name,
+    slug,
+    region->{
+      _id,
+      name,
+      slug
+    }
+  },
   slug
+}
+`;
+
+export const MAP_PLACES_QUERY = `
+*[
+  _type == "page" &&
+  slug.current != null &&
+  defined(coordinates.lat) &&
+  defined(coordinates.lng)
+] | order(title asc)[0...200]{
+  _id,
+  coordinates,
+  title,
+  subtitle,
+  "imageAlt": mainImage.alt,
+  "imageUrl": mainImage.asset->url,
+  slug,
+  subRegion->{
+    _id,
+    name,
+    slug,
+    region->{
+      _id,
+      name,
+      slug
+    }
+  }
+}
+`;
+
+export const MAP_NAVIGATION_QUERY = `
+*[_type == "islands"][0]{
+  north{
+    title,
+    maori,
+    regions[]->{
+      _id,
+      name,
+      maori,
+      slug,
+      "subRegions": *[
+        _type == "subRegion" &&
+        region._ref == ^._id
+      ] | order(name asc){
+        _id,
+        name,
+        maori,
+        slug
+      }
+    }
+  },
+  south{
+    title,
+    maori,
+    regions[]->{
+      _id,
+      name,
+      maori,
+      slug,
+      "subRegions": *[
+        _type == "subRegion" &&
+        region._ref == ^._id
+      ] | order(name asc){
+        _id,
+        name,
+        maori,
+        slug
+      }
+    }
+  }
 }
 `;

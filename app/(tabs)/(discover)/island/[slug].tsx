@@ -85,7 +85,7 @@ export default function IslandScreen() {
 
           <View style={{ padding: 24 }}>
             <Text style={{ fontSize: 34, fontWeight: '700', marginBottom: 8 }}>
-              {island.title ?? 'Untitled island'}
+              {island.title}
             </Text>
 
             {island.maori ? (

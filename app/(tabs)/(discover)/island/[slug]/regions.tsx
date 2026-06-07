@@ -95,7 +95,7 @@ export default function IslandRegionsScreen() {
                       paddingVertical: 14,
                     }}>
                     <Text style={{ fontSize: 18, fontWeight: '600' }}>
-                      {region.name ?? 'Untitled region'}
+                      {region.name}
                     </Text>
 
                     {region.maori ? (
