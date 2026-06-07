@@ -107,6 +107,7 @@ export type PlacePage = PlaceCardData & {
 };
 
 export type MapPlace = PlaceCardData & {
+  activityTags?: MapActivityTag[];
   subRegion?: {
     _id?: string;
     name?: string;
@@ -143,4 +144,18 @@ export type MapNavigationIsland = {
 export type MapNavigationResponse = {
   north?: MapNavigationIsland;
   south?: MapNavigationIsland;
+};
+
+export type MapActivityTag = {
+  _id?: string;
+  name?: string;
+  slug?: Slug;
+  superTagId?: string;
+};
+
+export type MapActivitySuperTag = {
+  _id?: string;
+  name?: string;
+  slug?: Slug;
+  tags?: MapActivityTag[];
 };

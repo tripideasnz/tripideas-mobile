@@ -10,25 +10,33 @@ import {
   View,
 } from 'react-native';
 
+import {
+  MapActiveFilters,
+  type MapActiveFilter,
+} from '@/components/map/map-active-filters';
 import type { MapPlace } from '@/sanity/types';
 
 type MapPeekSheetProps = {
+  activeFilters: MapActiveFilter[];
   isLoading: boolean;
   isMinimised: boolean;
   onHandlePress: () => void;
   onMinimise: () => void;
   onQueryChange: (query: string) => void;
+  onRemoveFilter: (filterId: string) => void;
   places: MapPlace[];
   query: string;
   resultCount: number;
 };
 
 export function MapPeekSheet({
+  activeFilters,
   isLoading,
   isMinimised,
   onHandlePress,
   onMinimise,
   onQueryChange,
+  onRemoveFilter,
   places,
   query,
   resultCount,
@@ -99,6 +107,15 @@ export function MapPeekSheet({
             }}
             value={query}
           />
+
+          {activeFilters.length > 0 ? (
+            <View style={{ paddingTop: 10 }}>
+              <MapActiveFilters
+                filters={activeFilters}
+                onRemove={onRemoveFilter}
+              />
+            </View>
+          ) : null}
 
           <View
             style={{

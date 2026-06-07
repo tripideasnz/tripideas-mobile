@@ -253,6 +253,12 @@ export const PLACE_CARDS_BY_IDS_QUERY = `
   "imageUrl": mainImage.asset->url,
   "preview": body[_type == "block" && style == "normal"][0].children[0].text,
   "seoDescription": seo.description,
+  "activityTags": tags[]->{
+    _id,
+    name,
+    slug,
+    "superTagId": superTag._ref
+  },
   subRegion->{
     _id,
     name,
@@ -273,13 +279,48 @@ export const MAP_PLACES_QUERY = `
   slug.current != null &&
   defined(coordinates.lat) &&
   defined(coordinates.lng)
-] | order(title asc)[0...200]{
+] | order(title asc){
   _id,
   coordinates,
   title,
-  subtitle,
-  "imageAlt": mainImage.alt,
-  "imageUrl": mainImage.asset->url,
+  "imageUrl": mainImage.asset->url + "?w=640&h=480&fit=crop&auto=format",
+  "activityTags": tags[]->{
+    _id,
+    name,
+    slug,
+    "superTagId": superTag._ref
+  },
+  slug,
+  subRegion->{
+    _id,
+    name,
+    slug,
+    region->{
+      _id,
+      name,
+      slug
+    }
+  }
+}
+`;
+
+export const MAP_PLACES_BY_IDS_QUERY = `
+*[
+  _type == "page" &&
+  _id in $ids &&
+  defined(coordinates.lat) &&
+  defined(coordinates.lng)
+]{
+  _id,
+  coordinates,
+  title,
+  "imageUrl": mainImage.asset->url + "?w=640&h=480&fit=crop&auto=format",
+  "activityTags": tags[]->{
+    _id,
+    name,
+    slug,
+    "superTagId": superTag._ref
+  },
   slug,
   subRegion->{
     _id,
@@ -333,6 +374,22 @@ export const MAP_NAVIGATION_QUERY = `
         slug
       }
     }
+  }
+}
+`;
+
+export const MAP_ACTIVITIES_QUERY = `
+*[_type == "superTag"] | order(name asc){
+  _id,
+  name,
+  slug,
+  "tags": *[
+    _type == "tag" &&
+    superTag._ref == ^._id
+  ] | order(name asc){
+    _id,
+    name,
+    slug
   }
 }
 `;

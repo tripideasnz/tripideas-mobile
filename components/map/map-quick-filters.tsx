@@ -2,6 +2,7 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Pressable, ScrollView, Text } from 'react-native';
 
 type MapQuickFiltersProps = {
+  isActivitiesSelected: boolean;
   isRegionsSelected: boolean;
   isSavedSelected: boolean;
   onActivitiesPress: () => void;
@@ -10,6 +11,7 @@ type MapQuickFiltersProps = {
 };
 
 export function MapQuickFilters({
+  isActivitiesSelected,
   isRegionsSelected,
   isSavedSelected,
   onActivitiesPress,
@@ -28,7 +30,8 @@ export function MapQuickFilters({
         onPress={onRegionsPress}
       />
       <FilterChip
-        icon="hiking"
+        icon={isActivitiesSelected ? 'check-circle' : 'hiking'}
+        isSelected={isActivitiesSelected}
         label="Activities"
         onPress={onActivitiesPress}
       />

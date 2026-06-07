@@ -4,6 +4,8 @@ import { Alert, Text, View } from 'react-native';
 import MapView, { Marker, type Region } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import type { MapActiveFilter } from '@/components/map/map-active-filters';
+import { MapActivitiesSheet } from '@/components/map/map-activities-sheet';
 import { fitMapToPlaces } from '@/components/map/map-bounds';
 import { MapControls } from '@/components/map/map-controls';
 import { MapPeekSheet } from '@/components/map/map-peek-sheet';
@@ -15,11 +17,16 @@ import type { MapContentSelection } from '@/components/map/map-selection';
 import { MapTileView } from '@/components/map/map-tile-view';
 import { useSavedPlaces } from '@/saved/provider';
 import {
+  fetchMapActivities,
   fetchMapNavigation,
   fetchMapPlaces,
-  fetchPlaceCardsByIds,
+  fetchMapPlacesByIds,
 } from '@/sanity/place-cards';
-import type { MapNavigationResponse, MapPlace } from '@/sanity/types';
+import type {
+  MapActivitySuperTag,
+  MapNavigationResponse,
+  MapPlace,
+} from '@/sanity/types';
 import { useMyTrips } from '@/trips/provider';
 
 const DEFAULT_REGION: Region = {
@@ -65,6 +72,17 @@ function matchesSearch(place: MapPlace, query: string) {
   ]
     .filter(Boolean)
     .some((value) => value?.toLocaleLowerCase().includes(query));
+}
+
+function matchesActivityTags(place: MapPlace, selectedTagIds: string[]) {
+  if (selectedTagIds.length === 0) {
+    return true;
+  }
+
+  const selectedIds = new Set(selectedTagIds);
+  return (place.activityTags ?? []).some(
+    (tag) => Boolean(tag._id && selectedIds.has(tag._id))
+  );
 }
 
 function isSameSelection(
@@ -164,8 +182,10 @@ export default function MapScreen() {
   const [mapPlaces, setMapPlaces] = useState<MapPlace[]>([]);
   const [supplementalPlaces, setSupplementalPlaces] = useState<MapPlace[]>([]);
   const [navigation, setNavigation] = useState<MapNavigationResponse>({});
+  const [activities, setActivities] = useState<MapActivitySuperTag[]>([]);
   const [isLoadingPlaces, setIsLoadingPlaces] = useState(true);
   const [isLoadingNavigation, setIsLoadingNavigation] = useState(true);
+  const [isLoadingActivities, setIsLoadingActivities] = useState(true);
   const [isLoadingSupplemental, setIsLoadingSupplemental] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isMapReady, setIsMapReady] = useState(false);
@@ -175,7 +195,11 @@ export default function MapScreen() {
   const [selection, setSelection] = useState<MapContentSelection>({
     type: 'all',
   });
-  const [pendingFit, setPendingFit] = useState<MapContentSelection | null>(null);
+  const [selectedActivityTagIds, setSelectedActivityTagIds] = useState<
+    string[]
+  >([]);
+  const [isFitPending, setIsFitPending] = useState(false);
+  const [isActivitiesSheetOpen, setIsActivitiesSheetOpen] = useState(false);
   const [isRegionsSheetOpen, setIsRegionsSheetOpen] = useState(false);
   const [isSavedSheetOpen, setIsSavedSheetOpen] = useState(false);
 
@@ -184,6 +208,7 @@ export default function MapScreen() {
 
     setIsLoadingPlaces(true);
     setIsLoadingNavigation(true);
+    setIsLoadingActivities(true);
     setErrorMessage(null);
 
     fetchMapPlaces()
@@ -225,6 +250,25 @@ export default function MapScreen() {
         }
       });
 
+    fetchMapActivities()
+      .then((data) => {
+        if (isMounted) {
+          setActivities(data);
+        }
+      })
+      .catch((error) => {
+        console.error(error);
+
+        if (isMounted) {
+          setActivities([]);
+        }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsLoadingActivities(false);
+        }
+      });
+
     return () => {
       isMounted = false;
     };
@@ -255,7 +299,7 @@ export default function MapScreen() {
 
     setIsLoadingSupplemental(true);
 
-    fetchPlaceCardsByIds(storedPlaceIds)
+    fetchMapPlacesByIds(storedPlaceIds)
       .then((data) => {
         if (isMounted) {
           setSupplementalPlaces(data);
@@ -316,13 +360,20 @@ export default function MapScreen() {
       }),
     [availablePlaces, savedPlaceIds, selection, trips]
   );
+  const activityFilteredPlaces = useMemo(
+    () =>
+      selectedPlaces.filter((place) =>
+        matchesActivityTags(place, selectedActivityTagIds)
+      ),
+    [selectedActivityTagIds, selectedPlaces]
+  );
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const displayedPlaces = useMemo(
     () =>
-      selectedPlaces.filter((place) =>
+      activityFilteredPlaces.filter((place) =>
         matchesSearch(place, normalizedQuery)
       ),
-    [normalizedQuery, selectedPlaces]
+    [activityFilteredPlaces, normalizedQuery]
   );
   const hasMatchingDeepLinkPlace = displayedPlaces.some(
     (place) =>
@@ -335,40 +386,62 @@ export default function MapScreen() {
     isLoadingSaved ||
     isLoadingTrips ||
     isLoadingSupplemental;
+  const activeFilters = useMemo<MapActiveFilter[]>(() => {
+    const filters: MapActiveFilter[] = [];
+
+    if (selection.type === 'region' || selection.type === 'subregion') {
+      filters.push({
+        id: 'scope',
+        label: selection.label,
+      });
+    } else if (selection.type === 'favourites') {
+      filters.push({
+        id: 'scope',
+        label: 'Favourites',
+      });
+    } else if (selection.type === 'trip') {
+      filters.push({
+        id: 'scope',
+        label: selection.label,
+      });
+    }
+
+    const activityTags = activities.flatMap((activity) => activity.tags ?? []);
+    selectedActivityTagIds.forEach((tagId) => {
+      const tag = activityTags.find((candidate) => candidate._id === tagId);
+
+      if (tag?.name) {
+        filters.push({
+          id: `activity:${tagId}`,
+          label: tag.name,
+        });
+      }
+    });
+
+    return filters;
+  }, [activities, selectedActivityTagIds, selection]);
 
   useEffect(() => {
-    if (!pendingFit || !isMapReady || !mapRef.current) {
+    if (!isFitPending || !isMapReady || !mapRef.current) {
       return;
     }
 
-    const placesToFit = getPlacesForSelection({
-      places: availablePlaces,
-      savedPlaceIds,
-      selection: pendingFit,
-      trips,
-    });
-
-    const didFit = fitMapToPlaces(mapRef.current, placesToFit);
+    const didFit = fitMapToPlaces(mapRef.current, activityFilteredPlaces);
 
     if (didFit) {
-      setPendingFit(null);
+      setIsFitPending(false);
       return;
     }
 
     if (!isLoadingPlaces && !isLoadingSupplemental) {
-      if (pendingFit.type === 'all') {
-        mapRef.current.animateToRegion(DEFAULT_REGION, 500);
-      }
-      setPendingFit(null);
+      setIsFitPending(false);
     }
   }, [
-    availablePlaces,
+    activityFilteredPlaces,
+    isFitPending,
     isMapReady,
     isLoadingPlaces,
     isLoadingSupplemental,
-    pendingFit,
-    savedPlaceIds,
-    trips,
   ]);
 
   const applySelection = (nextSelection: MapContentSelection) => {
@@ -379,7 +452,8 @@ export default function MapScreen() {
 
     setSelection(resolvedSelection);
     setQuery('');
-    setPendingFit(isDeselecting ? null : resolvedSelection);
+    setIsFitPending(!isDeselecting);
+    setIsActivitiesSheetOpen(false);
     setIsRegionsSheetOpen(false);
     setIsSavedSheetOpen(false);
     if (trayState === 'full') {
@@ -388,11 +462,40 @@ export default function MapScreen() {
     setTrayState('peek');
   };
 
+  const toggleActivityTag = (tagId: string) => {
+    setSelectedActivityTagIds((current) =>
+      current.includes(tagId)
+        ? current.filter((id) => id !== tagId)
+        : [...current, tagId]
+    );
+    setIsFitPending(true);
+  };
+
+  const removeActiveFilter = (filterId: string) => {
+    if (filterId === 'scope') {
+      setSelection({ type: 'all' });
+      return;
+    }
+
+    const activityPrefix = 'activity:';
+    if (filterId.startsWith(activityPrefix)) {
+      toggleActivityTag(filterId.slice(activityPrefix.length));
+    }
+  };
+
   const showPlaceholder = (heading: string) => {
     Alert.alert(
       heading,
       'This control will be connected in a later map phase.'
     );
+  };
+
+  const handleMapReady = () => {
+    setIsMapReady(true);
+  };
+
+  const handleRegionChangeComplete = (region: Region) => {
+    setLastMapRegion(region);
   };
 
   const regionSheet = (
@@ -403,6 +506,16 @@ export default function MapScreen() {
       onSelect={applySelection}
       selection={selection}
       visible={isRegionsSheetOpen}
+    />
+  );
+  const activitiesSheet = (
+    <MapActivitiesSheet
+      activities={activities}
+      isLoading={isLoadingActivities}
+      onClose={() => setIsActivitiesSheetOpen(false)}
+      onToggleTag={toggleActivityTag}
+      selectedTagIds={selectedActivityTagIds}
+      visible={isActivitiesSheetOpen}
     />
   );
   const savedSheet = (
@@ -419,14 +532,16 @@ export default function MapScreen() {
     return (
       <>
         <MapTileView
+          activeFilters={activeFilters}
           isLoading={isLoading}
           onCollapse={() => {
             setIsMapReady(false);
-            setPendingFit(selection);
+            setIsFitPending(true);
             setTrayState('peek');
           }}
           onRegionsPress={() => setIsRegionsSheetOpen(true)}
           onQueryChange={setQuery}
+          onRemoveFilter={removeActiveFilter}
           places={displayedPlaces}
           query={query}
           selectedFilterCount={
@@ -436,6 +551,7 @@ export default function MapScreen() {
           }
         />
         {regionSheet}
+        {activitiesSheet}
         {savedSheet}
       </>
     );
@@ -445,17 +561,23 @@ export default function MapScreen() {
     <View style={{ backgroundColor: '#fff', flex: 1 }}>
       <MapView
         initialRegion={lastMapRegion}
-        onMapReady={() => setIsMapReady(true)}
-        onRegionChangeComplete={setLastMapRegion}
+        onMapReady={handleMapReady}
+        onRegionChangeComplete={handleRegionChangeComplete}
+        pitchEnabled={false}
         ref={mapRef}
+        rotateEnabled={false}
         style={{ flex: 1 }}>
-        {displayedPlaces.map((place, index) => (
+        {displayedPlaces.map((place) => (
           <Marker
             coordinate={{
               latitude: place.coordinates.lat,
               longitude: place.coordinates.lng,
             }}
-            key={place._id ?? place.slug?.current ?? index}
+            key={
+              place._id ??
+              place.slug?.current ??
+              `${place.coordinates.lat}-${place.coordinates.lng}`
+            }
             title={place.title}
           />
         ))}
@@ -477,13 +599,14 @@ export default function MapScreen() {
           top: insets.top + 10,
         }}>
         <MapQuickFilters
+          isActivitiesSelected={selectedActivityTagIds.length > 0}
           isRegionsSelected={
             selection.type === 'region' || selection.type === 'subregion'
           }
           isSavedSelected={
             selection.type === 'favourites' || selection.type === 'trip'
           }
-          onActivitiesPress={() => showPlaceholder('Activities')}
+          onActivitiesPress={() => setIsActivitiesSheetOpen(true)}
           onRegionsPress={() => setIsRegionsSheetOpen(true)}
           onSavedPress={() => setIsSavedSheetOpen(true)}
         />
@@ -498,12 +621,15 @@ export default function MapScreen() {
         <MapControls
           onLayersPress={() => showPlaceholder('Map layers')}
           onRecenterPress={() => {
-            if (selection.type === 'all') {
+            if (
+              selection.type === 'all' &&
+              selectedActivityTagIds.length === 0
+            ) {
               mapRef.current?.animateToRegion(focusRegion, 450);
               return;
             }
 
-            fitMapToPlaces(mapRef.current, selectedPlaces);
+            fitMapToPlaces(mapRef.current, activityFilteredPlaces);
           }}
         />
       </View>
@@ -527,6 +653,7 @@ export default function MapScreen() {
 
       <View style={{ bottom: 0, left: 0, position: 'absolute', right: 0 }}>
         <MapPeekSheet
+          activeFilters={activeFilters}
           isLoading={isLoading}
           isMinimised={trayState === 'minimised'}
           onHandlePress={() =>
@@ -541,6 +668,7 @@ export default function MapScreen() {
           }
           onMinimise={() => setTrayState('minimised')}
           onQueryChange={setQuery}
+          onRemoveFilter={removeActiveFilter}
           places={displayedPlaces}
           query={query}
           resultCount={displayedPlaces.length}
@@ -548,6 +676,7 @@ export default function MapScreen() {
       </View>
 
       {regionSheet}
+      {activitiesSheet}
       {savedSheet}
     </View>
   );

@@ -1,32 +1,40 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import {
+  FlatList,
   Keyboard,
   Pressable,
-  ScrollView,
   Text,
   TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import {
+  MapActiveFilters,
+  type MapActiveFilter,
+} from '@/components/map/map-active-filters';
 import { MapPlaceTile } from '@/components/map/map-place-tile';
 import type { MapPlace } from '@/sanity/types';
 
 type MapTileViewProps = {
+  activeFilters: MapActiveFilter[];
   isLoading: boolean;
   onCollapse: () => void;
   onRegionsPress: () => void;
   onQueryChange: (query: string) => void;
+  onRemoveFilter: (filterId: string) => void;
   places: MapPlace[];
   query: string;
   selectedFilterCount: number;
 };
 
 export function MapTileView({
+  activeFilters,
   isLoading,
   onCollapse,
   onRegionsPress,
   onQueryChange,
+  onRemoveFilter,
   places,
   query,
   selectedFilterCount,
@@ -121,38 +129,47 @@ export function MapTileView({
         value={query}
       />
 
-      <ScrollView
+      {activeFilters.length > 0 ? (
+        <View style={{ marginBottom: 14, paddingHorizontal: 16 }}>
+          <MapActiveFilters
+            filters={activeFilters}
+            onRemove={onRemoveFilter}
+          />
+        </View>
+      ) : null}
+
+      <FlatList
+        columnWrapperStyle={{
+          gap: 12,
+          marginBottom: 16,
+        }}
+        data={places}
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{
           paddingBottom: 32,
           paddingHorizontal: 16,
-        }}>
-        {places.length > 0 ? (
-          <View
-            style={{
-              flexDirection: 'row',
-              flexWrap: 'wrap',
-              gap: 12,
-            }}>
-            {places.map((place, index) => (
-              <MapPlaceTile
-                key={place._id ?? place.slug?.current ?? index}
-                place={place}
-              />
-            ))}
-          </View>
-        ) : !isLoading ? (
-          <Text
-            style={{
-              color: '#717171',
-              fontSize: 16,
-              paddingTop: 30,
-              textAlign: 'center',
-            }}>
-            No places match this map view.
-          </Text>
-        ) : null}
-      </ScrollView>
+        }}
+        keyExtractor={(place, index) =>
+          place._id ?? place.slug?.current ?? `place-${index}`
+        }
+        ListEmptyComponent={
+          !isLoading ? (
+            <Text
+              style={{
+                color: '#717171',
+                fontSize: 16,
+                paddingTop: 30,
+                textAlign: 'center',
+              }}>
+              No places match this map view.
+            </Text>
+          ) : null
+        }
+        numColumns={2}
+        renderItem={({ item }) => <MapPlaceTile place={item} />}
+        showsVerticalScrollIndicator={false}
+        style={{ flex: 1 }}
+      />
     </SafeAreaView>
   );
 }
