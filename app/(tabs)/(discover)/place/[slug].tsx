@@ -10,7 +10,7 @@ import {
   getPlainText,
 } from '@/components/content-blocks';
 import { PlaceCardActions } from '@/components/place-card-actions';
-import { PlacePhotoCarousel } from '@/components/place-photo-carousel';
+import { PlacePhotoGrid } from '@/components/place-photo-grid';
 import { PlaceMapPreview } from '@/components/place-map-preview';
 import { PlaceCard } from '@/components/place-card';
 import { AppButton } from '@/components/ui/app-button';
@@ -24,10 +24,6 @@ import { sanityClient } from '@/sanity/client';
 import { PLACE_QUERY } from '@/sanity/queries';
 import type { PlacePage } from '@/sanity/types';
 
-function getPlaceHeading(place: PlacePage) {
-  return place.subtitle?.trim() || place.h3?.trim();
-}
-
 function getPlacePreview(place: PlacePage) {
   const preview = place.excerpt?.trim() || place.preview?.trim();
 
@@ -40,17 +36,6 @@ function getPlacePreview(place: PlacePage) {
 
 function getBodyText(place: PlacePage) {
   return getPlainText(place.textBlocks);
-}
-
-function getContextText(place: PlacePage) {
-  const regionName = place.subRegion?.region?.name?.trim();
-  const subRegionName = place.subRegion?.name?.trim();
-
-  if (regionName && subRegionName) {
-    return `${regionName} / ${subRegionName}`;
-  }
-
-  return regionName || subRegionName;
 }
 
 function getCoordinates(place: PlacePage | null) {
@@ -119,13 +104,11 @@ export default function PlaceScreen() {
   }, [selectedSlug]);
 
   const title = place?.title ?? 'Place';
-  const heading = place ? getPlaceHeading(place) : undefined;
   const fullText = place ? getBodyText(place) : undefined;
   const preview = place ? getPlacePreview(place) : undefined;
   const displayText = preview || fullText;
   const hasBodyBlocks = (place?.textBlocks ?? []).some((block) => getBlockText(block));
   const canExpand = Boolean(fullText && preview && fullText !== preview);
-  const contextText = place ? getContextText(place) : undefined;
   const galleryImages =
     place?.galleryCollections?.flatMap(
       (collection) => collection.images ?? []
@@ -175,29 +158,18 @@ export default function PlaceScreen() {
               paddingHorizontal: Screen.gutter,
               paddingTop: Screen.top,
             }}>
-            {contextText ? (
-              <Text
-                style={{
-                  color: Palette.textMuted,
-                  ...Type.label,
-                  marginBottom: Space.md,
-                }}>
-                {contextText}
-              </Text>
-            ) : null}
-
             <View
               style={{
                 alignItems: 'flex-start',
                 flexDirection: 'row',
                 gap: 12,
                 justifyContent: 'space-between',
-                marginBottom: 8,
+                marginBottom: Space.xl,
               }}>
               <Text
                 style={{
                   flex: 1,
-                  ...Type.display,
+                  ...Type.title,
                 }}>
                 {place.title}
               </Text>
@@ -214,18 +186,7 @@ export default function PlaceScreen() {
               ) : null}
             </View>
 
-            {heading ? (
-              <Text
-                style={{
-                  color: Palette.textMuted,
-                  ...Type.cardTitle,
-                  marginBottom: Space.xl,
-                }}>
-                {heading}
-              </Text>
-            ) : null}
-
-            <PlacePhotoCarousel
+            <PlacePhotoGrid
               images={galleryImages}
               placeTitle={place.title}
             />
