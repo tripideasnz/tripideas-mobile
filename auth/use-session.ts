@@ -1,7 +1,1 @@
-import { useMemo } from 'react';
-
-import { initialSessionState } from '@/auth/session';
-
-export function useSession() {
-  return useMemo(() => initialSessionState, []);
-}
+export { useSession } from '@/auth/provider';
