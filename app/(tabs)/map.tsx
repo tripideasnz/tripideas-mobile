@@ -1,13 +1,20 @@
 import {
   Camera,
+  GeoJSONSource,
+  Layer,
   Map as MapLibreMap,
   Marker,
   type CameraRef,
+  type FilterSpecification,
+  type GeoJSONSourceRef,
   type LngLat,
+  type LngLatBounds,
+  type PressEventWithFeatures,
+  type ViewPadding,
 } from '@maplibre/maplibre-react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Text, View } from 'react-native';
+import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type NativeSyntheticEvent, Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { MapActiveFilter } from '@/components/map/map-active-filters';
@@ -15,13 +22,16 @@ import { MapActivitiesSheet } from '@/components/map/map-activities-sheet';
 import { fitCameraToPlaces } from '@/components/map/map-bounds';
 import { MapControls } from '@/components/map/map-controls';
 import { MapPeekSheet } from '@/components/map/map-peek-sheet';
+import { MapStyleSheet } from '@/components/map/map-style-sheet';
 import { MapQuickFilters } from '@/components/map/map-quick-filters';
 import { orderMapNavigation } from '@/components/map/map-region-order';
 import { MapRegionsSheet } from '@/components/map/map-regions-sheet';
 import { MapSavedSheet } from '@/components/map/map-saved-sheet';
 import type { MapContentSelection } from '@/components/map/map-selection';
 import { MapTileView } from '@/components/map/map-tile-view';
-import { MAP_STYLE_URL } from '@/constants/map';
+import { HeaderBackButton } from '@/components/ui/header-back-button';
+import { MAP_STYLE_URL, MAP_STYLES, type MapStyleId } from '@/constants/map';
+import { Palette, Radius, Shadow, Space } from '@/constants/design';
 import { useSavedPlaces } from '@/saved/provider';
 import {
   fetchMapActivities,
@@ -38,6 +48,9 @@ import { useMyTrips } from '@/trips/provider';
 
 const DEFAULT_CENTER: LngLat = [174.77557, -41.28664];
 const DEFAULT_ZOOM = 5;
+const NZ_BOUNDS: LngLatBounds = [165.5, -47.5, 179.0, -34.0];
+const QUICK_FILTERS_BAR_HEIGHT = 44;
+const PEEK_SHEET_FALLBACK = 289;
 
 type MapTrayState = 'minimised' | 'peek' | 'full';
 
@@ -48,18 +61,16 @@ type MappablePlace = MapPlace & {
   };
 };
 
-function parseCoordinate(value?: string | string[]) {
-  const selectedValue = Array.isArray(value) ? value[0] : value;
-  const coordinate = Number(selectedValue);
-
-  return Number.isFinite(coordinate) ? coordinate : undefined;
-}
-
 function hasValidCoordinates(place: MapPlace): place is MappablePlace {
   return (
     Number.isFinite(place.coordinates?.lat) &&
     Number.isFinite(place.coordinates?.lng)
   );
+}
+
+function parseCoordinate(value: string | undefined): number | null {
+  const n = parseFloat(value ?? '');
+  return Number.isFinite(n) ? n : null;
 }
 
 function matchesSearch(place: MapPlace, query: string) {
@@ -111,6 +122,8 @@ function isSameSelection(
   return true;
 }
 
+type PlaceContext = { lat: number; lng: number; title: string; slug: string };
+
 function getPlacesForSelection({
   places,
   savedPlaceIds,
@@ -154,25 +167,21 @@ function getPlacesForSelection({
 
 export default function MapScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{
-    lat?: string | string[];
-    lng?: string | string[];
-    title?: string | string[];
-  }>();
+  const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const cameraRef = useRef<CameraRef>(null);
-  const latitude = parseCoordinate(params.lat);
-  const longitude = parseCoordinate(params.lng);
-  const hasDeepLinkMarker =
-    typeof latitude === 'number' && typeof longitude === 'number';
-
-  const focusCenter: LngLat = hasDeepLinkMarker
-    ? [longitude, latitude]
-    : DEFAULT_CENTER;
-  const focusZoom = hasDeepLinkMarker ? 13 : DEFAULT_ZOOM;
+  const sourceRef = useRef<GeoJSONSourceRef>(null);
 
   // Tracks the last camera state so the map restores position after tile view collapses.
-  const lastCameraRef = useRef({ center: focusCenter, zoom: focusZoom });
+  const lastCameraRef = useRef({ center: DEFAULT_CENTER, zoom: DEFAULT_ZOOM });
+
+  // URL params are the arrival signal — read-only, never written back.
+  const { lat: rawLat, lng: rawLng, title: rawTitle, slug: rawSlug } =
+    useLocalSearchParams<{ lat?: string; lng?: string; title?: string; slug?: string }>();
+
+  // Place context lives in local state; URL params only trigger it on focus.
+  const [placeContext, setPlaceContext] = useState<PlaceContext | null>(null);
+  const hasPlaceContext = placeContext !== null;
 
   const {
     isLoading: isLoadingSaved,
@@ -181,7 +190,7 @@ export default function MapScreen() {
   const { isLoading: isLoadingTrips, trips } = useMyTrips();
   const [mapPlaces, setMapPlaces] = useState<MapPlace[]>([]);
   const [supplementalPlaces, setSupplementalPlaces] = useState<MapPlace[]>([]);
-  const [navigation, setNavigation] = useState<MapNavigationResponse>({});
+  const [navigation2, setNavigation2] = useState<MapNavigationResponse>({});
   const [activities, setActivities] = useState<MapActivitySuperTag[]>([]);
   const [isLoadingPlaces, setIsLoadingPlaces] = useState(true);
   const [isLoadingNavigation, setIsLoadingNavigation] = useState(true);
@@ -198,9 +207,65 @@ export default function MapScreen() {
     string[]
   >([]);
   const [isFitPending, setIsFitPending] = useState(false);
+  const hasInitialFittedRef = useRef(false);
+  const prevPeekSheetHeightRef = useRef(0);
+  const [peekSheetHeight, setPeekSheetHeight] = useState(0);
   const [isActivitiesSheetOpen, setIsActivitiesSheetOpen] = useState(false);
   const [isRegionsSheetOpen, setIsRegionsSheetOpen] = useState(false);
   const [isSavedSheetOpen, setIsSavedSheetOpen] = useState(false);
+  const [isStyleSheetOpen, setIsStyleSheetOpen] = useState(false);
+  const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
+  const [mapStyleId, setMapStyleId] = useState<MapStyleId>('streets');
+  const [visibleBounds, setVisibleBounds] = useState<LngLatBounds | null>(null);
+
+  // Activate place context from URL params on focus; clear local state on blur.
+  // Never writes back to route params (rules 1 & 2).
+  useFocusEffect(
+    useCallback(() => {
+      const lat = parseCoordinate(rawLat);
+      const lng = parseCoordinate(rawLng);
+      if (lat !== null && lng !== null && rawSlug) {
+        setPlaceContext({ lat, lng, title: rawTitle ?? '', slug: rawSlug });
+      }
+      return () => {
+        setPlaceContext(null);
+      };
+    }, [rawLat, rawLng, rawTitle, rawSlug])
+  );
+
+  // Dismiss local place context; never touches route params (rule 5).
+  const clearPlaceContext = useCallback(() => {
+    setPlaceContext(null);
+    setSelectedPlaceId(null);
+  }, []);
+
+  // Navigate back to the originating place using the preserved slug (rule 4).
+  const handlePlaceContextBack = useCallback(() => {
+    if (placeContext?.slug) {
+      router.push({ pathname: '/place/[slug]', params: { slug: placeContext.slug } });
+    }
+  }, [placeContext, router]);
+
+  // Exit rule 2: re-tapping the Map tab while in place context clears it.
+  useEffect(() => {
+    const unsubscribe = (navigation as any).addListener('tabPress', () => {
+      if (hasPlaceContext) {
+        setPlaceContext(null);
+        setSelectedPlaceId(null);
+      }
+    });
+    return unsubscribe;
+  }, [navigation, hasPlaceContext]);
+
+  // Animate camera to the focused place when context is active and map is ready.
+  useEffect(() => {
+    if (!placeContext || !isMapReady) return;
+    cameraRef.current?.easeTo({
+      center: [placeContext.lng, placeContext.lat] as LngLat,
+      zoom: 13,
+      duration: 500,
+    });
+  }, [placeContext, isMapReady]);
 
   useEffect(() => {
     let isMounted = true;
@@ -233,14 +298,14 @@ export default function MapScreen() {
     fetchMapNavigation()
       .then((data) => {
         if (isMounted) {
-          setNavigation(orderMapNavigation(data));
+          setNavigation2(orderMapNavigation(data));
         }
       })
       .catch((error) => {
         console.error(error);
 
         if (isMounted) {
-          setNavigation({});
+          setNavigation2({});
         }
       })
       .finally(() => {
@@ -324,13 +389,6 @@ export default function MapScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoadingSaved, isLoadingTrips, storedPlaceIdsKey]);
 
-  useEffect(() => {
-    if (!isMapReady || !hasDeepLinkMarker || latitude === undefined || longitude === undefined) {
-      return;
-    }
-    cameraRef.current?.easeTo({ center: [longitude, latitude], zoom: 13, duration: 450 });
-  }, [hasDeepLinkMarker, isMapReady, latitude, longitude]);
-
   const availablePlaces = useMemo(() => {
     const placesById = new Map<string, MapPlace>();
 
@@ -373,15 +431,86 @@ export default function MapScreen() {
       ),
     [activityFilteredPlaces, normalizedQuery]
   );
-  const hasMatchingDeepLinkPlace =
-    hasDeepLinkMarker &&
-    latitude !== undefined &&
-    longitude !== undefined &&
-    displayedPlaces.some(
+
+  // Subset of displayedPlaces that falls within the current map viewport.
+  // Falls back to the full filtered set until the first region-change event fires.
+  const visiblePlaces = useMemo(() => {
+    if (!visibleBounds) return displayedPlaces;
+    const [west, south, east, north] = visibleBounds;
+    return displayedPlaces.filter(
       (place) =>
-        Math.abs(place.coordinates.lat - latitude) < 0.000001 &&
-        Math.abs(place.coordinates.lng - longitude) < 0.000001
+        place.coordinates.lng >= west &&
+        place.coordinates.lng <= east &&
+        place.coordinates.lat >= south &&
+        place.coordinates.lat <= north
     );
+  }, [displayedPlaces, visibleBounds]);
+
+  const placesGeoJSON = useMemo((): GeoJSON.FeatureCollection => ({
+    type: 'FeatureCollection',
+    features: displayedPlaces.map((place) => {
+      const featureId =
+        place._id ??
+        place.slug?.current ??
+        `${place.coordinates.lat}-${place.coordinates.lng}`;
+      const slugCurrent = place.slug?.current ?? null;
+      return {
+        type: 'Feature' as const,
+        geometry: {
+          type: 'Point' as const,
+          coordinates: [place.coordinates.lng, place.coordinates.lat],
+        },
+        properties: {
+          id: featureId,
+          slug: slugCurrent,
+          isSelected: featureId === selectedPlaceId,
+          isFocused: placeContext !== null && slugCurrent === placeContext.slug,
+        },
+      };
+    }),
+  }), [displayedPlaces, selectedPlaceId, placeContext]);
+
+  // True when the focused place appears in the dataset (can be highlighted via layer paint).
+  const hasFocusedInDataset =
+    placeContext !== null &&
+    displayedPlaces.some((p) => p.slug?.current === placeContext.slug);
+
+  const handleSourcePress = async (event: NativeSyntheticEvent<PressEventWithFeatures>) => {
+    event.stopPropagation();
+    const feature = event.nativeEvent.features[0];
+    if (!feature || feature.geometry.type !== 'Point') return;
+
+    const { properties, geometry } = feature;
+    const coords = geometry.coordinates as [number, number];
+
+    if (properties?.cluster_id !== undefined) {
+      const expansionZoom = await sourceRef.current?.getClusterExpansionZoom(
+        properties.cluster_id as number
+      );
+      // Cap the jump to +3 zoom levels per tap for a smooth progressive expansion.
+      const targetZoom =
+        expansionZoom !== undefined
+          ? Math.min(expansionZoom, lastCameraRef.current.zoom + 3)
+          : lastCameraRef.current.zoom + 2;
+      cameraRef.current?.easeTo({ center: coords, zoom: targetZoom, duration: 400 });
+      return;
+    }
+
+    const id = properties?.id as string | null;
+    const slug = properties?.slug as string | null;
+
+    if (id && id === selectedPlaceId) {
+      // Second tap on the same pin — open place detail.
+      if (slug) router.push({ pathname: '/place/[slug]', params: { slug } });
+      return;
+    }
+
+    // First tap — select and recenter. Don't navigate yet.
+    setSelectedPlaceId(id);
+    const targetZoom = Math.max(lastCameraRef.current.zoom, 12);
+    cameraRef.current?.easeTo({ center: coords, zoom: targetZoom, duration: 350 });
+  };
+
   const isLoading =
     isLoadingPlaces ||
     isLoadingSaved ||
@@ -422,12 +551,22 @@ export default function MapScreen() {
     return filters;
   }, [activities, selectedActivityTagIds, selection]);
 
+  const mapPadding: ViewPadding = useMemo(
+    () => ({
+      top: insets.top + QUICK_FILTERS_BAR_HEIGHT,
+      right: 56,
+      bottom: (peekSheetHeight > 0 ? peekSheetHeight : PEEK_SHEET_FALLBACK) + 16,
+      left: 56,
+    }),
+    [insets.top, peekSheetHeight]
+  );
+
   useEffect(() => {
     if (!isFitPending || !isMapReady) {
       return;
     }
 
-    const didFit = fitCameraToPlaces(cameraRef.current, activityFilteredPlaces);
+    const didFit = fitCameraToPlaces(cameraRef.current, activityFilteredPlaces, mapPadding);
 
     if (didFit) {
       setIsFitPending(false);
@@ -435,6 +574,10 @@ export default function MapScreen() {
     }
 
     if (!isLoadingPlaces && !isLoadingSupplemental) {
+      // No places in the filtered set — fall back to NZ overview.
+      if (activityFilteredPlaces.length === 0) {
+        cameraRef.current?.fitBounds(NZ_BOUNDS, { padding: mapPadding, duration: 450 });
+      }
       setIsFitPending(false);
     }
   }, [
@@ -443,9 +586,39 @@ export default function MapScreen() {
     isMapReady,
     isLoadingPlaces,
     isLoadingSupplemental,
+    mapPadding,
   ]);
 
+  useEffect(() => {
+    if (
+      !isMapReady ||
+      isLoadingPlaces ||
+      hasInitialFittedRef.current ||
+      peekSheetHeight === 0 ||
+      hasPlaceContext
+    ) {
+      return;
+    }
+
+    hasInitialFittedRef.current = true;
+
+    if (displayedPlaces.length > 0) {
+      fitCameraToPlaces(cameraRef.current, displayedPlaces, mapPadding);
+    }
+  }, [isMapReady, isLoadingPlaces, displayedPlaces, peekSheetHeight, mapPadding, hasPlaceContext]);
+
+  useEffect(() => {
+    if (!hasInitialFittedRef.current || !isMapReady || peekSheetHeight === 0) return;
+    if (peekSheetHeight === prevPeekSheetHeightRef.current) return;
+    if (hasPlaceContext) return;
+    prevPeekSheetHeightRef.current = peekSheetHeight;
+    fitCameraToPlaces(cameraRef.current, displayedPlaces, mapPadding);
+  }, [peekSheetHeight, isMapReady, displayedPlaces, mapPadding, hasPlaceContext]);
+
   const applySelection = (nextSelection: MapContentSelection) => {
+    // Exit rule 3: choosing a map filter clears the place context.
+    clearPlaceContext();
+
     const isDeselecting = isSameSelection(selection, nextSelection);
     const resolvedSelection: MapContentSelection = isDeselecting
       ? { type: 'all' }
@@ -453,7 +626,7 @@ export default function MapScreen() {
 
     setSelection(resolvedSelection);
     setQuery('');
-    setIsFitPending(!isDeselecting);
+    setIsFitPending(true);
     setIsActivitiesSheetOpen(false);
     setIsRegionsSheetOpen(false);
     setIsSavedSheetOpen(false);
@@ -464,6 +637,9 @@ export default function MapScreen() {
   };
 
   const toggleActivityTag = (tagId: string) => {
+    // Exit rule 3: choosing a map filter clears the place context.
+    clearPlaceContext();
+
     setSelectedActivityTagIds((current) =>
       current.includes(tagId)
         ? current.filter((id) => id !== tagId)
@@ -475,6 +651,7 @@ export default function MapScreen() {
   const removeActiveFilter = (filterId: string) => {
     if (filterId === 'scope') {
       setSelection({ type: 'all' });
+      setIsFitPending(true);
       return;
     }
 
@@ -484,17 +661,10 @@ export default function MapScreen() {
     }
   };
 
-  const showPlaceholder = (heading: string) => {
-    Alert.alert(
-      heading,
-      'This control will be connected in a later map phase.'
-    );
-  };
-
   const regionSheet = (
     <MapRegionsSheet
       isLoading={isLoadingNavigation}
-      navigation={navigation}
+      navigation={navigation2}
       onClose={() => setIsRegionsSheetOpen(false)}
       onSelect={applySelection}
       selection={selection}
@@ -535,7 +705,7 @@ export default function MapScreen() {
           onRegionsPress={() => setIsRegionsSheetOpen(true)}
           onQueryChange={setQuery}
           onRemoveFilter={removeActiveFilter}
-          places={displayedPlaces}
+          places={visiblePlaces}
           query={query}
           selectedFilterCount={
             selection.type === 'region' || selection.type === 'subregion'
@@ -553,71 +723,115 @@ export default function MapScreen() {
   return (
     <View style={{ backgroundColor: '#fff', flex: 1 }}>
       <MapLibreMap
-        mapStyle={MAP_STYLE_URL}
+        mapStyle={MAP_STYLES.find((s) => s.id === mapStyleId)?.url ?? MAP_STYLE_URL}
         touchPitch={false}
         touchRotate={false}
         onDidFinishLoadingMap={() => setIsMapReady(true)}
+        onPress={() => setSelectedPlaceId(null)}
         onRegionDidChange={(event) => {
           lastCameraRef.current = {
             center: event.nativeEvent.center,
             zoom: event.nativeEvent.zoom,
           };
+          setVisibleBounds(event.nativeEvent.bounds);
         }}
         style={{ flex: 1 }}>
         <Camera
           ref={cameraRef}
-          initialViewState={{
-            center: lastCameraRef.current.center,
-            zoom: lastCameraRef.current.zoom,
-          }}
+          initialViewState={
+            placeContext
+              ? { center: [placeContext.lng, placeContext.lat] as LngLat, zoom: 13 }
+              : hasInitialFittedRef.current
+                ? { center: lastCameraRef.current.center, zoom: lastCameraRef.current.zoom }
+                : {
+                    bounds: NZ_BOUNDS,
+                    padding: {
+                      top: insets.top + QUICK_FILTERS_BAR_HEIGHT,
+                      right: 56,
+                      bottom: PEEK_SHEET_FALLBACK,
+                      left: 56,
+                    },
+                  }
+          }
         />
 
-        {displayedPlaces.map((place) => {
-          const placeKey =
-            place._id ??
-            place.slug?.current ??
-            `${place.coordinates.lat}-${place.coordinates.lng}`;
-          return (
-            <Marker
-              key={placeKey}
-              id={placeKey}
-              lngLat={[place.coordinates.lng, place.coordinates.lat]}
-              onPress={() => {
-                if (place.slug?.current) {
-                  router.push({
-                    pathname: '/place/[slug]',
-                    params: { slug: place.slug.current },
-                  });
-                }
-              }}>
-              <View
-                style={{
-                  borderColor: '#fff',
-                  borderRadius: 6,
-                  borderWidth: 2,
-                  backgroundColor: '#0080C8',
-                  height: 12,
-                  width: 12,
-                }}
-              />
-            </Marker>
-          );
-        })}
+        <GeoJSONSource
+          ref={sourceRef}
+          id="places"
+          data={placesGeoJSON}
+          cluster
+          clusterRadius={50}
+          clusterMaxZoom={12}
+          onPress={handleSourcePress}>
+          <Layer
+            type="circle"
+            id="place-clusters"
+            filter={['has', 'point_count'] as FilterSpecification}
+            paint={{
+              'circle-color': '#0080C8',
+              'circle-radius': ['step', ['get', 'point_count'], 16, 10, 20, 50, 24] as unknown as number,
+              'circle-stroke-width': 2,
+              'circle-stroke-color': '#fff',
+              'circle-opacity': 0.9,
+            }}
+          />
+          <Layer
+            type="symbol"
+            id="place-cluster-count"
+            filter={['has', 'point_count'] as FilterSpecification}
+            layout={{
+              'text-field': '{point_count}',
+              'text-size': 13,
+              'text-font': ['Noto Sans Regular'],
+            }}
+            paint={{ 'text-color': '#fff' }}
+          />
+          <Layer
+            type="circle"
+            id="place-points"
+            filter={['!', ['has', 'point_count']] as FilterSpecification}
+            paint={{
+              'circle-radius': [
+                'case',
+                ['boolean', ['get', 'isFocused'], false], 11,
+                ['boolean', ['get', 'isSelected'], false], 10,
+                7,
+              ] as unknown as number,
+              'circle-color': [
+                'case',
+                ['boolean', ['get', 'isFocused'], false], '#E74C3C',
+                ['boolean', ['get', 'isSelected'], false], '#005FA3',
+                '#0080C8',
+              ] as unknown as string,
+              'circle-stroke-width': [
+                'case',
+                ['boolean', ['get', 'isFocused'], false], 3,
+                ['boolean', ['get', 'isSelected'], false], 3,
+                2,
+              ] as unknown as number,
+              'circle-stroke-color': '#fff',
+            }}
+          />
+        </GeoJSONSource>
 
-        {hasDeepLinkMarker && !hasMatchingDeepLinkPlace && latitude !== undefined && longitude !== undefined ? (
-          <Marker lngLat={[longitude, latitude]}>
+        {/* Fallback marker when the focused place is not in the main dataset */}
+        {placeContext && !hasFocusedInDataset ? (
+          <Marker
+            lngLat={[placeContext.lng, placeContext.lat]}
+            anchor="center">
             <View
               style={{
-                borderColor: '#fff',
-                borderRadius: 7,
-                borderWidth: 2.5,
                 backgroundColor: '#E74C3C',
-                height: 14,
-                width: 14,
+                borderColor: '#fff',
+                borderRadius: 8,
+                borderWidth: 3,
+                height: 16,
+                width: 16,
               }}
             />
           </Marker>
         ) : null}
+
       </MapLibreMap>
 
       <View
@@ -628,18 +842,46 @@ export default function MapScreen() {
           right: 0,
           top: insets.top + 10,
         }}>
-        <MapQuickFilters
-          isActivitiesSelected={selectedActivityTagIds.length > 0}
-          isRegionsSelected={
-            selection.type === 'region' || selection.type === 'subregion'
-          }
-          isSavedSelected={
-            selection.type === 'favourites' || selection.type === 'trip'
-          }
-          onActivitiesPress={() => setIsActivitiesSheetOpen(true)}
-          onRegionsPress={() => setIsRegionsSheetOpen(true)}
-          onSavedPress={() => setIsSavedSheetOpen(true)}
-        />
+        {hasPlaceContext ? (
+          <View
+            style={{
+              alignItems: 'center',
+              backgroundColor: '#fff',
+              borderRadius: Radius.control,
+              flexDirection: 'row',
+              marginHorizontal: Space.lg,
+              paddingRight: Space.md,
+              ...Shadow.floating,
+            }}>
+            <HeaderBackButton onPress={handlePlaceContextBack} />
+            <Pressable
+              onPress={handlePlaceContextBack}
+              style={{ flex: 1 }}>
+              <Text
+                numberOfLines={1}
+                style={{
+                  color: Palette.text,
+                  fontSize: 15,
+                  fontWeight: '600',
+                }}>
+                {placeContext?.title || 'Place'}
+              </Text>
+            </Pressable>
+          </View>
+        ) : (
+          <MapQuickFilters
+            isActivitiesSelected={selectedActivityTagIds.length > 0}
+            isRegionsSelected={
+              selection.type === 'region' || selection.type === 'subregion'
+            }
+            isSavedSelected={
+              selection.type === 'favourites' || selection.type === 'trip'
+            }
+            onActivitiesPress={() => setIsActivitiesSheetOpen(true)}
+            onRegionsPress={() => setIsRegionsSheetOpen(true)}
+            onSavedPress={() => setIsSavedSheetOpen(true)}
+          />
+        )}
       </View>
 
       <View
@@ -649,22 +891,37 @@ export default function MapScreen() {
           top: insets.top + 62,
         }}>
         <MapControls
-          onLayersPress={() => showPlaceholder('Map layers')}
+          onLayersPress={() => setIsStyleSheetOpen(true)}
           onRecenterPress={() => {
-            if (
-              selection.type === 'all' &&
-              selectedActivityTagIds.length === 0
-            ) {
+            if (placeContext) {
               cameraRef.current?.easeTo({
-                center: focusCenter,
-                zoom: focusZoom,
+                center: [placeContext.lng, placeContext.lat] as LngLat,
+                zoom: 13,
                 duration: 450,
               });
               return;
             }
 
-            fitCameraToPlaces(cameraRef.current, activityFilteredPlaces);
+            if (
+              selection.type === 'all' &&
+              selectedActivityTagIds.length === 0
+            ) {
+              cameraRef.current?.easeTo({
+                center: DEFAULT_CENTER,
+                zoom: DEFAULT_ZOOM,
+                duration: 450,
+              });
+              return;
+            }
+
+            fitCameraToPlaces(cameraRef.current, activityFilteredPlaces, mapPadding);
           }}
+          onZoomInPress={() =>
+            cameraRef.current?.zoomTo(lastCameraRef.current.zoom + 1, { duration: 250 })
+          }
+          onZoomOutPress={() =>
+            cameraRef.current?.zoomTo(lastCameraRef.current.zoom - 1, { duration: 250 })
+          }
         />
       </View>
 
@@ -685,7 +942,9 @@ export default function MapScreen() {
         </View>
       ) : null}
 
-      <View style={{ bottom: 0, left: 0, position: 'absolute', right: 0 }}>
+      <View
+        onLayout={(e) => setPeekSheetHeight(e.nativeEvent.layout.height)}
+        style={{ bottom: 0, left: 0, position: 'absolute', right: 0 }}>
         <MapPeekSheet
           activeFilters={activeFilters}
           isLoading={isLoading}
@@ -703,15 +962,21 @@ export default function MapScreen() {
           onMinimise={() => setTrayState('minimised')}
           onQueryChange={setQuery}
           onRemoveFilter={removeActiveFilter}
-          places={displayedPlaces}
+          places={visiblePlaces}
           query={query}
-          resultCount={displayedPlaces.length}
+          resultCount={visiblePlaces.length}
         />
       </View>
 
       {regionSheet}
       {activitiesSheet}
       {savedSheet}
+      <MapStyleSheet
+        activeStyleId={mapStyleId}
+        onClose={() => setIsStyleSheetOpen(false)}
+        onSelectStyle={setMapStyleId}
+        visible={isStyleSheetOpen}
+      />
     </View>
   );
 }

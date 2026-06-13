@@ -1,12 +1,13 @@
 import { Stack } from 'expo-router';
 import React from 'react';
 
+import { HeaderBackButton } from '@/components/ui/header-back-button';
+
 export default function DiscoverLayout() {
   return (
     <Stack
       screenOptions={{
-        headerBackButtonDisplayMode: 'minimal',
-        headerBackTitle: '',
+        headerLeft: () => <HeaderBackButton />,
       }}>
       <Stack.Screen
         name="discover"

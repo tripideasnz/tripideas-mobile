@@ -1,7 +1,12 @@
 import { Link, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AppText } from '@/components/ui/app-text';
+import { LoadingView } from '@/components/ui/loading-view';
+import { StatusText } from '@/components/ui/status-text';
+import { Palette, Screen, Space } from '@/constants/design';
 import { sanityClient } from '@/sanity/client';
 import { ISLAND_REGIONS_QUERY } from '@/sanity/queries';
 import type { IslandRegions, IslandRegionsResponse } from '@/sanity/types';
@@ -27,26 +32,19 @@ export default function IslandRegionsScreen() {
     setErrorMessage(null);
 
     sanityClient
-      .fetch<IslandRegionsResponse | null>(ISLAND_REGIONS_QUERY, {
-        slug: selectedSlug,
-      })
+      .fetch<IslandRegionsResponse | null>(ISLAND_REGIONS_QUERY, { slug: selectedSlug })
       .then((data) => {
-        if (isMounted) {
-          setIsland(data?.island ?? null);
-        }
+        if (isMounted) setIsland(data?.island ?? null);
       })
       .catch((error) => {
         console.error(error);
-
         if (isMounted) {
           setIsland(null);
           setErrorMessage('Unable to load island regions.');
         }
       })
       .finally(() => {
-        if (isMounted) {
-          setIsLoading(false);
-        }
+        if (isMounted) setIsLoading(false);
       });
 
     return () => {
@@ -58,25 +56,25 @@ export default function IslandRegionsScreen() {
   const title = island?.title ? `${island.title} Regions` : 'Island Regions';
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: '#fff' }}>
+    <SafeAreaView edges={['bottom']} style={{ backgroundColor: Palette.background, flex: 1 }}>
       <Stack.Screen options={{ title }} />
-
-      <View style={{ padding: 24 }}>
+      <ScrollView
+        contentContainerStyle={{
+          paddingBottom: Screen.bottom,
+          paddingHorizontal: Screen.gutter,
+          paddingTop: Screen.top,
+        }}>
         {isLoading ? (
-          <Text>Loading...</Text>
+          <LoadingView />
         ) : errorMessage ? (
-          <Text>{errorMessage}</Text>
+          <StatusText>{errorMessage}</StatusText>
         ) : !island ? (
-          <Text>Island regions not found.</Text>
+          <StatusText>Island regions not found.</StatusText>
         ) : (
           <>
-            <Text style={{ fontSize: 32, fontWeight: '700', marginBottom: 8 }}>
+            <AppText style={{ marginBottom: Space.xxl }} variant="display">
               {title}
-            </Text>
-
-            <Text style={{ color: '#4a4a4a', fontSize: 16, marginBottom: 20 }}>
-              Browse regions for {island.title ?? 'this island'}.
-            </Text>
+            </AppText>
 
             {regions.length > 0 ? (
               regions.map((region, index) => (
@@ -89,29 +87,27 @@ export default function IslandRegionsScreen() {
                   asChild>
                   <Pressable
                     disabled={!region.slug?.current}
-                    style={{
-                      borderBottomColor: '#ddd',
+                    style={({ pressed }) => ({
+                      borderBottomColor: Palette.border,
                       borderBottomWidth: 1,
-                      paddingVertical: 14,
-                    }}>
-                    <Text style={{ fontSize: 18, fontWeight: '600' }}>
-                      {region.name}
-                    </Text>
-
+                      opacity: pressed ? 0.55 : 1,
+                      paddingVertical: Space.lg,
+                    })}>
+                    <AppText>{region.name}</AppText>
                     {region.maori ? (
-                      <Text style={{ color: '#717171', fontSize: 14, marginTop: 4 }}>
+                      <AppText color={Palette.textMuted} variant="caption">
                         {region.maori}
-                      </Text>
+                      </AppText>
                     ) : null}
                   </Pressable>
                 </Link>
               ))
             ) : (
-              <Text>No regions found.</Text>
+              <StatusText>No regions found.</StatusText>
             )}
           </>
         )}
-      </View>
-    </ScrollView>
+      </ScrollView>
+    </SafeAreaView>
   );
 }

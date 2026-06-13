@@ -1,8 +1,14 @@
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, Text } from 'react-native';
+import { ScrollView } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PlaceCard } from '@/components/place-card';
+import { AppButton } from '@/components/ui/app-button';
+import { AppText } from '@/components/ui/app-text';
+import { LoadingView } from '@/components/ui/loading-view';
+import { StatusText } from '@/components/ui/status-text';
+import { Palette, Screen, Space } from '@/constants/design';
 import { sanityClient } from '@/sanity/client';
 import { SUBREGION_QUERY } from '@/sanity/queries';
 import type { SubRegionDetail } from '@/sanity/types';
@@ -34,25 +40,17 @@ export default function SubRegionScreen() {
     sanityClient
       .fetch<SubRegionDetail | null>(SUBREGION_QUERY, { slug: selectedSlug })
       .then((data) => {
-        if (!isMounted) {
-          return;
-        }
-
+        if (!isMounted) return;
         setSubRegion(data);
       })
       .catch((error) => {
-        if (!isMounted) {
-          return;
-        }
-
+        if (!isMounted) return;
         console.error(error);
         setSubRegion(null);
         setErrorMessage('Unable to load this subregion.');
       })
       .finally(() => {
-        if (isMounted) {
-          setIsLoading(false);
-        }
+        if (isMounted) setIsLoading(false);
       });
 
     return () => {
@@ -66,54 +64,52 @@ export default function SubRegionScreen() {
   const title = subRegion?.name ?? 'Subregion';
 
   return (
-    <ScrollView style={{ flex: 1, padding: 24, backgroundColor: '#fff' }}>
+    <SafeAreaView edges={['bottom']} style={{ backgroundColor: Palette.background, flex: 1 }}>
       <Stack.Screen options={{ title }} />
+      <ScrollView
+        contentContainerStyle={{
+          paddingBottom: Screen.bottom,
+          paddingHorizontal: Screen.gutter,
+          paddingTop: Screen.top,
+        }}>
+        {isLoading ? (
+          <LoadingView />
+        ) : errorMessage ? (
+          <StatusText>{errorMessage}</StatusText>
+        ) : !subRegion ? (
+          <StatusText>Subregion not found.</StatusText>
+        ) : (
+          <>
+            <AppText style={{ marginBottom: Space.xl }} variant="display">
+              {subRegion.name}
+            </AppText>
 
-      {isLoading ? (
-        <Text>Loading...</Text>
-      ) : errorMessage ? (
-        <Text>{errorMessage}</Text>
-      ) : !subRegion ? (
-        <Text>Subregion not found.</Text>
-      ) : (
-        <>
-          <Text style={{ fontSize: 32, fontWeight: '700', marginBottom: 8 }}>
-            {subRegion.name}
-          </Text>
+            <AppText style={{ marginBottom: Space.md }} variant="section">
+              Places
+            </AppText>
 
-          <Text style={{ fontSize: 20, fontWeight: '700', marginBottom: 12 }}>
-            Places
-          </Text>
+            {visiblePlaces.length > 0 ? (
+              visiblePlaces.map((place, index) => (
+                <PlaceCard
+                  key={place._id ?? place.slug?.current ?? index}
+                  place={place}
+                />
+              ))
+            ) : (
+              <StatusText>No places found.</StatusText>
+            )}
 
-          {visiblePlaces.length > 0 ? (
-            visiblePlaces.map((place, index) => (
-              <PlaceCard
-                key={place._id ?? place.slug?.current ?? index}
-                place={place}
+            {hasMorePlaces ? (
+              <AppButton
+                label="Load more"
+                onPress={() => setVisibleCount((count) => count + PAGE_SIZE)}
+                style={{ marginTop: Space.lg }}
+                variant="secondary"
               />
-            ))
-          ) : (
-            <Text>No places found.</Text>
-          )}
-
-          {hasMorePlaces ? (
-            <Pressable
-              onPress={() => setVisibleCount((count) => count + PAGE_SIZE)}
-              style={{
-                alignItems: 'center',
-                borderColor: '#111',
-                borderRadius: 8,
-                borderWidth: 1,
-                marginTop: 16,
-                paddingVertical: 12,
-              }}>
-              <Text style={{ fontSize: 16, fontWeight: '700' }}>
-                Load more
-              </Text>
-            </Pressable>
-          ) : null}
-        </>
-      )}
-    </ScrollView>
+            ) : null}
+          </>
+        )}
+      </ScrollView>
+    </SafeAreaView>
   );
 }

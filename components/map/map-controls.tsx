@@ -5,12 +5,17 @@ import { Palette, Radius, Shadow } from '@/constants/design';
 type MapControlsProps = {
   onLayersPress: () => void;
   onRecenterPress: () => void;
+  onZoomInPress?: () => void;
+  onZoomOutPress?: () => void;
 };
 
 export function MapControls({
   onLayersPress,
   onRecenterPress,
+  onZoomInPress,
+  onZoomOutPress,
 }: MapControlsProps) {
+  const sep = <View style={{ backgroundColor: Palette.border, height: 1 }} />;
   return (
     <View
       style={{
@@ -26,7 +31,19 @@ export function MapControls({
         icon="layers"
         onPress={onLayersPress}
       />
-      <View style={{ backgroundColor: Palette.border, height: 1 }} />
+      {sep}
+      <ControlButton
+        accessibilityLabel="Zoom in"
+        icon="add"
+        onPress={onZoomInPress ?? (() => {})}
+      />
+      {sep}
+      <ControlButton
+        accessibilityLabel="Zoom out"
+        icon="remove"
+        onPress={onZoomOutPress ?? (() => {})}
+      />
+      {sep}
       <ControlButton
         accessibilityLabel="Recenter map"
         icon="my-location"

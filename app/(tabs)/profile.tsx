@@ -67,7 +67,7 @@ function SignedInView({
       </View>
 
       <AppText color={Palette.textBody}>
-        Your favourites and collections sync with TripIdeas.nz.
+        Your saved places and trips are stored on this device.
       </AppText>
 
       <AppButton
@@ -75,12 +75,6 @@ function SignedInView({
         onPress={onSignOut}
         variant="secondary"
       />
-
-      <AppText color={Palette.textMuted} variant="caption">
-        Sign out removes your session from this device. If you sign in again
-        immediately, the sign-in screen may be skipped — full single-device
-        logout requires a backend update.
-      </AppText>
     </View>
   );
 }

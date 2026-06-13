@@ -163,6 +163,8 @@ export default function SavedScreen() {
               accessibilityLabel="New trip name"
               onChangeText={setNewTripName}
               onSubmitEditing={async () => {
+                if (!newTripName.trim()) return;
+
                 const trip = await createTrip(newTripName);
 
                 if (trip) {

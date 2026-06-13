@@ -1,13 +1,15 @@
 import { Image } from 'expo-image';
-import { Link, Stack, useLocalSearchParams } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-import {
-  ContentBlocks,
-  getBlockText,
-  getPlainText,
-} from '@/components/content-blocks';
+import { ContentBlocks, getBlockText, getPlainText } from '@/components/content-blocks';
+import { AppButton } from '@/components/ui/app-button';
+import { AppText } from '@/components/ui/app-text';
+import { LoadingView } from '@/components/ui/loading-view';
+import { StatusText } from '@/components/ui/status-text';
+import { Palette, Screen, Space } from '@/constants/design';
 import { sanityClient } from '@/sanity/client';
 import { ISLAND_QUERY } from '@/sanity/queries';
 import type { IslandArticle, IslandResponse } from '@/sanity/types';
@@ -18,6 +20,7 @@ export default function IslandScreen() {
   const [island, setIsland] = useState<IslandArticle | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
     if (!selectedSlug) {
@@ -35,22 +38,17 @@ export default function IslandScreen() {
     sanityClient
       .fetch<IslandResponse | null>(ISLAND_QUERY, { slug: selectedSlug })
       .then((data) => {
-        if (isMounted) {
-          setIsland(data?.island ?? null);
-        }
+        if (isMounted) setIsland(data?.island ?? null);
       })
       .catch((error) => {
         console.error(error);
-
         if (isMounted) {
           setIsland(null);
           setErrorMessage('Unable to load this island.');
         }
       })
       .finally(() => {
-        if (isMounted) {
-          setIsLoading(false);
-        }
+        if (isMounted) setIsLoading(false);
       });
 
     return () => {
@@ -63,85 +61,74 @@ export default function IslandScreen() {
   const fallbackText = getPlainText(island?.textBlocks) || island?.preview;
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: '#fff' }}>
+    <SafeAreaView edges={['bottom']} style={{ backgroundColor: Palette.background, flex: 1 }}>
       <Stack.Screen options={{ title }} />
-
-      {isLoading ? (
-        <Text style={{ padding: 24 }}>Loading...</Text>
-      ) : errorMessage ? (
-        <Text style={{ padding: 24 }}>{errorMessage}</Text>
-      ) : !island ? (
-        <Text style={{ padding: 24 }}>Island not found.</Text>
-      ) : (
-        <>
-          {island.imageUrl ? (
-            <Image
-              source={{ uri: island.imageUrl }}
-              accessibilityLabel={island.imageAlt ?? island.title ?? 'Island image'}
-              style={{ aspectRatio: 16 / 9, width: '100%' }}
-              contentFit="cover"
-            />
-          ) : null}
-
-          <View style={{ padding: 24 }}>
-            <Text style={{ fontSize: 34, fontWeight: '700', marginBottom: 8 }}>
-              {island.title}
-            </Text>
-
-            {island.maori ? (
-              <Text
-                style={{
-                  color: '#717171',
-                  fontSize: 18,
-                  fontWeight: '600',
-                  marginBottom: 18,
-                }}>
-                {island.maori}
-              </Text>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: Screen.bottom }}>
+        {isLoading ? (
+          <LoadingView />
+        ) : errorMessage ? (
+          <StatusText style={{ padding: Screen.gutter }}>{errorMessage}</StatusText>
+        ) : !island ? (
+          <StatusText style={{ padding: Screen.gutter }}>Island not found.</StatusText>
+        ) : (
+          <>
+            {island.imageUrl ? (
+              <Image
+                accessibilityLabel={island.imageAlt ?? island.title ?? 'Island image'}
+                contentFit="cover"
+                source={{ uri: island.imageUrl }}
+                style={{ aspectRatio: 16 / 9, width: '100%' }}
+              />
             ) : null}
 
-            {hasBodyBlocks ? (
-              <View style={{ marginBottom: 8 }}>
-                <ContentBlocks blocks={island.textBlocks} />
-              </View>
-            ) : fallbackText ? (
-              <Text
-                style={{
-                  color: '#333',
-                  fontSize: 17,
-                  lineHeight: 25,
-                  marginBottom: 24,
-                }}>
-                {fallbackText}
-              </Text>
-            ) : (
-              <Text style={{ color: '#717171', fontSize: 16, marginBottom: 24 }}>
-                Island article content is not available yet.
-              </Text>
-            )}
+            <View style={{ padding: Screen.gutter }}>
+              <AppText style={{ marginBottom: Space.xs }} variant="display">
+                {island.title}
+              </AppText>
 
-            <Link
-              href={{
-                pathname: '/island/[slug]/regions',
-                params: { slug: selectedSlug ?? '' },
-              }}
-              asChild>
-              <Pressable
+              {island.maori ? (
+                <AppText
+                  color={Palette.textMuted}
+                  style={{ marginBottom: Space.xl }}
+                  variant="cardTitle">
+                  {island.maori}
+                </AppText>
+              ) : null}
+
+              {hasBodyBlocks ? (
+                <View style={{ marginBottom: Space.xl }}>
+                  <ContentBlocks blocks={island.textBlocks} />
+                </View>
+              ) : fallbackText ? (
+                <AppText
+                  color={Palette.textBody}
+                  style={{ lineHeight: 25, marginBottom: Space.xl }}>
+                  {fallbackText}
+                </AppText>
+              ) : (
+                <AppText
+                  color={Palette.textMuted}
+                  style={{ marginBottom: Space.xl }}>
+                  Island article content is not available yet.
+                </AppText>
+              )}
+
+              <AppButton
                 disabled={!selectedSlug}
-                style={{
-                  alignItems: 'center',
-                  backgroundColor: '#111',
-                  borderRadius: 8,
-                  paddingVertical: 12,
-                }}>
-                <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>
-                  Browse regions
-                </Text>
-              </Pressable>
-            </Link>
-          </View>
-        </>
-      )}
-    </ScrollView>
+                label="Browse regions"
+                onPress={() => {
+                  if (selectedSlug) {
+                    router.push({
+                      pathname: '/island/[slug]/regions',
+                      params: { slug: selectedSlug },
+                    });
+                  }
+                }}
+              />
+            </View>
+          </>
+        )}
+      </ScrollView>
+    </SafeAreaView>
   );
 }

@@ -9,6 +9,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 
 import { PlaceCard } from '@/components/place-card';
+import { HeaderBackButton } from '@/components/ui/header-back-button';
 import { MAP_STYLE_URL } from '@/constants/map';
 import { fetchPlaceCardsByIds } from '@/sanity/place-cards';
 import { useMyTrips } from '@/trips/provider';
@@ -123,7 +124,12 @@ export default function TripMapScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: '#fff' }}>
-      <Stack.Screen options={{ title }} />
+      <Stack.Screen
+        options={{
+          headerLeft: () => <HeaderBackButton />,
+          title,
+        }}
+      />
 
       {isLoadingTrips || isLoadingPlaces ? (
         <Text style={{ color: '#717171', fontSize: 16, padding: 24 }}>

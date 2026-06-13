@@ -121,12 +121,13 @@ export default function PlaceScreen() {
       return;
     }
 
-    router.push({
+    router.navigate({
       pathname: '/map',
       params: {
         lat: String(coordinates.latitude),
         lng: String(coordinates.longitude),
         title,
+        slug: selectedSlug ?? '',
       },
     });
   };
@@ -231,7 +232,6 @@ export default function PlaceScreen() {
                 <PlaceMapPreview
                   latitude={coordinates.latitude}
                   longitude={coordinates.longitude}
-                  onPress={openTripIdeasMap}
                   title={place.title}
                 />
                 <AppButton
@@ -274,28 +274,24 @@ export default function PlaceScreen() {
               </View>
             ) : null}
 
-            <View style={{ marginBottom: 8 }}>
-              <Text
-                style={{
-                  ...Type.section,
-                  marginBottom: Space.md,
-                }}>
-                Nearby Places
-              </Text>
+            {nearbyPlaces.length > 0 ? (
+              <View style={{ marginBottom: 8 }}>
+                <Text
+                  style={{
+                    ...Type.section,
+                    marginBottom: Space.md,
+                  }}>
+                  Nearby Places
+                </Text>
 
-              {nearbyPlaces.length > 0 ? (
-                nearbyPlaces.map((nearbyPlace, index) => (
+                {nearbyPlaces.map((nearbyPlace, index) => (
                   <PlaceCard
                     key={nearbyPlace._id ?? nearbyPlace.slug?.current ?? index}
                     place={nearbyPlace}
                   />
-                ))
-              ) : (
-                <Text style={{ color: '#717171', fontSize: 16 }}>
-                  No nearby places found yet.
-                </Text>
-              )}
-            </View>
+                ))}
+              </View>
+            ) : null}
           </View>
         </>
       )}

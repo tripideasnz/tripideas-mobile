@@ -1,5 +1,5 @@
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
@@ -9,6 +9,8 @@ import {
   Text,
   View,
 } from 'react-native';
+
+import { HeaderBackButton } from '@/components/ui/header-back-button';
 
 import { PlaceCard } from '@/components/place-card';
 import { TripImageCollage } from '@/components/trip-image-collage';
@@ -212,25 +214,7 @@ export default function TripDetailScreen() {
         options={{
           headerBackVisible: false,
           headerLeft: () => (
-            <Pressable
-              accessibilityLabel="Back to Saved"
-              accessibilityRole="button"
-              hitSlop={8}
-              onPress={() => router.replace('/saved')}
-              style={({ pressed }) => ({
-                alignItems: 'center',
-                height: 44,
-                justifyContent: 'center',
-                opacity: pressed ? 0.5 : 1,
-                width: 44,
-              })}>
-              <MaterialIcons
-                color={Palette.text}
-                name="arrow-back-ios-new"
-                size={22}
-                style={{ transform: [{ translateX: 2 }] }}
-              />
-            </Pressable>
+            <HeaderBackButton onPress={() => router.replace('/saved')} />
           ),
           title: '',
         }}
