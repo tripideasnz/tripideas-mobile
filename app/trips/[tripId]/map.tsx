@@ -1,9 +1,15 @@
+import {
+  Camera,
+  Map as MapLibreMap,
+  Marker,
+  type CameraRef,
+} from '@maplibre/maplibre-react-native';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
-import MapView, { Marker } from 'react-native-maps';
 
 import { PlaceCard } from '@/components/place-card';
+import { MAP_STYLE_URL } from '@/constants/map';
 import { fetchPlaceCardsByIds } from '@/sanity/place-cards';
 import { useMyTrips } from '@/trips/provider';
 import type { PlaceCardData } from '@/types/content';
@@ -29,7 +35,7 @@ export default function TripMapScreen() {
   const selectedTripId = Array.isArray(tripId) ? tripId[0] : tripId;
   const { getTrip, isLoading: isLoadingTrips } = useMyTrips();
   const trip = getTrip(selectedTripId);
-  const mapRef = useRef<MapView>(null);
+  const cameraRef = useRef<CameraRef>(null);
   const [places, setPlaces] = useState<PlaceCardData[]>([]);
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
   const [isLoadingPlaces, setIsLoadingPlaces] = useState(false);
@@ -96,27 +102,21 @@ export default function TripMapScreen() {
       return;
     }
 
-    const coordinates = mappablePlaces.map((place) => ({
-      latitude: place.coordinates.lat,
-      longitude: place.coordinates.lng,
-    }));
-
-    if (coordinates.length === 1) {
-      mapRef.current?.animateToRegion(
-        {
-          ...coordinates[0],
-          latitudeDelta: 0.04,
-          longitudeDelta: 0.04,
-        },
-        350
-      );
+    if (mappablePlaces.length === 1) {
+      cameraRef.current?.easeTo({
+        center: [mappablePlaces[0].coordinates.lng, mappablePlaces[0].coordinates.lat],
+        zoom: 13,
+        duration: 350,
+      });
       return;
     }
 
-    mapRef.current?.fitToCoordinates(coordinates, {
-      animated: true,
-      edgePadding: { bottom: 48, left: 48, right: 48, top: 48 },
-    });
+    const lngs = mappablePlaces.map((p) => p.coordinates.lng);
+    const lats = mappablePlaces.map((p) => p.coordinates.lat);
+    cameraRef.current?.fitBounds(
+      [Math.min(...lngs), Math.min(...lats), Math.max(...lngs), Math.max(...lats)],
+      { padding: { top: 48, right: 48, bottom: 48, left: 48 }, duration: 350 }
+    );
   }, [isMapReady, mappablePlaces]);
 
   const title = trip?.name ? `${trip.name} Map` : 'Trip Map';
@@ -157,28 +157,38 @@ export default function TripMapScreen() {
 
           {mappablePlaces.length > 0 ? (
             <View style={{ flex: 1 }}>
-              <MapView
-                ref={mapRef}
-                initialRegion={{
-                  latitude: -41.28664,
-                  longitude: 174.77557,
-                  latitudeDelta: 12,
-                  longitudeDelta: 12,
-                }}
-                onMapReady={() => setIsMapReady(true)}
+              <MapLibreMap
+                mapStyle={MAP_STYLE_URL}
+                touchPitch={false}
+                touchRotate={false}
+                onDidFinishLoadingMap={() => setIsMapReady(true)}
                 style={{ flex: 1 }}>
+                <Camera
+                  ref={cameraRef}
+                  initialViewState={{
+                    center: [174.77557, -41.28664],
+                    zoom: 5,
+                  }}
+                />
                 {mappablePlaces.map((place, index) => (
                   <Marker
-                    coordinate={{
-                      latitude: place.coordinates.lat,
-                      longitude: place.coordinates.lng,
-                    }}
                     key={place._id ?? place.slug?.current ?? index}
-                    onPress={() => setSelectedPlaceId(place._id ?? null)}
-                    title={place.title}
-                  />
+                    id={String(place._id ?? place.slug?.current ?? index)}
+                    lngLat={[place.coordinates.lng, place.coordinates.lat]}
+                    onPress={() => setSelectedPlaceId(place._id ?? null)}>
+                    <View
+                      style={{
+                        borderColor: '#fff',
+                        borderRadius: 6,
+                        borderWidth: 2,
+                        backgroundColor: '#0080C8',
+                        height: 12,
+                        width: 12,
+                      }}
+                    />
+                  </Marker>
                 ))}
-              </MapView>
+              </MapLibreMap>
             </View>
           ) : (
             <View

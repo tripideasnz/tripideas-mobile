@@ -1,58 +1,47 @@
-import MapView from 'react-native-maps';
+import type { CameraRef, LngLat, LngLatBounds } from '@maplibre/maplibre-react-native';
 
 import type { MapPlace } from '@/sanity/types';
 
-type Coordinate = {
-  latitude: number;
-  longitude: number;
-};
-
-export function getMapCoordinates(places: MapPlace[]): Coordinate[] {
+export function getMapLngLats(places: MapPlace[]): LngLat[] {
   return places.flatMap((place) => {
-    const latitude = place.coordinates?.lat;
-    const longitude = place.coordinates?.lng;
-
-    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-      return [];
-    }
-
-    return [{ latitude: latitude as number, longitude: longitude as number }];
+    const lng = place.coordinates?.lng;
+    const lat = place.coordinates?.lat;
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return [];
+    return [[lng as number, lat as number] as LngLat];
   });
 }
 
-export function fitMapToPlaces(
-  map: MapView | null,
+export function fitCameraToPlaces(
+  camera: CameraRef | null,
   places: MapPlace[],
-  options?: {
-    bottomPadding?: number;
-  }
-) {
-  const coordinates = getMapCoordinates(places);
+  options?: { bottomPadding?: number }
+): boolean {
+  const coords = getMapLngLats(places);
 
-  if (!map || coordinates.length === 0) {
-    return false;
-  }
+  if (!camera || coords.length === 0) return false;
 
-  if (coordinates.length === 1) {
-    map.animateToRegion(
-      {
-        ...coordinates[0],
-        latitudeDelta: 0.08,
-        longitudeDelta: 0.08,
-      },
-      450
-    );
+  if (coords.length === 1) {
+    camera.easeTo({ center: coords[0], zoom: 13, duration: 450 });
     return true;
   }
 
-  map.fitToCoordinates(coordinates, {
-    animated: true,
-    edgePadding: {
+  const lngs = coords.map((c) => c[0]);
+  const lats = coords.map((c) => c[1]);
+  const bounds: LngLatBounds = [
+    Math.min(...lngs),
+    Math.min(...lats),
+    Math.max(...lngs),
+    Math.max(...lats),
+  ];
+
+  camera.fitBounds(bounds, {
+    padding: {
+      top: 120,
+      right: 48,
       bottom: options?.bottomPadding ?? 220,
       left: 48,
-      right: 48,
-      top: 120,
     },
+    duration: 450,
   });
   return true;
 }

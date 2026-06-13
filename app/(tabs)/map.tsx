@@ -1,12 +1,18 @@
-import { useLocalSearchParams } from 'expo-router';
+import {
+  Camera,
+  Map as MapLibreMap,
+  Marker,
+  type CameraRef,
+  type LngLat,
+} from '@maplibre/maplibre-react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Text, View } from 'react-native';
-import MapView, { Marker, type Region } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { MapActiveFilter } from '@/components/map/map-active-filters';
 import { MapActivitiesSheet } from '@/components/map/map-activities-sheet';
-import { fitMapToPlaces } from '@/components/map/map-bounds';
+import { fitCameraToPlaces } from '@/components/map/map-bounds';
 import { MapControls } from '@/components/map/map-controls';
 import { MapPeekSheet } from '@/components/map/map-peek-sheet';
 import { MapQuickFilters } from '@/components/map/map-quick-filters';
@@ -15,6 +21,7 @@ import { MapRegionsSheet } from '@/components/map/map-regions-sheet';
 import { MapSavedSheet } from '@/components/map/map-saved-sheet';
 import type { MapContentSelection } from '@/components/map/map-selection';
 import { MapTileView } from '@/components/map/map-tile-view';
+import { MAP_STYLE_URL } from '@/constants/map';
 import { useSavedPlaces } from '@/saved/provider';
 import {
   fetchMapActivities,
@@ -29,12 +36,8 @@ import type {
 } from '@/sanity/types';
 import { useMyTrips } from '@/trips/provider';
 
-const DEFAULT_REGION: Region = {
-  latitude: -41.28664,
-  longitude: 174.77557,
-  latitudeDelta: 12,
-  longitudeDelta: 12,
-};
+const DEFAULT_CENTER: LngLat = [174.77557, -41.28664];
+const DEFAULT_ZOOM = 5;
 
 type MapTrayState = 'minimised' | 'peek' | 'full';
 
@@ -150,30 +153,27 @@ function getPlacesForSelection({
 }
 
 export default function MapScreen() {
+  const router = useRouter();
   const params = useLocalSearchParams<{
     lat?: string | string[];
     lng?: string | string[];
     title?: string | string[];
   }>();
   const insets = useSafeAreaInsets();
-  const mapRef = useRef<MapView>(null);
+  const cameraRef = useRef<CameraRef>(null);
   const latitude = parseCoordinate(params.lat);
   const longitude = parseCoordinate(params.lng);
-  const title = Array.isArray(params.title) ? params.title[0] : params.title;
   const hasDeepLinkMarker =
     typeof latitude === 'number' && typeof longitude === 'number';
-  const focusRegion = useMemo<Region>(
-    () =>
-      hasDeepLinkMarker
-        ? {
-            latitude,
-            longitude,
-            latitudeDelta: 0.04,
-            longitudeDelta: 0.04,
-          }
-        : DEFAULT_REGION,
-    [hasDeepLinkMarker, latitude, longitude]
-  );
+
+  const focusCenter: LngLat = hasDeepLinkMarker
+    ? [longitude, latitude]
+    : DEFAULT_CENTER;
+  const focusZoom = hasDeepLinkMarker ? 13 : DEFAULT_ZOOM;
+
+  // Tracks the last camera state so the map restores position after tile view collapses.
+  const lastCameraRef = useRef({ center: focusCenter, zoom: focusZoom });
+
   const {
     isLoading: isLoadingSaved,
     savedPlaceIds,
@@ -189,7 +189,6 @@ export default function MapScreen() {
   const [isLoadingSupplemental, setIsLoadingSupplemental] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isMapReady, setIsMapReady] = useState(false);
-  const [lastMapRegion, setLastMapRegion] = useState<Region>(focusRegion);
   const [trayState, setTrayState] = useState<MapTrayState>('peek');
   const [query, setQuery] = useState('');
   const [selection, setSelection] = useState<MapContentSelection>({
@@ -326,12 +325,11 @@ export default function MapScreen() {
   }, [isLoadingSaved, isLoadingTrips, storedPlaceIdsKey]);
 
   useEffect(() => {
-    if (!isMapReady || !hasDeepLinkMarker) {
+    if (!isMapReady || !hasDeepLinkMarker || latitude === undefined || longitude === undefined) {
       return;
     }
-
-    mapRef.current?.animateToRegion(focusRegion, 450);
-  }, [focusRegion, hasDeepLinkMarker, isMapReady]);
+    cameraRef.current?.easeTo({ center: [longitude, latitude], zoom: 13, duration: 450 });
+  }, [hasDeepLinkMarker, isMapReady, latitude, longitude]);
 
   const availablePlaces = useMemo(() => {
     const placesById = new Map<string, MapPlace>();
@@ -375,12 +373,15 @@ export default function MapScreen() {
       ),
     [activityFilteredPlaces, normalizedQuery]
   );
-  const hasMatchingDeepLinkPlace = displayedPlaces.some(
-    (place) =>
-      hasDeepLinkMarker &&
-      Math.abs(place.coordinates.lat - latitude) < 0.000001 &&
-      Math.abs(place.coordinates.lng - longitude) < 0.000001
-  );
+  const hasMatchingDeepLinkPlace =
+    hasDeepLinkMarker &&
+    latitude !== undefined &&
+    longitude !== undefined &&
+    displayedPlaces.some(
+      (place) =>
+        Math.abs(place.coordinates.lat - latitude) < 0.000001 &&
+        Math.abs(place.coordinates.lng - longitude) < 0.000001
+    );
   const isLoading =
     isLoadingPlaces ||
     isLoadingSaved ||
@@ -422,11 +423,11 @@ export default function MapScreen() {
   }, [activities, selectedActivityTagIds, selection]);
 
   useEffect(() => {
-    if (!isFitPending || !isMapReady || !mapRef.current) {
+    if (!isFitPending || !isMapReady) {
       return;
     }
 
-    const didFit = fitMapToPlaces(mapRef.current, activityFilteredPlaces);
+    const didFit = fitCameraToPlaces(cameraRef.current, activityFilteredPlaces);
 
     if (didFit) {
       setIsFitPending(false);
@@ -490,14 +491,6 @@ export default function MapScreen() {
     );
   };
 
-  const handleMapReady = () => {
-    setIsMapReady(true);
-  };
-
-  const handleRegionChangeComplete = (region: Region) => {
-    setLastMapRegion(region);
-  };
-
   const regionSheet = (
     <MapRegionsSheet
       isLoading={isLoadingNavigation}
@@ -559,36 +552,73 @@ export default function MapScreen() {
 
   return (
     <View style={{ backgroundColor: '#fff', flex: 1 }}>
-      <MapView
-        initialRegion={lastMapRegion}
-        onMapReady={handleMapReady}
-        onRegionChangeComplete={handleRegionChangeComplete}
-        pitchEnabled={false}
-        ref={mapRef}
-        rotateEnabled={false}
+      <MapLibreMap
+        mapStyle={MAP_STYLE_URL}
+        touchPitch={false}
+        touchRotate={false}
+        onDidFinishLoadingMap={() => setIsMapReady(true)}
+        onRegionDidChange={(event) => {
+          lastCameraRef.current = {
+            center: event.nativeEvent.center,
+            zoom: event.nativeEvent.zoom,
+          };
+        }}
         style={{ flex: 1 }}>
-        {displayedPlaces.map((place) => (
-          <Marker
-            coordinate={{
-              latitude: place.coordinates.lat,
-              longitude: place.coordinates.lng,
-            }}
-            key={
-              place._id ??
-              place.slug?.current ??
-              `${place.coordinates.lat}-${place.coordinates.lng}`
-            }
-            title={place.title}
-          />
-        ))}
+        <Camera
+          ref={cameraRef}
+          initialViewState={{
+            center: lastCameraRef.current.center,
+            zoom: lastCameraRef.current.zoom,
+          }}
+        />
 
-        {hasDeepLinkMarker && !hasMatchingDeepLinkPlace ? (
-          <Marker
-            coordinate={{ latitude, longitude }}
-            title={title}
-          />
+        {displayedPlaces.map((place) => {
+          const placeKey =
+            place._id ??
+            place.slug?.current ??
+            `${place.coordinates.lat}-${place.coordinates.lng}`;
+          return (
+            <Marker
+              key={placeKey}
+              id={placeKey}
+              lngLat={[place.coordinates.lng, place.coordinates.lat]}
+              onPress={() => {
+                if (place.slug?.current) {
+                  router.push({
+                    pathname: '/place/[slug]',
+                    params: { slug: place.slug.current },
+                  });
+                }
+              }}>
+              <View
+                style={{
+                  borderColor: '#fff',
+                  borderRadius: 6,
+                  borderWidth: 2,
+                  backgroundColor: '#0080C8',
+                  height: 12,
+                  width: 12,
+                }}
+              />
+            </Marker>
+          );
+        })}
+
+        {hasDeepLinkMarker && !hasMatchingDeepLinkPlace && latitude !== undefined && longitude !== undefined ? (
+          <Marker lngLat={[longitude, latitude]}>
+            <View
+              style={{
+                borderColor: '#fff',
+                borderRadius: 7,
+                borderWidth: 2.5,
+                backgroundColor: '#E74C3C',
+                height: 14,
+                width: 14,
+              }}
+            />
+          </Marker>
         ) : null}
-      </MapView>
+      </MapLibreMap>
 
       <View
         pointerEvents="box-none"
@@ -625,11 +655,15 @@ export default function MapScreen() {
               selection.type === 'all' &&
               selectedActivityTagIds.length === 0
             ) {
-              mapRef.current?.animateToRegion(focusRegion, 450);
+              cameraRef.current?.easeTo({
+                center: focusCenter,
+                zoom: focusZoom,
+                duration: 450,
+              });
               return;
             }
 
-            fitMapToPlaces(mapRef.current, activityFilteredPlaces);
+            fitCameraToPlaces(cameraRef.current, activityFilteredPlaces);
           }}
         />
       </View>

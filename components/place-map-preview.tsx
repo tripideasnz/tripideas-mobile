@@ -1,7 +1,9 @@
-import MapView, { Marker } from 'react-native-maps';
+import { Camera, Map as MapLibreMap, Marker } from '@maplibre/maplibre-react-native';
 import { Pressable, Text, View } from 'react-native';
 
+import { MAP_STYLE_URL } from '@/constants/map';
 import { Radius, Shadow, Space, Type } from '@/constants/design';
+
 type PlaceMapPreviewProps = {
   latitude: number;
   longitude: number;
@@ -13,7 +15,6 @@ export function PlaceMapPreview({
   latitude,
   longitude,
   onPress,
-  title,
 }: PlaceMapPreviewProps) {
   return (
     <Pressable
@@ -28,21 +29,33 @@ export function PlaceMapPreview({
         overflow: 'hidden',
         zIndex: 1,
       }}>
-      <MapView
-        initialRegion={{
-          latitude,
-          longitude,
-          latitudeDelta: 0.04,
-          longitudeDelta: 0.04,
-        }}
-        pointerEvents="none"
-        scrollEnabled={false}
-        pitchEnabled={false}
-        rotateEnabled={false}
-        zoomEnabled={false}
+      <MapLibreMap
+        mapStyle={MAP_STYLE_URL}
+        dragPan={false}
+        touchZoom={false}
+        touchRotate={false}
+        touchPitch={false}
+        logo={false}
         style={{ flex: 1 }}>
-        <Marker coordinate={{ latitude, longitude }} title={title} />
-      </MapView>
+        <Camera
+          initialViewState={{
+            center: [longitude, latitude],
+            zoom: 13,
+          }}
+        />
+        <Marker lngLat={[longitude, latitude]}>
+          <View
+            style={{
+              borderColor: '#fff',
+              borderRadius: 7,
+              borderWidth: 2.5,
+              backgroundColor: '#E74C3C',
+              height: 14,
+              width: 14,
+            }}
+          />
+        </Marker>
+      </MapLibreMap>
       <View
         pointerEvents="none"
         style={{
