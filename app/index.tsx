@@ -80,13 +80,22 @@ export default function CoverScreen() {
               maxWidth: 560,
               width: '100%',
             }}>
-            <BrandLogo
-              tone="light"
-              style={{
-                height: 72,
-                marginBottom: 32,
-              }}
-            />
+            {cover?.logoUrl ? (
+              <Image
+                accessibilityLabel={cover.logoAlt ?? 'TripIdeas logo'}
+                contentFit="contain"
+                source={{ uri: cover.logoUrl }}
+                style={{ height: 72, marginBottom: 32 }}
+              />
+            ) : (
+              <BrandLogo
+                tone="light"
+                style={{
+                  height: 72,
+                  marginBottom: 32,
+                }}
+              />
+            )}
 
             <Text
               style={{

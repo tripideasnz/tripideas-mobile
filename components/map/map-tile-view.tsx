@@ -71,7 +71,7 @@ export function MapTileView({
           <MaterialIcons color={Palette.text} name="keyboard-arrow-down" size={28} />
         </Pressable>
 
-        <Text style={Type.label}>
+        <Text style={{ flex: 1, textAlign: 'center', ...Type.label }}>
           {isLoading
             ? 'Loading places...'
             : `${places.length} ${places.length === 1 ? 'place' : 'places'} in view`}

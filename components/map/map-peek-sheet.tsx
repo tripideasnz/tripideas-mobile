@@ -49,14 +49,10 @@ export function MapPeekSheet({
   resultCount,
 }: MapPeekSheetProps) {
   const router = useRouter();
-  const handlePress = () => {
-    Keyboard.dismiss();
-    onHandlePress();
-  };
-  const minimiseTray = () => {
-    Keyboard.dismiss();
-    onMinimise();
-  };
+
+  const countLabel = isLoading
+    ? 'Loading...'
+    : `${resultCount} ${resultCount === 1 ? 'place' : 'places'} in view`;
 
   return (
     <View
@@ -69,27 +65,69 @@ export function MapPeekSheet({
         paddingHorizontal: Space.md,
         paddingTop: Space.xs,
       }}>
-      <Pressable
-        accessibilityLabel={
-          isMinimised ? 'Open map tray' : 'Open full list view'
-        }
-        accessibilityRole="button"
-        onPress={handlePress}
-        style={({ pressed }) => ({
+      {/* Header row: [↓ or spacer] | count | [↑] */}
+      <View
+        style={{
           alignItems: 'center',
-          justifyContent: 'center',
-          minHeight: isMinimised ? 48 : 36,
-          opacity: pressed ? 0.6 : 1,
-        })}>
-        <View
+          flexDirection: 'row',
+          minHeight: isMinimised ? 48 : 44,
+        }}>
+        {isMinimised ? (
+          <View style={{ width: 44 }} />
+        ) : (
+          <Pressable
+            accessibilityLabel="Minimise map tray"
+            accessibilityRole="button"
+            hitSlop={8}
+            onPress={() => {
+              Keyboard.dismiss();
+              onMinimise();
+            }}
+            style={({ pressed }) => ({
+              alignItems: 'center',
+              justifyContent: 'center',
+              opacity: pressed ? 0.55 : 1,
+              width: 44,
+            })}>
+            <MaterialIcons
+              color={Palette.textMuted}
+              name="keyboard-arrow-down"
+              size={28}
+            />
+          </Pressable>
+        )}
+
+        <Text
           style={{
-            backgroundColor: '#c9c9c9',
-            borderRadius: Radius.pill,
-            height: 4,
-            width: 42,
+            color: Palette.text,
+            flex: 1,
+            textAlign: 'center',
+            ...Type.label,
+          }}>
+          {countLabel}
+        </Text>
+
+        <Pressable
+          accessibilityLabel={isMinimised ? 'Expand map tray' : 'Open full list view'}
+          accessibilityRole="button"
+          hitSlop={8}
+          onPress={() => {
+            Keyboard.dismiss();
+            onHandlePress();
           }}
-        />
-      </Pressable>
+          style={({ pressed }) => ({
+            alignItems: 'center',
+            justifyContent: 'center',
+            opacity: pressed ? 0.55 : 1,
+            width: 44,
+          })}>
+          <MaterialIcons
+            color={Palette.textMuted}
+            name="keyboard-arrow-up"
+            size={28}
+          />
+        </Pressable>
+      </View>
 
       {isMinimised ? null : (
         <>
@@ -115,52 +153,6 @@ export function MapPeekSheet({
               />
             </View>
           ) : null}
-
-          <View
-            style={{
-              alignItems: 'center',
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-              paddingHorizontal: 3,
-              paddingVertical: Space.md,
-            }}>
-            <Text
-              style={{ color: Palette.textBody, ...Type.label }}>
-              {isLoading
-                ? 'Loading places...'
-                : `${resultCount} ${
-                    resultCount === 1 ? 'place' : 'places'
-                  } in view`}
-            </Text>
-            <View
-              style={{
-                alignItems: 'center',
-                flexDirection: 'row',
-                gap: Space.md,
-              }}>
-              <Pressable
-                accessibilityRole="button"
-                onPress={handlePress}
-                style={({ pressed }) => ({ opacity: pressed ? 0.55 : 1 })}>
-                <Text
-                  style={{ color: Palette.text, ...Type.label }}>
-                  List view
-                </Text>
-              </Pressable>
-              <Pressable
-                accessibilityLabel="Minimise map tray"
-                accessibilityRole="button"
-                hitSlop={8}
-                onPress={minimiseTray}
-                style={({ pressed }) => ({ opacity: pressed ? 0.55 : 1 })}>
-                <MaterialIcons
-                  color={Palette.text}
-                  name="keyboard-arrow-down"
-                  size={25}
-                />
-              </Pressable>
-            </View>
-          </View>
 
           {places.length > 0 ? (
             <ScrollView
