@@ -14,6 +14,7 @@ import type { MyTrip } from '@/trips/types';
 type MyTripsContextValue = {
   addPlaceToTrip: (tripId: string, placeId: string) => Promise<void>;
   createTrip: (name: string) => Promise<MyTrip | null>;
+  createTripWithPlace: (name: string, placeId: string) => Promise<MyTrip | null>;
   deleteTrip: (tripId: string) => Promise<void>;
   getTrip: (tripId?: string | null) => MyTrip | undefined;
   isLoading: boolean;
@@ -70,6 +71,7 @@ export function MyTripsProvider({ children }: PropsWithChildren) {
 
       try {
         const storedTrips = await setMyTrips(nextTrips);
+        console.log('[Trips] persisted count:', storedTrips.length);
         setTripsState(storedTrips);
       } catch (error) {
         console.error(error);
@@ -98,6 +100,41 @@ export function MyTripsProvider({ children }: PropsWithChildren) {
       };
 
       await persistUpdate((currentTrips) => [trip, ...currentTrips]);
+      return trip;
+    },
+    [persistUpdate]
+  );
+
+  const createTripWithPlace = useCallback(
+    async (name: string, placeId: string): Promise<MyTrip | null> => {
+      const trimmedName = name.trim();
+      const trimmedPlaceId = placeId.trim();
+
+      if (!trimmedName || !trimmedPlaceId) {
+        return null;
+      }
+
+      const timestamp = new Date().toISOString();
+      const trip: MyTrip = {
+        createdAt: timestamp,
+        id: createTripId(),
+        name: trimmedName,
+        note: '',
+        places: [{ addedAt: timestamp, note: '', placeId: trimmedPlaceId }],
+        updatedAt: timestamp,
+      };
+
+      console.log('[Trips] add place to trip id:', trip.id, 'place:', trimmedPlaceId);
+
+      await persistUpdate((currentTrips) => {
+        console.log('[Trips] before create count:', currentTrips.length);
+        const next = [trip, ...currentTrips];
+        console.log('[Trips] after create count:', next.length);
+        return next;
+      });
+
+      console.log('[Trips] created trip id:', trip.id);
+
       return trip;
     },
     [persistUpdate]
@@ -227,6 +264,7 @@ export function MyTripsProvider({ children }: PropsWithChildren) {
     () => ({
       addPlaceToTrip,
       createTrip,
+      createTripWithPlace,
       deleteTrip,
       getTrip,
       isLoading,
@@ -239,6 +277,7 @@ export function MyTripsProvider({ children }: PropsWithChildren) {
     [
       addPlaceToTrip,
       createTrip,
+      createTripWithPlace,
       deleteTrip,
       getTrip,
       isLoading,

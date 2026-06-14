@@ -22,7 +22,7 @@ export function PlaceCardActions({
   style,
 }: PlaceCardActionsProps) {
   const { isSaved, toggleSavedPlace } = useSavedPlaces();
-  const { addPlaceToTrip, trips } = useMyTrips();
+  const { addPlaceToTrip, createTripWithPlace, trips } = useMyTrips();
   const [isTripPickerOpen, setIsTripPickerOpen] = useState(false);
   const isInTrip = trips.some((trip) =>
     trip.places.some((place) => place.placeId === placeId)
@@ -64,6 +64,10 @@ export function PlaceCardActions({
 
       <AddToTripModal
         onClose={() => setIsTripPickerOpen(false)}
+        onCreateTrip={async (name) => {
+          await createTripWithPlace(name, placeId);
+          setIsTripPickerOpen(false);
+        }}
         onSelectTrip={async (tripId) => {
           const selectedTrip = trips.find((trip) => trip.id === tripId);
           const alreadyAdded = selectedTrip?.places.some(
