@@ -155,6 +155,7 @@ export default function SavedScreen() {
 
           <View
             style={{
+              alignItems: 'center',
               flexDirection: 'row',
               gap: Space.md,
               marginBottom: Space.lg,

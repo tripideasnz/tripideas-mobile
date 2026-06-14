@@ -1,5 +1,5 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Modal,
   Pressable,
@@ -14,8 +14,8 @@ import type { MapActivitySuperTag } from '@/sanity/types';
 type MapActivitiesSheetProps = {
   activities: MapActivitySuperTag[];
   isLoading: boolean;
+  onApply: (tagIds: string[]) => void;
   onClose: () => void;
-  onToggleTag: (tagId: string) => void;
   selectedTagIds: string[];
   visible: boolean;
 };
@@ -23,13 +23,21 @@ type MapActivitiesSheetProps = {
 export function MapActivitiesSheet({
   activities,
   isLoading,
+  onApply,
   onClose,
-  onToggleTag,
   selectedTagIds,
   visible,
 }: MapActivitiesSheetProps) {
   const [expandedSuperTagIds, setExpandedSuperTagIds] = useState<string[]>([]);
-  const selectedIds = new Set(selectedTagIds);
+  const [pendingTagIds, setPendingTagIds] = useState<string[]>(selectedTagIds);
+
+  useEffect(() => {
+    if (visible) setPendingTagIds(selectedTagIds);
+  // Reset to committed state whenever the modal opens; selectedTagIds intentionally omitted.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]);
+
+  const selectedIds = new Set(pendingTagIds);
 
   return (
     <Modal
@@ -49,13 +57,26 @@ export function MapActivitiesSheet({
             paddingVertical: 14,
           }}>
           <Pressable
+            accessibilityLabel="Apply filters"
             accessibilityRole="button"
-            onPress={onClose}
+            onPress={() => onApply(pendingTagIds)}
             style={({ pressed }) => ({ opacity: pressed ? 0.55 : 1 })}>
-            <Text style={{ fontSize: 16, fontWeight: '600' }}>Close</Text>
+            <Text style={{ fontSize: 16, fontWeight: '600' }}>Apply</Text>
           </Pressable>
           <Text style={{ fontSize: 19, fontWeight: '800' }}>Activities</Text>
-          <View style={{ width: 42 }} />
+          <Pressable
+            accessibilityLabel="Close without applying"
+            accessibilityRole="button"
+            hitSlop={8}
+            onPress={onClose}
+            style={({ pressed }) => ({
+              alignItems: 'center',
+              justifyContent: 'center',
+              opacity: pressed ? 0.55 : 1,
+              width: 42,
+            })}>
+            <MaterialIcons color="#4a4a4a" name="close" size={22} />
+          </Pressable>
         </View>
 
         <ScrollView
@@ -151,7 +172,11 @@ export function MapActivitiesSheet({
                             key={tagId ?? tag.slug?.current ?? tagIndex}
                             onPress={() => {
                               if (tagId) {
-                                onToggleTag(tagId);
+                                setPendingTagIds((current) =>
+                                  current.includes(tagId)
+                                    ? current.filter((id) => id !== tagId)
+                                    : [...current, tagId]
+                                );
                               }
                             }}
                             style={({ pressed }) => ({

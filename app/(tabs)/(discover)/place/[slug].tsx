@@ -2,7 +2,7 @@ import { Image } from 'expo-image';
 import * as Linking from 'expo-linking';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 
 import {
   ContentBlocks,
@@ -23,6 +23,15 @@ import {
 import { sanityClient } from '@/sanity/client';
 import { PLACE_QUERY } from '@/sanity/queries';
 import type { PlacePage } from '@/sanity/types';
+
+const EXCERPT_LENGTH = 160;
+
+function truncateAtWord(text: string, max: number): string {
+  if (text.length <= max) return text;
+  const cut = text.slice(0, max);
+  const boundary = cut.lastIndexOf(' ');
+  return boundary > 0 ? cut.slice(0, boundary) : cut;
+}
 
 function getPlacePreview(place: PlacePage) {
   const preview = place.excerpt?.trim() || place.preview?.trim();
@@ -108,7 +117,10 @@ export default function PlaceScreen() {
   const preview = place ? getPlacePreview(place) : undefined;
   const displayText = preview || fullText;
   const hasBodyBlocks = (place?.textBlocks ?? []).some((block) => getBlockText(block));
-  const canExpand = Boolean(fullText && preview && fullText !== preview);
+  const excerpt = displayText ? truncateAtWord(displayText, EXCERPT_LENGTH) : undefined;
+  const canExpand = Boolean(
+    displayText && (displayText.length > EXCERPT_LENGTH || hasBodyBlocks)
+  );
   const galleryImages =
     place?.galleryCollections?.flatMap(
       (collection) => collection.images ?? []
@@ -192,32 +204,38 @@ export default function PlaceScreen() {
               placeTitle={place.title}
             />
 
-            {isExpanded && hasBodyBlocks ? (
-              <View style={{ marginBottom: 8 }}>
-                <ContentBlocks blocks={place.textBlocks} />
+            {(displayText || hasBodyBlocks) ? (
+              <View style={{ marginBottom: Space.xl }}>
+                {isExpanded ? (
+                  <>
+                    {hasBodyBlocks ? (
+                      <ContentBlocks blocks={place.textBlocks} />
+                    ) : displayText ? (
+                      <Text style={{ color: Palette.textBody, ...Type.body }}>
+                        {displayText}
+                      </Text>
+                    ) : null}
+                    {canExpand ? (
+                      <Text
+                        onPress={() => setIsExpanded(false)}
+                        style={{ color: Palette.textBody, ...Type.bodyStrong, marginTop: Space.md }}>
+                        Show less
+                      </Text>
+                    ) : null}
+                  </>
+                ) : (
+                  <Text style={{ color: Palette.textBody, ...Type.body }}>
+                    {canExpand ? excerpt : displayText}
+                    {canExpand ? (
+                      <Text
+                        onPress={() => setIsExpanded(true)}
+                        style={{ fontStyle: 'italic' }}>
+                        {'… read more'}
+                      </Text>
+                    ) : null}
+                  </Text>
+                )}
               </View>
-            ) : displayText ? (
-              <Text
-                style={{
-                  color: Palette.textBody,
-                  ...Type.body,
-                  marginBottom: Space.xxl,
-                }}>
-                {displayText}
-              </Text>
-            ) : null}
-
-            {canExpand ? (
-              <Pressable
-                onPress={() => setIsExpanded((expanded) => !expanded)}
-                style={{
-                  alignSelf: 'flex-start',
-                  marginBottom: 24,
-                }}>
-                <Text style={Type.bodyStrong}>
-                  {isExpanded ? 'Show less' : 'Read more'}
-                </Text>
-              </Pressable>
             ) : null}
 
             {coordinates ? (
@@ -281,7 +299,7 @@ export default function PlaceScreen() {
                     ...Type.section,
                     marginBottom: Space.md,
                   }}>
-                  Nearby Places
+                  {place.subRegion?.name ? `More in ${place.subRegion.name}` : 'Nearby Places'}
                 </Text>
 
                 {nearbyPlaces.map((nearbyPlace, index) => (

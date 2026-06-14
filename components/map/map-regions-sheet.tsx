@@ -45,7 +45,7 @@ export function MapRegionsSheet({
       presentationStyle="pageSheet"
       visible={visible}>
       <SafeAreaView style={{ backgroundColor: '#fff', flex: 1 }}>
-        <SheetHeader onClose={onClose} title="Regions" />
+        <SheetHeader onApply={onClose} onDismiss={onClose} title="Regions" />
         <ScrollView
           contentContainerStyle={{ paddingBottom: 40, paddingHorizontal: 18 }}>
           {isLoading ? (
@@ -258,10 +258,12 @@ function SubRegionRow({
 }
 
 function SheetHeader({
-  onClose,
+  onApply,
+  onDismiss,
   title,
 }: {
-  onClose: () => void;
+  onApply: () => void;
+  onDismiss: () => void;
   title: string;
 }) {
   return (
@@ -276,13 +278,26 @@ function SheetHeader({
         paddingVertical: 14,
       }}>
       <Pressable
+        accessibilityLabel="Apply filter"
         accessibilityRole="button"
-        onPress={onClose}
+        onPress={onApply}
         style={({ pressed }) => ({ opacity: pressed ? 0.55 : 1 })}>
-        <Text style={{ fontSize: 16, fontWeight: '600' }}>Close</Text>
+        <Text style={{ fontSize: 16, fontWeight: '600' }}>Apply</Text>
       </Pressable>
       <Text style={{ fontSize: 19, fontWeight: '800' }}>{title}</Text>
-      <View style={{ width: 42 }} />
+      <Pressable
+        accessibilityLabel="Close without applying"
+        accessibilityRole="button"
+        hitSlop={8}
+        onPress={onDismiss}
+        style={({ pressed }) => ({
+          alignItems: 'center',
+          justifyContent: 'center',
+          opacity: pressed ? 0.55 : 1,
+          width: 42,
+        })}>
+        <MaterialIcons color="#4a4a4a" name="close" size={22} />
+      </Pressable>
     </View>
   );
 }

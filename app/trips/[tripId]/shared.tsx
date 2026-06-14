@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BrandLogo } from '@/components/brand-logo';
 import { PlaceCard } from '@/components/place-card';
+import { LoadingView } from '@/components/ui/loading-view';
 import { TripShareCard } from '@/components/trip-share-card';
 import { Palette, Radius, Screen, Space, Type } from '@/constants/design';
 import { fetchPlaceCardsByIds } from '@/sanity/place-cards';
@@ -123,9 +124,7 @@ export default function SharedTripPreviewScreen() {
         </View>
 
         {isLoadingTrips || isLoadingPlaces ? (
-          <Text style={{ color: Palette.textMuted, ...Type.body }}>
-            Loading shared trip...
-          </Text>
+          <LoadingView />
         ) : !trip || !selectedTripId ? (
           <Text style={{ color: Palette.textMuted, ...Type.body }}>
             This shared trip could not be found on this device.

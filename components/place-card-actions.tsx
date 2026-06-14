@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, View } from 'react-native';
+import { View } from 'react-native';
 import type { ViewStyle } from 'react-native';
 
 import { AddPlaceToTripButton } from '@/components/add-place-to-trip-button';
@@ -71,13 +71,12 @@ export function PlaceCardActions({
           );
 
           if (alreadyAdded) {
-            Alert.alert('This place is already in that trip');
+            setIsTripPickerOpen(false);
             return;
           }
 
           await addPlaceToTrip(tripId, placeId);
           setIsTripPickerOpen(false);
-          Alert.alert('Added to My Trip');
         }}
         placeId={isTripPickerOpen ? placeId : null}
         trips={trips}

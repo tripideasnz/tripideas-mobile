@@ -1,9 +1,11 @@
-import { ActivityIndicator, ScrollView, View } from 'react-native';
+import * as Linking from 'expo-linking';
+import { Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useSession } from '@/auth/use-session';
 import { AppButton } from '@/components/ui/app-button';
 import { AppText } from '@/components/ui/app-text';
+import { LoadingView } from '@/components/ui/loading-view';
 import {
   Palette,
   Radius,
@@ -27,7 +29,7 @@ export default function ProfileScreen() {
         </AppText>
 
         {isLoading ? (
-          <ActivityIndicator />
+          <LoadingView />
         ) : user ? (
           <SignedInView
             email={user.email}
@@ -37,6 +39,18 @@ export default function ProfileScreen() {
         ) : (
           <SignedOutView onSignIn={signIn} />
         )}
+
+        <Pressable
+          onPress={() =>
+            Linking.openURL('https://www.tripideas.nz/privacy-policy')
+          }
+          style={{ marginTop: Space.xxxl }}>
+          <AppText
+            color={Palette.trip}
+            style={{ textDecorationLine: 'underline' }}>
+            Privacy Policy
+          </AppText>
+        </Pressable>
       </ScrollView>
     </SafeAreaView>
   );
@@ -66,10 +80,6 @@ function SignedInView({
         <AppText color={Palette.textMuted}>{email}</AppText>
       </View>
 
-      <AppText color={Palette.textBody}>
-        Your saved places and trips are stored on this device.
-      </AppText>
-
       <AppButton
         label="Sign out"
         onPress={onSignOut}
@@ -83,7 +93,9 @@ function SignedOutView({ onSignIn }: { onSignIn: () => Promise<void> }) {
   return (
     <View style={{ gap: Space.lg }}>
       <AppText color={Palette.textBody}>
-        Sign in to sync your favourites and trip ideas across devices.
+        Signing in allows you to create, save, and share content on
+        TripIdeas.nz that is personal to you, including favourites, trip
+        ideas, and related messages.
       </AppText>
 
       <AppButton label="Sign in" onPress={onSignIn} />

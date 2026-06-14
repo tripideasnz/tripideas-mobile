@@ -20,7 +20,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { MapActiveFilter } from '@/components/map/map-active-filters';
 import { MapActivitiesSheet } from '@/components/map/map-activities-sheet';
 import { fitCameraToPlaces } from '@/components/map/map-bounds';
-import { MapControls } from '@/components/map/map-controls';
+import { MapControls, MapZoomControls } from '@/components/map/map-controls';
 import { MapPeekSheet } from '@/components/map/map-peek-sheet';
 import { MapStyleSheet } from '@/components/map/map-style-sheet';
 import { MapQuickFilters } from '@/components/map/map-quick-filters';
@@ -207,8 +207,11 @@ export default function MapScreen() {
     string[]
   >([]);
   const [isFitPending, setIsFitPending] = useState(false);
+  const [fitResetTrigger, setFitResetTrigger] = useState(0);
   const hasInitialFittedRef = useRef(false);
   const prevPeekSheetHeightRef = useRef(0);
+  const mapPaddingRef = useRef<ViewPadding>({ top: 0, right: 56, bottom: PEEK_SHEET_FALLBACK + 16, left: 56 });
+  const displayedPlacesRef = useRef<MappablePlace[]>([]);
   const [peekSheetHeight, setPeekSheetHeight] = useState(0);
   const [isActivitiesSheetOpen, setIsActivitiesSheetOpen] = useState(false);
   const [isRegionsSheetOpen, setIsRegionsSheetOpen] = useState(false);
@@ -246,16 +249,27 @@ export default function MapScreen() {
     }
   }, [placeContext, router]);
 
-  // Exit rule 2: re-tapping the Map tab while in place context clears it.
+  // Exit rule 2: re-tapping the Map tab while already on it resets place context and filters,
+  // clears URL params so useFocusEffect doesn't re-hydrate on next focus, and schedules
+  // a camera fit via fitResetTrigger (useEffect fires after commit; raw event handler calls drop).
   useEffect(() => {
     const unsubscribe = (navigation as any).addListener('tabPress', () => {
-      if (hasPlaceContext) {
-        setPlaceContext(null);
-        setSelectedPlaceId(null);
-      }
+      if (!(navigation as any).isFocused()) return;
+      const isResetting =
+        hasPlaceContext || selection.type !== 'all' || selectedActivityTagIds.length > 0;
+      if (!isResetting) return;
+      console.log('[Map] tab re-press reset: clearing place context and fitting full map');
+      // Clear URL params so useFocusEffect sees null coords on next focus and does not
+      // re-activate place context when the user leaves and returns to this tab.
+      router.setParams({ lat: undefined, lng: undefined, title: undefined, slug: undefined } as any);
+      setPlaceContext(null);
+      setSelectedPlaceId(null);
+      setSelection({ type: 'all' });
+      setSelectedActivityTagIds([]);
+      setFitResetTrigger((n) => n + 1);
     });
     return unsubscribe;
-  }, [navigation, hasPlaceContext]);
+  }, [navigation, hasPlaceContext, selection, selectedActivityTagIds, router]);
 
   // Animate camera to the focused place when context is active and map is ready.
   useEffect(() => {
@@ -560,6 +574,10 @@ export default function MapScreen() {
     }),
     [insets.top, peekSheetHeight]
   );
+  // Keep refs current so the tabPress handler always reads the latest values without
+  // needing to add these to its own deps (which would resubscribe on every render).
+  useEffect(() => { mapPaddingRef.current = mapPadding; }, [mapPadding]);
+  useEffect(() => { displayedPlacesRef.current = displayedPlaces; }, [displayedPlaces]);
 
   useEffect(() => {
     if (!isFitPending || !isMapReady) {
@@ -588,6 +606,20 @@ export default function MapScreen() {
     isLoadingSupplemental,
     mapPadding,
   ]);
+
+  // Dedicated camera reset triggered by the Map tab re-press dismiss.
+  // Uses a useEffect (not a raw event handler) so the camera command is issued
+  // after React commits, which is required for MapLibre bridge commands to fire.
+  useEffect(() => {
+    if (fitResetTrigger === 0 || !isMapReady) return;
+    const places = displayedPlacesRef.current;
+    const padding = mapPaddingRef.current;
+    if (places.length > 0) {
+      fitCameraToPlaces(cameraRef.current, places, padding);
+    } else {
+      cameraRef.current?.fitBounds(NZ_BOUNDS, { padding, duration: 450 });
+    }
+  }, [fitResetTrigger, isMapReady]);
 
   useEffect(() => {
     if (
@@ -648,6 +680,15 @@ export default function MapScreen() {
     setIsFitPending(true);
   };
 
+  const applyActivityTags = (tagIds: string[]) => {
+    clearPlaceContext();
+    setSelectedActivityTagIds(tagIds);
+    setIsFitPending(true);
+    setIsActivitiesSheetOpen(false);
+    if (trayState === 'full') setIsMapReady(false);
+    setTrayState('peek');
+  };
+
   const removeActiveFilter = (filterId: string) => {
     if (filterId === 'scope') {
       setSelection({ type: 'all' });
@@ -675,8 +716,8 @@ export default function MapScreen() {
     <MapActivitiesSheet
       activities={activities}
       isLoading={isLoadingActivities}
+      onApply={applyActivityTags}
       onClose={() => setIsActivitiesSheetOpen(false)}
-      onToggleTag={toggleActivityTag}
       selectedTagIds={selectedActivityTagIds}
       visible={isActivitiesSheetOpen}
     />
@@ -916,6 +957,16 @@ export default function MapScreen() {
 
             fitCameraToPlaces(cameraRef.current, activityFilteredPlaces, mapPadding);
           }}
+        />
+      </View>
+
+      <View
+        style={{
+          bottom: (peekSheetHeight > 0 ? peekSheetHeight : PEEK_SHEET_FALLBACK) + 16,
+          position: 'absolute',
+          right: 12,
+        }}>
+        <MapZoomControls
           onZoomInPress={() =>
             cameraRef.current?.zoomTo(lastCameraRef.current.zoom + 1, { duration: 250 })
           }

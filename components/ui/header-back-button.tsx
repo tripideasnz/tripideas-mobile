@@ -1,4 +1,4 @@
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { Pressable } from 'react-native';
 
@@ -18,17 +18,16 @@ export function HeaderBackButton({ onPress }: HeaderBackButtonProps = {}) {
       onPress={onPress ?? (() => router.back())}
       style={({ pressed }) => ({
         alignItems: 'center',
-        height: 44,
+        backgroundColor: Palette.surface,
+        borderColor: Palette.border,
+        borderRadius: 20,
+        borderWidth: 0.5,
+        height: 40,
         justifyContent: 'center',
         opacity: pressed ? 0.5 : 1,
-        width: 44,
+        width: 40,
       })}>
-      <MaterialIcons
-        color={Palette.text}
-        name="arrow-back-ios-new"
-        size={22}
-        style={{ transform: [{ translateX: 2 }] }}
-      />
+      <Ionicons color={Palette.text} name="chevron-back" size={22} />
     </Pressable>
   );
 }

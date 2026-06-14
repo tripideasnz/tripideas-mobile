@@ -82,30 +82,26 @@ export default function SearchScreen() {
           paddingTop: Screen.top,
         }}>
         <AppText style={{ marginBottom: Space.sm }} variant="display">
-          Search
+          Search TripIdeas
         </AppText>
 
         <AppText
           color={Palette.textBody}
           style={{ marginBottom: Space.xl }}>
-          Find places by name, tags, region, or keywords.
+          Search for places, beaches, walks, towns and regions across New Zealand.
         </AppText>
 
         <AppTextInput
           value={query}
           onChangeText={setQuery}
-          placeholder="Search places, beaches, walks, regions..."
+          placeholder="Search now"
           autoCapitalize="none"
           autoCorrect={false}
           returnKeyType="search"
           style={{ marginBottom: Space.xl }}
         />
 
-        {!hasSearched ? (
-          <StatusText>
-            Search places, beaches, walks, regions...
-          </StatusText>
-        ) : errorMessage ? (
+        {!hasSearched ? null : errorMessage ? (
           <StatusText>{errorMessage}</StatusText>
         ) : isSearching ? (
           <StatusText>Searching...</StatusText>

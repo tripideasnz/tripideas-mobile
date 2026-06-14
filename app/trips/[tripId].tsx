@@ -13,6 +13,7 @@ import {
 import { HeaderBackButton } from '@/components/ui/header-back-button';
 
 import { PlaceCard } from '@/components/place-card';
+import { LoadingView } from '@/components/ui/loading-view';
 import { TripImageCollage } from '@/components/trip-image-collage';
 import { AppTextInput } from '@/components/ui/app-text-input';
 import { CardSurface } from '@/components/ui/card-surface';
@@ -137,7 +138,6 @@ export default function TripDetailScreen() {
     }
 
     await updateTripNote(trip.id, tripNote);
-    Alert.alert('Saved');
   };
 
   const openShareSheet = async () => {
@@ -221,7 +221,7 @@ export default function TripDetailScreen() {
       />
 
       {isLoadingTrips ? (
-        <Text style={{ color: '#717171', fontSize: 16 }}>Loading trip...</Text>
+        <LoadingView />
       ) : !trip || !selectedTripId ? (
         <Text style={{ color: '#717171', fontSize: 16 }}>
           This trip could not be found.
@@ -429,9 +429,7 @@ export default function TripDetailScreen() {
           </Text>
 
           {isLoadingPlaces ? (
-            <Text style={{ color: '#717171', fontSize: 16 }}>
-              Loading places...
-            </Text>
+            <LoadingView />
           ) : errorMessage ? (
             <Text style={{ color: '#717171', fontSize: 16 }}>
               {errorMessage}
@@ -505,7 +503,6 @@ export default function TripDetailScreen() {
                               placeId,
                               draftPlaceNote
                             );
-                            Alert.alert('Saved');
                           }}
                           style={({ pressed }) => ({
                             alignItems: 'center',

@@ -1,6 +1,6 @@
 import { Image } from 'expo-image';
 import { Link } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { RefObject, useCallback, useEffect, useRef, useState } from 'react';
 import {
   LayoutChangeEvent,
   Pressable,
@@ -14,11 +14,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppBrandHeader } from '@/components/app-brand-header';
 import { CardSurface } from '@/components/ui/card-surface';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { LoadingView } from '@/components/ui/loading-view';
 import { MediaFrame } from '@/components/ui/media-frame';
 import {
   Palette,
   Radius,
-  Screen,
   Space,
   Type,
 } from '@/constants/design';
@@ -33,31 +33,66 @@ import type {
 
 export default function DiscoverScreen() {
   const [islands, setIslands] = useState<IslandSummary[] | null>(null);
-  const [cardsAreaHeight, setCardsAreaHeight] = useState(0);
+  // Measures the ScrollView viewport height (not content height) so card sizing is
+  // based on the true visible area rather than a magic windowHeight offset.
+  const [scrollViewHeight, setScrollViewHeight] = useState(0);
   const { height: windowHeight, width: windowWidth } = useWindowDimensions();
-  const horizontalContentWidth = windowWidth - Screen.gutter * 2;
-  const fallbackCardsAreaHeight = Math.max(420, windowHeight - 230);
-  const availableCardsHeight = cardsAreaHeight || fallbackCardsAreaHeight;
+  // Fallback used before the first onLayout fires; conservative so cards never overflow.
+  const fallbackScrollViewHeight = Math.max(400, windowHeight - 280);
+  // Only NI card has a gap below it (marginBottom); SI has none, so gap overhead = Space.lg.
+  // paddingBottom is Space.lg, so availableCardsHeight excludes that padding.
+  const availableCardsHeight = Math.max(
+    0,
+    (scrollViewHeight || fallbackScrollViewHeight) - Space.lg
+  );
   const cardGap = Space.lg;
   const cardHeight = Math.min(
-    330,
+    400,
     Math.max(196, (availableCardsHeight - cardGap) / 2)
   );
   const titleAreaHeight = Math.min(92, Math.max(70, cardHeight * 0.28));
   const imageHeight = Math.max(126, cardHeight - titleAreaHeight);
-  const expandedImageHeight = horizontalContentWidth / 2.05;
+  const expandedImageHeight = (windowWidth - 40) / 2.05;
   const titleFontSize = Math.min(24, Math.max(20, cardHeight * 0.075));
   const titleLineHeight = Math.round(titleFontSize * 1.22);
   const maoriFontSize = Math.min(15, Math.max(13, cardHeight * 0.045));
   const maoriLineHeight = Math.round(maoriFontSize * 1.3);
 
-  const handleCardsAreaLayout = (event: LayoutChangeEvent) => {
+  const scrollViewRef = useRef<ScrollView>(null);
+  const scrollOffsetRef = useRef(0);
+
+  // Scroll the outer ScrollView so that a given view is near the top of the viewport.
+  const scrollToView = useCallback((viewRef: RefObject<View>) => {
+    setTimeout(() => {
+      viewRef.current?.measure((_vx, _vy, _vw, _vh, _vpageX, vpageY) => {
+        scrollViewRef.current?.measure((_sx, _sy, _sw, _sh, _spageX, spageY) => {
+          const contentY = vpageY - spageY + scrollOffsetRef.current;
+          scrollViewRef.current?.scrollTo({ y: Math.max(0, contentY - Space.md), animated: true });
+        });
+      });
+    }, 100);
+  }, []);
+
+  const handleScrollViewLayout = (event: LayoutChangeEvent) => {
     const nextHeight = event.nativeEvent.layout.height;
 
-    if (Math.abs(nextHeight - cardsAreaHeight) > 1) {
-      setCardsAreaHeight(nextHeight);
+    if (Math.abs(nextHeight - scrollViewHeight) > 1) {
+      setScrollViewHeight(nextHeight);
     }
   };
+
+  const handleCardOpen = useCallback(
+    (index: number) => {
+      const targetY =
+        index === 0
+          ? Math.round(expandedImageHeight)
+          : Math.round(cardHeight + Space.lg);
+      setTimeout(() => {
+        scrollViewRef.current?.scrollTo({ y: targetY, animated: true });
+      }, 50);
+    },
+    [expandedImageHeight, cardHeight],
+  );
 
   useEffect(() => {
     let isMounted = true;
@@ -90,35 +125,44 @@ export default function DiscoverScreen() {
   }, []);
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: Palette.background }}>
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{
-          flexGrow: 1,
-          paddingBottom: Screen.bottom,
-          paddingHorizontal: Screen.gutter,
-          paddingTop: Space.lg,
-        }}>
+    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: Palette.background }}>
+      {/* Header sits above the ScrollView so the ScrollView's onLayout reports the
+          true remaining viewport height, which is used to size the island cards. */}
+      <View style={{ paddingHorizontal: 20, paddingTop: Space.lg }}>
         <AppBrandHeader
           compact
           subtitle="Choose an island to explore Aotearoa."
         />
+      </View>
 
+      <ScrollView
+        ref={scrollViewRef}
+        style={{ flex: 1 }}
+        contentContainerStyle={{
+          flexGrow: 1,
+          paddingBottom: Space.lg,
+          paddingHorizontal: 20,
+        }}
+        onLayout={handleScrollViewLayout}
+        onScroll={({ nativeEvent }) => { scrollOffsetRef.current = nativeEvent.contentOffset.y; }}
+        scrollEventThrottle={100}>
         {!islands ? (
-          <Text>Loading...</Text>
+          <LoadingView />
         ) : islands.length > 0 ? (
           <View
-            onLayout={handleCardsAreaLayout}
-            style={{ flex: 1, justifyContent: 'center' }}>
-            {islands.map((island) => (
+            style={{ alignSelf: 'stretch', justifyContent: 'center', minHeight: availableCardsHeight }}>
+            {islands.map((island, index) => (
               <IslandCard
                 cardHeight={cardHeight}
+                cardMarginBottom={index < islands.length - 1 ? Space.lg : 0}
                 expandedImageHeight={expandedImageHeight}
                 imageHeight={imageHeight}
                 key={island.slug}
                 island={island}
                 maoriFontSize={maoriFontSize}
                 maoriLineHeight={maoriLineHeight}
+                onOpen={() => handleCardOpen(index)}
+                scrollToView={scrollToView}
                 titleFontSize={titleFontSize}
                 titleLineHeight={titleLineHeight}
               />
@@ -134,20 +178,26 @@ export default function DiscoverScreen() {
 
 function IslandCard({
   cardHeight,
+  cardMarginBottom,
   expandedImageHeight,
   imageHeight,
   island,
   maoriFontSize,
   maoriLineHeight,
+  onOpen,
+  scrollToView,
   titleFontSize,
   titleLineHeight,
 }: {
   cardHeight: number;
+  cardMarginBottom: number;
   expandedImageHeight: number;
   imageHeight: number;
   island: IslandSummary;
   maoriFontSize: number;
   maoriLineHeight: number;
+  onOpen?: () => void;
+  scrollToView?: (viewRef: RefObject<View>) => void;
   titleFontSize: number;
   titleLineHeight: number;
 }) {
@@ -158,7 +208,8 @@ function IslandCard({
     <CardSurface
       style={{
         height: isOpen ? undefined : cardHeight,
-        marginBottom: Space.lg,
+        marginBottom: cardMarginBottom,
+        width: '100%',
       }}>
       {island.imageUrl ? (
         <MediaFrame
@@ -172,7 +223,11 @@ function IslandCard({
       <Pressable
         accessibilityRole="button"
         accessibilityState={{ expanded: isOpen }}
-        onPress={() => setIsOpen((current) => !current)}
+        onPress={() => {
+          const next = !isOpen;
+          setIsOpen(next);
+          if (next) onOpen?.();
+        }}
         style={({ pressed }) => ({
           alignItems: 'center',
           flexDirection: 'row',
@@ -218,6 +273,7 @@ function IslandCard({
               <RegionSection
                 key={region._id ?? region.slug?.current ?? index}
                 region={region}
+                scrollToView={scrollToView}
               />
             ))
           ) : (
@@ -231,16 +287,27 @@ function IslandCard({
   );
 }
 
-function RegionSection({ region }: { region: Region }) {
+function RegionSection({
+  region,
+  scrollToView,
+}: {
+  region: Region;
+  scrollToView?: (viewRef: RefObject<View>) => void;
+}) {
   const [isOpen, setIsOpen] = useState(false);
+  const viewRef = useRef<View>(null);
   const subRegions = (region.subRegions ?? []).filter(Boolean);
 
   return (
-    <View style={{ borderBottomColor: Palette.border, borderBottomWidth: 1 }}>
+    <View ref={viewRef} style={{ borderBottomColor: Palette.border, borderBottomWidth: 1 }}>
       <Pressable
         accessibilityRole="button"
         accessibilityState={{ expanded: isOpen }}
-        onPress={() => setIsOpen((current) => !current)}
+        onPress={() => {
+          const next = !isOpen;
+          setIsOpen(next);
+          if (next) scrollToView?.(viewRef);
+        }}
         style={({ pressed }) => ({
           alignItems: 'center',
           flexDirection: 'row',

@@ -1,12 +1,26 @@
-import { Stack } from 'expo-router';
+import { Stack, useNavigation } from 'expo-router';
+import { useEffect } from 'react';
 import React from 'react';
 
 import { HeaderBackButton } from '@/components/ui/header-back-button';
 
 export default function DiscoverLayout() {
+  const navigation = useNavigation();
+
+  useEffect(() => {
+    // When the Discover tab is pressed (even when already focused), always pop back to
+    // the discover root — Expo Router's default retap behaviour is unreliable with
+    // the nested (discover) group + Stack combo.
+    const unsubscribe = (navigation as any).addListener('tabPress', () => {
+      (navigation as any).navigate('(discover)', { screen: 'discover' });
+    });
+    return unsubscribe;
+  }, [navigation]);
+
   return (
     <Stack
       screenOptions={{
+        headerBackVisible: false,
         headerLeft: () => <HeaderBackButton />,
       }}>
       <Stack.Screen
