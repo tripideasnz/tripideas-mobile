@@ -176,8 +176,8 @@ export default function MapScreen() {
   const lastCameraRef = useRef({ center: DEFAULT_CENTER, zoom: DEFAULT_ZOOM });
 
   // URL params are the arrival signal — read-only, never written back.
-  const { lat: rawLat, lng: rawLng, title: rawTitle, slug: rawSlug } =
-    useLocalSearchParams<{ lat?: string; lng?: string; title?: string; slug?: string }>();
+  const { lat: rawLat, lng: rawLng, title: rawTitle, slug: rawSlug, tripId: rawTripId, tripLabel: rawTripLabel } =
+    useLocalSearchParams<{ lat?: string; lng?: string; title?: string; slug?: string; tripId?: string; tripLabel?: string }>();
 
   // Place context lives in local state; URL params only trigger it on focus.
   const [placeContext, setPlaceContext] = useState<PlaceContext | null>(null);
@@ -222,6 +222,8 @@ export default function MapScreen() {
   const [visibleBounds, setVisibleBounds] = useState<LngLatBounds | null>(null);
 
   // Activate place context from URL params on focus; clear local state on blur.
+  // Trip selection from URL params is applied once then the param is cleared so
+  // re-focusing the tab does not toggle the selection off.
   // Never writes back to route params (rules 1 & 2).
   useFocusEffect(
     useCallback(() => {
@@ -230,10 +232,19 @@ export default function MapScreen() {
       if (lat !== null && lng !== null && rawSlug) {
         setPlaceContext({ lat, lng, title: rawTitle ?? '', slug: rawSlug });
       }
+
+      if (rawTripId) {
+        setSelection({ type: 'trip', tripId: rawTripId, label: rawTripLabel ?? rawTripId });
+        setIsFitPending(true);
+        setTrayState('peek');
+        router.setParams({ tripId: undefined, tripLabel: undefined } as any);
+      }
+
       return () => {
         setPlaceContext(null);
+        // Trip selection intentionally persists across tab switches.
       };
-    }, [rawLat, rawLng, rawTitle, rawSlug])
+    }, [rawLat, rawLng, rawTitle, rawSlug, rawTripId, rawTripLabel])
   );
 
   // Dismiss local place context; never touches route params (rule 5).
@@ -261,7 +272,7 @@ export default function MapScreen() {
       console.log('[Map] tab re-press reset: clearing place context and fitting full map');
       // Clear URL params so useFocusEffect sees null coords on next focus and does not
       // re-activate place context when the user leaves and returns to this tab.
-      router.setParams({ lat: undefined, lng: undefined, title: undefined, slug: undefined } as any);
+      router.setParams({ lat: undefined, lng: undefined, title: undefined, slug: undefined, tripId: undefined, tripLabel: undefined } as any);
       setPlaceContext(null);
       setSelectedPlaceId(null);
       setSelection({ type: 'all' });

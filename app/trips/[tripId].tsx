@@ -374,9 +374,9 @@ export default function TripDetailScreen() {
             <Pressable
               accessibilityRole="button"
               onPress={() =>
-                router.push({
-                  pathname: '/trips/[tripId]/map',
-                  params: { tripId: trip.id },
+                router.navigate({
+                  pathname: '/map',
+                  params: { tripId: trip.id, tripLabel: trip.name },
                 })
               }
               style={({ pressed }) => ({
