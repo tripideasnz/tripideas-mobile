@@ -9,8 +9,14 @@ import { sanityClient } from '@/sanity/client';
 import { COVER_QUERY } from '@/sanity/queries';
 import type { CoverContent, CoverResponse } from '@/sanity/types';
 
+type WelcomeScreenData = CoverContent & {
+  fallbackSubtitle?: string;
+  subtitle?: string;
+  title?: string;
+};
+
 export default function CoverScreen() {
-  const [cover, setCover] = useState<CoverContent | null>(null);
+  const [cover, setCover] = useState<WelcomeScreenData | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -23,10 +29,13 @@ export default function CoverScreen() {
         }
 
         setCover({
-          backgroundAlt: data?.home?.backgroundAlt ?? data?.islands?.backgroundAlt,
-          backgroundUrl: data?.home?.backgroundUrl ?? data?.islands?.backgroundUrl,
+          backgroundAlt: data?.welcomePage?.backgroundAlt ?? data?.home?.backgroundAlt ?? data?.islands?.backgroundAlt,
+          backgroundUrl: data?.welcomePage?.backgroundUrl ?? data?.home?.backgroundUrl ?? data?.islands?.backgroundUrl,
+          fallbackSubtitle: data?.welcomePage?.fallbackSubtitle,
           logoAlt: data?.home?.logoAlt,
           logoUrl: data?.home?.logoUrl,
+          subtitle: data?.welcomePage?.subtitle,
+          title: data?.welcomePage?.title,
         });
       })
       .catch((error) => {
@@ -106,7 +115,7 @@ export default function CoverScreen() {
                 marginBottom: 16,
                 textAlign: 'center',
               }}>
-              Welcome to TripIdeas.nz
+              {cover?.title ?? 'Welcome to TripIdeas.nz'}
             </Text>
 
             <Text
@@ -118,8 +127,7 @@ export default function CoverScreen() {
                 maxWidth: 420,
                 textAlign: 'center',
               }}>
-              Find memorable places, regions, and trip ideas around New
-              Zealand.
+              {cover?.subtitle ?? cover?.fallbackSubtitle ?? 'Find memorable places, regions, and trip ideas around New Zealand.'}
             </Text>
 
             <Link href="/discover" asChild>

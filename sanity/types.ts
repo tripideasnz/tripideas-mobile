@@ -10,9 +10,18 @@ export type CoverContent = {
   logoUrl?: string;
 };
 
+export type WelcomePageContent = {
+  backgroundAlt?: string;
+  backgroundUrl?: string;
+  fallbackSubtitle?: string;
+  subtitle?: string;
+  title?: string;
+};
+
 export type CoverResponse = {
   home?: CoverContent;
   islands?: CoverContent;
+  welcomePage?: WelcomePageContent;
 };
 
 export type Region = {

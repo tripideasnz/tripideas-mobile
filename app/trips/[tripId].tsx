@@ -76,7 +76,7 @@ export default function TripDetailScreen() {
         (trip?.places ?? []).map((place) => [place.placeId, place.note])
       )
     );
-  }, [trip]);
+  }, [trip?.id]);
 
   useEffect(() => {
     if (!trip || placeIds.length === 0) {
@@ -204,6 +204,7 @@ export default function TripDetailScreen() {
 
   return (
     <ScrollView
+      keyboardShouldPersistTaps="handled"
       style={{ flex: 1, backgroundColor: Palette.background }}
       contentContainerStyle={{
         paddingBottom: Space.huge,
@@ -341,6 +342,7 @@ export default function TripDetailScreen() {
               borderRadius: 10,
               borderWidth: 1,
               fontSize: 16,
+              lineHeight: undefined,
               minHeight: 110,
               padding: 14,
               textAlignVertical: 'top',
@@ -478,6 +480,7 @@ export default function TripDetailScreen() {
                           borderRadius: 10,
                           borderWidth: 1,
                           fontSize: 16,
+                          lineHeight: undefined,
                           minHeight: 90,
                           padding: 14,
                           textAlignVertical: 'top',

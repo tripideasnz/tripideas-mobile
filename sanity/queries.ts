@@ -1,5 +1,12 @@
 export const COVER_QUERY = `
 {
+  "welcomePage": *[_type == "customPage" && slug.current == "app-welcome"][0]{
+    title,
+    subtitle,
+    "fallbackSubtitle": content[_type == "block" && style == "normal"][0].children[0].text,
+    "backgroundAlt": mainImage.alt,
+    "backgroundUrl": mainImage.asset->url
+  },
   "home": *[_type == "home"][0]{
     "backgroundAlt": coalesce(heroImage.alt, mainImage.alt, image.alt),
     "backgroundUrl": coalesce(heroImage.asset->url, mainImage.asset->url, image.asset->url),
