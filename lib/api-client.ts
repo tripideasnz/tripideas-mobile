@@ -30,5 +30,8 @@ export async function apiFetch<T>(
     throw new Error(`API ${response.status}: ${path}`);
   }
 
-  return response.json() as Promise<T>;
+  // Some endpoints (e.g. POST/DELETE /favourite) return a 200 with an empty
+  // body. response.json() throws on empty input, so parse manually.
+  const responseText = await response.text();
+  return (responseText ? JSON.parse(responseText) : undefined) as T;
 }

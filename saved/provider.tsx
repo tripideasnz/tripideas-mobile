@@ -5,10 +5,19 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 
-import { getSavedPlaceIds, setSavedPlaceIds } from '@/saved/storage';
+import { addFavourite, removeFavourite } from '@/saved/api';
+import {
+  getAnonSavedPlaceIds,
+  getUserSavedPlaceIds,
+  setAnonSavedPlaceIds,
+  setUserSavedPlaceIds,
+} from '@/saved/storage';
+import { reconcileFavouritesForUser } from '@/saved/sync';
+import { useSession } from '@/auth/provider';
 
 type SavedPlacesContextValue = {
   isLoading: boolean;
@@ -20,23 +29,40 @@ type SavedPlacesContextValue = {
 const SavedPlacesContext = createContext<SavedPlacesContextValue | null>(null);
 
 export function SavedPlacesProvider({ children }: PropsWithChildren) {
+  const { user } = useSession();
+  const userId = user?.id ?? null;
+
   const [savedPlaceIds, setSavedPlaceIdsState] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Tracks which key is "active" right now, so async loads/toggles that
+  // resolve after the user has signed in/out/switched don't clobber state
+  // that belongs to a different identity.
+  const activeUserIdRef = useRef<string | null>(null);
+  // Tracks which userId has already had reconciliation run this session, so
+  // it fires once per sign-in transition rather than on every re-render.
+  const reconciledUserIdRef = useRef<string | null>(null);
+
+  // Load whichever store is active (anon, or this user's) whenever the
+  // identified user changes.
   useEffect(() => {
     let isMounted = true;
+    activeUserIdRef.current = userId;
+    setIsLoading(true);
 
-    getSavedPlaceIds()
+    const load = userId ? getUserSavedPlaceIds(userId) : getAnonSavedPlaceIds();
+
+    load
       .then((ids) => {
-        if (isMounted) {
+        if (isMounted && activeUserIdRef.current === userId) {
           setSavedPlaceIdsState(ids);
         }
       })
       .catch((error) => {
-        console.error(error);
+        console.error('[Saved] failed to load saved places:', error);
       })
       .finally(() => {
-        if (isMounted) {
+        if (isMounted && activeUserIdRef.current === userId) {
           setIsLoading(false);
         }
       });
@@ -44,7 +70,38 @@ export function SavedPlacesProvider({ children }: PropsWithChildren) {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [userId]);
+
+  // Sign-in reconciliation: merge anon + user-scoped + server favourites.
+  // Runs once per "becoming signed in as this user" transition (covers both
+  // an interactive sign-in and a restored session on cold start).
+  useEffect(() => {
+    if (!userId) {
+      reconciledUserIdRef.current = null;
+      return;
+    }
+
+    if (reconciledUserIdRef.current === userId) {
+      return;
+    }
+    reconciledUserIdRef.current = userId;
+
+    let isMounted = true;
+
+    reconcileFavouritesForUser(userId)
+      .then((mergedIds) => {
+        if (isMounted && activeUserIdRef.current === userId) {
+          setSavedPlaceIdsState(mergedIds);
+        }
+      })
+      .catch((error) => {
+        console.error('[Saved] reconciliation failed:', error);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [userId]);
 
   const isSaved = useCallback(
     (placeId?: string | null) => {
@@ -53,29 +110,63 @@ export function SavedPlacesProvider({ children }: PropsWithChildren) {
     [savedPlaceIds]
   );
 
-  const toggleSavedPlace = useCallback(async (placeId?: string | null) => {
-    if (!placeId) {
-      return;
-    }
+  const toggleSavedPlace = useCallback(
+    async (placeId?: string | null) => {
+      if (!placeId) {
+        return;
+      }
 
-    let nextIds: string[] = [];
+      const toggledForUserId = userId;
+      let nextIds: string[] = [];
+      let wasSaved = false;
 
-    setSavedPlaceIdsState((currentIds) => {
-      nextIds = currentIds.includes(placeId)
-        ? currentIds.filter((id) => id !== placeId)
-        : [placeId, ...currentIds];
-      return nextIds;
-    });
+      setSavedPlaceIdsState((currentIds) => {
+        wasSaved = currentIds.includes(placeId);
+        nextIds = wasSaved
+          ? currentIds.filter((id) => id !== placeId)
+          : [placeId, ...currentIds];
+        return nextIds;
+      });
 
-    try {
-      const storedIds = await setSavedPlaceIds(nextIds);
-      setSavedPlaceIdsState(storedIds);
-    } catch (error) {
-      console.error(error);
-      const storedIds = await getSavedPlaceIds();
-      setSavedPlaceIdsState(storedIds);
-    }
-  }, []);
+      try {
+        const storedIds = toggledForUserId
+          ? await setUserSavedPlaceIds(toggledForUserId, nextIds)
+          : await setAnonSavedPlaceIds(nextIds);
+
+        if (activeUserIdRef.current === toggledForUserId) {
+          setSavedPlaceIdsState(storedIds);
+        }
+      } catch (error) {
+        console.error('[Saved] failed to persist local toggle:', error);
+        const storedIds = toggledForUserId
+          ? await getUserSavedPlaceIds(toggledForUserId)
+          : await getAnonSavedPlaceIds();
+        if (activeUserIdRef.current === toggledForUserId) {
+          setSavedPlaceIdsState(storedIds);
+        }
+        return;
+      }
+
+      if (!toggledForUserId) {
+        // Signed out: local only, nothing to push.
+        return;
+      }
+
+      try {
+        if (wasSaved) {
+          await removeFavourite(placeId);
+        } else {
+          await addFavourite(placeId);
+        }
+      } catch (error) {
+        // Local state already reflects the toggle and stays as-is. No
+        // disruptive UI — the next sign-in reconciliation will retry any
+        // favourite that never made it to the server.
+        console.warn('[Saved] backend push failed for', placeId, error);
+      }
+    },
+    [userId]
+  );
 
   const value = useMemo(
     () => ({
