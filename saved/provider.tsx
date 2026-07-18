@@ -29,8 +29,14 @@ type SavedPlacesContextValue = {
 const SavedPlacesContext = createContext<SavedPlacesContextValue | null>(null);
 
 export function SavedPlacesProvider({ children }: PropsWithChildren) {
-  const { user } = useSession();
+  const { user, session } = useSession();
+  // user?.id drives the load effect so the cached user's IDs render immediately
+  // on cold start without waiting for the async token refresh.
   const userId = user?.id ?? null;
+  // session?.userId gates reconciliation — it's only set once auth is confirmed,
+  // preventing reconcileFavouritesForUser (which clears the anon key) from
+  // running against a stale cached user whose refresh token has since expired.
+  const confirmedUserId = session?.userId ?? null;
 
   const [savedPlaceIds, setSavedPlaceIdsState] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -75,22 +81,26 @@ export function SavedPlacesProvider({ children }: PropsWithChildren) {
   // Sign-in reconciliation: merge anon + user-scoped + server favourites.
   // Runs once per "becoming signed in as this user" transition (covers both
   // an interactive sign-in and a restored session on cold start).
+  // Gated on confirmedUserId (session?.userId) rather than userId (user?.id)
+  // so it never fires while auth is still restoring from a cached user object.
+  // This prevents the anon key from being cleared before we know the session
+  // is actually valid.
   useEffect(() => {
-    if (!userId) {
+    if (!confirmedUserId) {
       reconciledUserIdRef.current = null;
       return;
     }
 
-    if (reconciledUserIdRef.current === userId) {
+    if (reconciledUserIdRef.current === confirmedUserId) {
       return;
     }
-    reconciledUserIdRef.current = userId;
+    reconciledUserIdRef.current = confirmedUserId;
 
     let isMounted = true;
 
-    reconcileFavouritesForUser(userId)
+    reconcileFavouritesForUser(confirmedUserId)
       .then((mergedIds) => {
-        if (isMounted && activeUserIdRef.current === userId) {
+        if (isMounted && activeUserIdRef.current === confirmedUserId) {
           setSavedPlaceIdsState(mergedIds);
         }
       })
@@ -101,7 +111,7 @@ export function SavedPlacesProvider({ children }: PropsWithChildren) {
     return () => {
       isMounted = false;
     };
-  }, [userId]);
+  }, [confirmedUserId]);
 
   const isSaved = useCallback(
     (placeId?: string | null) => {
