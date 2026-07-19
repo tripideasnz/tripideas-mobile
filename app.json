@@ -10,7 +10,10 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "nz.tripideas.app"
+      "bundleIdentifier": "nz.tripideas.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -53,6 +56,12 @@
         "projectId": "737c6cee-da54-491d-9841-b1b6d1f485d7"
       }
     },
-    "owner": "douglas-tripideas"
+    "owner": "douglas-tripideas",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/737c6cee-da54-491d-9841-b1b6d1f485d7"
+    }
   }
 }
