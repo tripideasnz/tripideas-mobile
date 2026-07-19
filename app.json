@@ -46,6 +46,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "737c6cee-da54-491d-9841-b1b6d1f485d7"
+      }
+    },
+    "owner": "douglas-tripideas"
   }
 }
