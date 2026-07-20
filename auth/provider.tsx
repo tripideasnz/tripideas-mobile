@@ -129,6 +129,7 @@ function parseCallbackUrl(raw: string): ParsedCallback {
 export function AuthProvider({ children }: PropsWithChildren) {
   const [state, setState] = useState<SessionState>(initialSessionState);
   const [authError, setAuthError] = useState<string | null>(null);
+  const hasAuthenticatedUserRef = useRef(false);
   const isRestoringRef = useRef(false);
 
   const restoreSession = useCallback(async () => {
@@ -145,6 +146,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
           await storeRefreshToken(result.refreshToken);
           const user = mapTokenUser(result.user);
           await cacheUser(user);
+          hasAuthenticatedUserRef.current = Boolean(user);
+          if (user) setAuthError(null);
           setState(userToSession(user, result.accessToken));
           return;
         } catch {
@@ -158,6 +161,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
       // Cookie-based fallback.
       const user = await getCurrentUser();
       await cacheUser(user);
+      hasAuthenticatedUserRef.current = Boolean(user);
+      if (user) setAuthError(null);
       setState(userToSession(user));
     } catch {
       setState((prev) => ({ ...prev, isLoading: false }));
@@ -182,6 +187,12 @@ export function AuthProvider({ children }: PropsWithChildren) {
     });
     return () => sub.remove();
   }, [restoreSession]);
+
+  useEffect(() => {
+    if (!state.user) return;
+    hasAuthenticatedUserRef.current = true;
+    if (authError) setAuthError(null);
+  }, [authError, state.user]);
 
   const signIn = useCallback(async () => {
     setAuthError(null);
@@ -219,18 +230,30 @@ export function AuthProvider({ children }: PropsWithChildren) {
       result = await WebBrowser.openAuthSessionAsync(authorizationUrl, MOBILE_REDIRECT_URI);
     } catch {
       console.error('[Auth] Auth browser failed.');
+      if (hasAuthenticatedUserRef.current) {
+        setAuthError(null);
+        return;
+      }
       setAuthError('Sign-in could not open. Please try again.');
       await clearAuthStorage();
       return;
     }
 
     if (result.type === 'cancel' || result.type === 'dismiss') {
+      if (hasAuthenticatedUserRef.current) {
+        setAuthError(null);
+        return;
+      }
       await clearAuthStorage();
       return;
     }
 
     if (result.type !== 'success') {
       console.warn('[Auth] Auth browser returned an unexpected result.');
+      if (hasAuthenticatedUserRef.current) {
+        setAuthError(null);
+        return;
+      }
       setAuthError('Sign-in did not complete. Please try again.');
       await clearAuthStorage();
       return;
@@ -239,6 +262,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
     const parsed = parseCallbackUrl(result.url);
 
     if (!parsed.ok) {
+      if (hasAuthenticatedUserRef.current) {
+        setAuthError(null);
+        return;
+      }
       console.warn('[Auth] Callback validation failed.');
       setAuthError('Sign-in did not complete. Please try again.');
       await clearAuthStorage();
@@ -247,6 +274,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
     if (parsed.state && expectedState && parsed.state !== expectedState) {
       console.error('[Auth] State mismatch. Aborting.');
+      if (hasAuthenticatedUserRef.current) {
+        setAuthError(null);
+        return;
+      }
       setAuthError('Sign-in could not be verified. Please try again.');
       await clearAuthStorage();
       return;
@@ -260,6 +291,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
       tokens = await mobileExchange(parsed.code, codeVerifier);
     } catch {
       console.error('[Auth] Token exchange failed.');
+      if (hasAuthenticatedUserRef.current) {
+        setAuthError(null);
+        return;
+      }
       setAuthError('Sign-in could not be completed. Please try again later.');
       await clearAuthStorage();
       return;
@@ -269,6 +304,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
     await storeRefreshToken(tokens.refreshToken);
     const user = mapTokenUser(tokens.user);
     await cacheUser(user);
+    hasAuthenticatedUserRef.current = Boolean(user);
+    if (user) setAuthError(null);
     setState(userToSession(user, tokens.accessToken));
   }, []);
 
@@ -278,6 +315,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
     // active, so re-signing in immediately will skip the WorkOS UI.
     setActiveToken(null);
     await clearAuthStorage();
+    hasAuthenticatedUserRef.current = false;
+    setAuthError(null);
     setState({ isLoading: false, session: null, user: null });
   }, []);
 
