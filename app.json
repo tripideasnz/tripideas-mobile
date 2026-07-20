@@ -12,7 +12,8 @@
       "supportsTablet": true,
       "bundleIdentifier": "nz.tripideas.app",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSLocationWhenInUseUsageDescription": "Tripideasnz may use your location to support map-based features and help show places relevant to your position."
       }
     },
     "android": {

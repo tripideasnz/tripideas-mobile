@@ -104,16 +104,15 @@ function parseCallbackUrl(raw: string): ParsedCallback {
   let url: URL;
   try {
     url = new URL(raw);
-  } catch (err) {
-    console.error('[Auth] URL parse failed:', err);
-    return { ok: false, reason: `URL parse error: ${String(err)}` };
+  } catch {
+    console.error('[Auth] Callback validation failed: invalid callback URL.');
+    return { ok: false, reason: 'Invalid callback URL' };
   }
 
   const error = url.searchParams.get('error');
   if (error) {
-    const desc = url.searchParams.get('error_description') ?? '(no description)';
-    console.error(`[Auth] Provider returned error: ${error} — ${desc}`);
-    return { ok: false, reason: `Provider error: ${error} — ${desc}` };
+    console.error('[Auth] Callback validation failed: provider returned an error.');
+    return { ok: false, reason: 'Provider returned an error' };
   }
 
   const code = url.searchParams.get('code');
@@ -129,6 +128,7 @@ function parseCallbackUrl(raw: string): ParsedCallback {
 
 export function AuthProvider({ children }: PropsWithChildren) {
   const [state, setState] = useState<SessionState>(initialSessionState);
+  const [authError, setAuthError] = useState<string | null>(null);
   const isRestoringRef = useRef(false);
 
   const restoreSession = useCallback(async () => {
@@ -184,6 +184,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, [restoreSession]);
 
   const signIn = useCallback(async () => {
+    setAuthError(null);
     const codeVerifier = generateCodeVerifier();
     const codeChallenge = await generateCodeChallenge(codeVerifier);
 
@@ -191,8 +192,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
     try {
       const response = await mobileAuthorize(codeChallenge);
       authorizationUrl = response.url;
-    } catch (err) {
-      console.error('[Auth] mobileAuthorize failed:', err);
+    } catch {
+      console.error('[Auth] Authorize request failed.');
+      setAuthError('Sign-in could not start. Please try again later.');
       return;
     }
 
@@ -202,10 +204,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       const redirectUri = authUrl.searchParams.get('redirect_uri');
       expectedState = authUrl.searchParams.get('state');
       if (redirectUri !== MOBILE_REDIRECT_URI) {
-        console.error(
-          `[Auth] BACKEND CONFIG ISSUE: redirect_uri is "${redirectUri}", ` +
-          `expected "${MOBILE_REDIRECT_URI}". Fix in WorkOS + backend.`
-        );
+        console.error('[Auth] Backend redirect URI configuration mismatch.');
       }
     } catch {
       console.warn('[Auth] Could not inspect authorization URL');
@@ -218,8 +217,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
     let result: WebBrowser.WebBrowserAuthSessionResult;
     try {
       result = await WebBrowser.openAuthSessionAsync(authorizationUrl, MOBILE_REDIRECT_URI);
-    } catch (err) {
-      console.error('[Auth] openAuthSessionAsync threw:', err);
+    } catch {
+      console.error('[Auth] Auth browser failed.');
+      setAuthError('Sign-in could not open. Please try again.');
       await clearAuthStorage();
       return;
     }
@@ -230,7 +230,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
     }
 
     if (result.type !== 'success') {
-      console.warn('[Auth] Unexpected result type:', result.type);
+      console.warn('[Auth] Auth browser returned an unexpected result.');
+      setAuthError('Sign-in did not complete. Please try again.');
       await clearAuthStorage();
       return;
     }
@@ -238,13 +239,15 @@ export function AuthProvider({ children }: PropsWithChildren) {
     const parsed = parseCallbackUrl(result.url);
 
     if (!parsed.ok) {
-      console.warn('[Auth] Callback not usable:', parsed.reason);
+      console.warn('[Auth] Callback validation failed.');
+      setAuthError('Sign-in did not complete. Please try again.');
       await clearAuthStorage();
       return;
     }
 
     if (parsed.state && expectedState && parsed.state !== expectedState) {
-      console.error(`[Auth] State mismatch. Expected "${expectedState}", got "${parsed.state}". Aborting.`);
+      console.error('[Auth] State mismatch. Aborting.');
+      setAuthError('Sign-in could not be verified. Please try again.');
       await clearAuthStorage();
       return;
     }
@@ -255,8 +258,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
     let tokens;
     try {
       tokens = await mobileExchange(parsed.code, codeVerifier);
-    } catch (err) {
-      console.error('[Auth] mobileExchange failed:', err);
+    } catch {
+      console.error('[Auth] Token exchange failed.');
+      setAuthError('Sign-in could not be completed. Please try again later.');
       await clearAuthStorage();
       return;
     }
@@ -278,8 +282,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, []);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ ...state, signIn, signOut }),
-    [state, signIn, signOut]
+    () => ({ ...state, authError, signIn, signOut }),
+    [state, authError, signIn, signOut]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -14,7 +14,7 @@ import {
 } from '@/constants/design';
 
 export default function ProfileScreen() {
-  const { isLoading, user, signIn, signOut } = useSession();
+  const { authError, isLoading, user, signIn, signOut } = useSession();
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: Palette.background }}>
@@ -37,7 +37,7 @@ export default function ProfileScreen() {
             onSignOut={signOut}
           />
         ) : (
-          <SignedOutView onSignIn={signIn} />
+          <SignedOutView authError={authError} onSignIn={signIn} />
         )}
 
         <Pressable
@@ -89,7 +89,13 @@ function SignedInView({
   );
 }
 
-function SignedOutView({ onSignIn }: { onSignIn: () => Promise<void> }) {
+function SignedOutView({
+  authError,
+  onSignIn,
+}: {
+  authError: string | null;
+  onSignIn: () => Promise<void>;
+}) {
   return (
     <View style={{ gap: Space.lg }}>
       <AppText color={Palette.textBody}>
@@ -99,6 +105,9 @@ function SignedOutView({ onSignIn }: { onSignIn: () => Promise<void> }) {
       </AppText>
 
       <AppButton label="Sign in" onPress={onSignIn} />
+      {authError ? (
+        <AppText color={Palette.danger}>{authError}</AppText>
+      ) : null}
     </View>
   );
 }

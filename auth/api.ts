@@ -67,7 +67,7 @@ export async function mobileExchange(
   const responseText = await response.text();
 
   if (!response.ok) {
-    throw new Error(`API ${response.status}: /auth/mobile/exchange — ${responseText}`);
+    throw new Error('Mobile token exchange request failed');
   }
 
   return JSON.parse(responseText) as TokenResponse;
@@ -82,8 +82,7 @@ export async function mobileRefresh(refreshToken: string): Promise<TokenResponse
   });
 
   if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`API ${response.status}: /auth/mobile/refresh — ${text}`);
+    throw new Error('Mobile token refresh request failed');
   }
 
   return response.json() as Promise<TokenResponse>;

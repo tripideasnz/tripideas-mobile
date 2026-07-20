@@ -16,6 +16,7 @@ export type SessionState = {
 };
 
 export type AuthContextValue = SessionState & {
+  authError: string | null;
   signIn: () => Promise<void>;
   signOut: () => Promise<void>;
 };

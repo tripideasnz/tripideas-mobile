@@ -778,6 +778,9 @@ export default function MapScreen() {
         mapStyle={MAP_STYLES.find((s) => s.id === mapStyleId)?.url ?? MAP_STYLE_URL}
         touchPitch={false}
         touchRotate={false}
+        onDidFailLoadingMap={() => {
+          console.error('[Map] Map or style failed to load.');
+        }}
         onDidFinishLoadingMap={() => setIsMapReady(true)}
         onPress={() => setSelectedPlaceId(null)}
         onRegionDidChange={(event) => {

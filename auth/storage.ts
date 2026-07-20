@@ -25,15 +25,15 @@ export async function clearAuthStorage(): Promise<void> {
     ...SECURE_KEYS.map(async (key) => {
       try {
         await SecureStore.deleteItemAsync(key);
-      } catch (err) {
-        console.warn('[Auth] failed to clear SecureStore key:', key, err);
+      } catch {
+        console.warn('[Auth] SecureStore cleanup failed.');
       }
     }),
     ...ASYNC_KEYS.map(async (key) => {
       try {
         await AsyncStorage.removeItem(key);
-      } catch (err) {
-        console.warn('[Auth] failed to clear AsyncStorage key:', key, err);
+      } catch {
+        console.warn('[Auth] AsyncStorage cleanup failed.');
       }
     }),
   ]);
