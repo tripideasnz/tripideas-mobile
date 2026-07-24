@@ -21,6 +21,19 @@ function getPlacePreview(place: PlaceCardData) {
   return place.seoDescription?.trim() || preview;
 }
 
+function getDistanceLabel(distanceKm: number | undefined) {
+  if (
+    typeof distanceKm !== 'number' ||
+    !Number.isFinite(distanceKm) ||
+    distanceKm < 0
+  ) {
+    return null;
+  }
+
+  const roundedDistance = Math.round(distanceKm * 10) / 10;
+  return `${roundedDistance} km away`;
+}
+
 export function PlaceCard({
   embedded = false,
   place,
@@ -35,6 +48,7 @@ export function PlaceCard({
   const router = useRouter();
   const heading = getPlaceHeading(place);
   const preview = getPlacePreview(place);
+  const distanceLabel = getDistanceLabel(place.distanceKm);
   const placeId = place._id;
   const canOpenPlace = Boolean(place.slug?.current);
 
@@ -81,9 +95,27 @@ export function PlaceCard({
         ) : null}
 
         <View style={{ padding: Space.lg }}>
-          <Text numberOfLines={2} style={Type.cardTitle}>
-            {place.title}
-          </Text>
+          <View
+            style={{
+              alignItems: 'baseline',
+              flexDirection: 'row',
+            }}>
+            <Text numberOfLines={2} style={{ flex: 1, ...Type.cardTitle }}>
+              {place.title}
+            </Text>
+
+            {distanceLabel ? (
+              <Text
+                numberOfLines={1}
+                style={{
+                  color: Palette.textMuted,
+                  ...Type.label,
+                  textAlign: 'right',
+                }}>
+                {distanceLabel}
+              </Text>
+            ) : null}
+          </View>
 
           {showSnippet && heading ? (
             <Text

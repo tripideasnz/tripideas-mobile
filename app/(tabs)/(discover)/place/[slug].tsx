@@ -127,7 +127,7 @@ export default function PlaceScreen() {
     ) ?? [];
   const placeId = place?._id;
   const coordinates = getCoordinates(place);
-  const nearbyPlaces = (place?.nearbyPlaces ?? []).filter(Boolean).slice(0, 4);
+  const nearbyPlaces = (place?.nearbyPlaces ?? []).filter(Boolean);
   const openTripIdeasMap = () => {
     if (!coordinates) {
       return;
@@ -299,7 +299,7 @@ export default function PlaceScreen() {
                     ...Type.section,
                     marginBottom: Space.md,
                   }}>
-                  {place.subRegion?.name ? `More in ${place.subRegion.name}` : 'Nearby Places'}
+                  Nearby Places
                 </Text>
 
                 {nearbyPlaces.map((nearbyPlace, index) => (

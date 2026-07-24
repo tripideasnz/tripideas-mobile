@@ -195,23 +195,47 @@ export const PLACE_QUERY = `
       slug
     }
   },
-  "nearbyPlaces": *[
-    _type == "page" &&
-    _id != ^._id &&
-    slug.current != null &&
-    subRegion._ref == ^.subRegion._ref
-  ] | order(title asc)[0...4]{
-    _id,
-    title,
-    subtitle,
-    excerpt,
-    "h3": body[_type == "block" && style == "h3"][0].children[0].text,
-    "imageAlt": mainImage.alt,
-    "imageUrl": mainImage.asset->url,
-    "preview": body[_type == "block" && style == "normal"][0].children[0].text,
-    "seoDescription": seo.description,
-    slug
-  },
+  "nearbyPlaces": select(
+    placeType == "supercluster" =>
+      (nearbyPlaces[
+        defined(place._ref) &&
+        place._ref != ^._id &&
+        defined(place->._id) &&
+        defined(place->slug.current) &&
+        status in ["approved", "manual"]
+      ] | order(sortOrder asc))[0...12]{
+        distanceKm,
+        "_id": place->_id,
+        "title": place->title,
+        "subtitle": place->subtitle,
+        "excerpt": place->excerpt,
+        "h3": place->body[_type == "block" && style == "h3"][0].children[0].text,
+        "imageAlt": place->mainImage.alt,
+        "imageUrl": place->mainImage.asset->url,
+        "preview": place->body[_type == "block" && style == "normal"][0].children[0].text,
+        "seoDescription": place->seo.description,
+        "slug": place->slug
+      },
+    (nearbyPlaces[
+      defined(place._ref) &&
+      place._ref != ^._id &&
+      defined(place->._id) &&
+      defined(place->slug.current) &&
+      status in ["approved", "manual"]
+    ] | order(sortOrder asc))[0...6]{
+      distanceKm,
+      "_id": place->_id,
+      "title": place->title,
+      "subtitle": place->subtitle,
+      "excerpt": place->excerpt,
+      "h3": place->body[_type == "block" && style == "h3"][0].children[0].text,
+      "imageAlt": place->mainImage.alt,
+      "imageUrl": place->mainImage.asset->url,
+      "preview": place->body[_type == "block" && style == "normal"][0].children[0].text,
+      "seoDescription": place->seo.description,
+      "slug": place->slug
+    }
+  ),
   slug
 }
 `;

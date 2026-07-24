@@ -10,6 +10,7 @@ export type Coordinates = {
 export type PlaceCardData = {
   _id?: string;
   coordinates?: Coordinates;
+  distanceKm?: number;
   title?: string;
   subtitle?: string;
   excerpt?: string;
