@@ -11,19 +11,47 @@ export function getSignInUrl(): string {
   return `${API_BASE_URL}/auth/authenticate`;
 }
 
+function hasJsonBody(body: BodyInit | null | undefined): boolean {
+  if (typeof body !== 'string') {
+    return false;
+  }
+
+  try {
+    JSON.parse(body);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function buildApiHeaders(
+  options?: RequestInit,
+  token: string | null = _activeToken
+): Headers {
+  const headers = new Headers(options?.headers);
+
+  if (token && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+
+  if (
+    hasJsonBody(options?.body) &&
+    !headers.has('Content-Type')
+  ) {
+    headers.set('Content-Type', 'application/json');
+  }
+
+  return headers;
+}
+
 export async function apiFetch<T>(
   path: string,
   options?: RequestInit
 ): Promise<T> {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (_activeToken) {
-    headers['Authorization'] = `Bearer ${_activeToken}`;
-  }
-
   const response = await fetch(`${API_BASE_URL}${path}`, {
     credentials: 'include',
     ...options,
-    headers: { ...headers, ...(options?.headers as Record<string, string> | undefined) },
+    headers: buildApiHeaders(options),
   });
 
   if (!response.ok) {
