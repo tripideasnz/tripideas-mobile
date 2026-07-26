@@ -1,5 +1,5 @@
 import { type Href, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -48,14 +48,30 @@ export default function NotebookListScreen() {
   const [description, setDescription] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+  const createInFlightRef = useRef(false);
+
+  const resetCreateForm = () => {
+    setTitle('');
+    setDescription('');
+    setFormError(null);
+    setIsCreating(false);
+    createInFlightRef.current = false;
+  };
+
+  useEffect(() => {
+    if (session) setFormError(null);
+  }, [session]);
 
   const submitCreate = async () => {
+    if (createInFlightRef.current) return;
+
     const validation = validateNotebookMetadata(title, description);
     if (!validation.valid) {
       setFormError(validation.message);
       return;
     }
 
+    createInFlightRef.current = true;
     setIsCreating(true);
     setFormError(null);
     try {
@@ -63,8 +79,7 @@ export default function NotebookListScreen() {
         title: validation.title,
         description: validation.description,
       });
-      setTitle('');
-      setDescription('');
+      resetCreateForm();
       setShowCreate(false);
       router.push(`/notebooks/${detail.id}` as Href);
     } catch (error) {
@@ -77,6 +92,7 @@ export default function NotebookListScreen() {
             : 'Could not create the Notebook. Please try again.'
       );
     } finally {
+      createInFlightRef.current = false;
       setIsCreating(false);
     }
   };
@@ -123,8 +139,9 @@ export default function NotebookListScreen() {
               accessibilityLabel="Add Notebook"
               label={showCreate ? 'Cancel' : 'Add Notebook'}
               onPress={() => {
-                setFormError(null);
-                setShowCreate((current) => !current);
+                if (showCreate) resetCreateForm();
+                else setFormError(null);
+                setShowCreate(!showCreate);
               }}
               variant="secondary"
             />
@@ -143,7 +160,10 @@ export default function NotebookListScreen() {
                 accessibilityLabel="Notebook title"
                 autoFocus
                 maxLength={200}
-                onChangeText={setTitle}
+                onChangeText={(value) => {
+                  setTitle(value);
+                  setFormError(null);
+                }}
                 placeholder="e.g. South Island ideas"
                 value={title}
               />
@@ -151,7 +171,10 @@ export default function NotebookListScreen() {
                 accessibilityLabel="Notebook description"
                 maxLength={10_000}
                 multiline
-                onChangeText={setDescription}
+                onChangeText={(value) => {
+                  setDescription(value);
+                  setFormError(null);
+                }}
                 placeholder="Optional description"
                 style={{ minHeight: 96, textAlignVertical: 'top' }}
                 value={description}
