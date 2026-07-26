@@ -3,14 +3,16 @@ import React from 'react';
 
 import { AuthProvider } from '@/auth/provider';
 import { SavedPlacesProvider } from '@/saved/provider';
+import { NotebookProvider } from '@/notebooks/provider';
 import { MyTripsProvider } from '@/trips/provider';
 
 export default function RootLayout() {
   return (
     <AuthProvider>
       <SavedPlacesProvider>
-        <MyTripsProvider>
-          <Stack
+        <NotebookProvider>
+          <MyTripsProvider>
+            <Stack
             screenOptions={{
               headerBackButtonDisplayMode: 'minimal',
               headerBackTitle: '',
@@ -21,6 +23,11 @@ export default function RootLayout() {
               options={{ headerShown: false, title: '' }}
             />
             <Stack.Screen name="trips/[tripId]" options={{ title: 'My Trip' }} />
+            <Stack.Screen name="notebooks/index" options={{ title: 'Notebooks' }} />
+            <Stack.Screen
+              name="notebooks/[notebookId]"
+              options={{ title: 'Notebook' }}
+            />
             <Stack.Screen
               name="trips/[tripId]/map"
               options={{ title: 'Trip Map' }}
@@ -31,8 +38,9 @@ export default function RootLayout() {
             />
             <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
             <Stack.Screen name="auth" options={{ headerShown: false }} />
-          </Stack>
-        </MyTripsProvider>
+            </Stack>
+          </MyTripsProvider>
+        </NotebookProvider>
       </SavedPlacesProvider>
     </AuthProvider>
   );

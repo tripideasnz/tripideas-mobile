@@ -22,6 +22,7 @@ import {
 import { generateCodeChallenge, generateCodeVerifier } from '@/auth/pkce';
 import { clearAuthStorage } from '@/auth/storage';
 import { setActiveToken } from '@/lib/api-client';
+import { clearNotebookCache } from '@/notebooks/storage';
 import type { AuthContextValue, AuthUser, SessionState } from '@/auth/session';
 import {
   CODE_VERIFIER_KEY,
@@ -314,11 +315,15 @@ export function AuthProvider({ children }: PropsWithChildren) {
     // Until then, sign-out is local-only. The WorkOS hosted session remains
     // active, so re-signing in immediately will skip the WorkOS UI.
     setActiveToken(null);
+    const signedOutUserId = state.session?.userId ?? state.user?.id;
+    if (signedOutUserId) {
+      await clearNotebookCache(signedOutUserId);
+    }
     await clearAuthStorage();
     hasAuthenticatedUserRef.current = false;
     setAuthError(null);
     setState({ isLoading: false, session: null, user: null });
-  }, []);
+  }, [state.session?.userId, state.user?.id]);
 
   const value = useMemo<AuthContextValue>(
     () => ({ ...state, authError, signIn, signOut }),

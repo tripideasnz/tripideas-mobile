@@ -150,6 +150,30 @@ export default function SavedScreen() {
 
         <View style={{ marginBottom: Space.xxxl }}>
           <AppText style={{ marginBottom: Space.md }} variant="section">
+            Notebooks
+          </AppText>
+          <Pressable
+            accessibilityLabel="Open your private Notebooks"
+            accessibilityRole="button"
+            onPress={() => router.push('/notebooks')}
+            style={({ pressed }) => ({
+              backgroundColor: Palette.surfaceMuted,
+              borderColor: Palette.border,
+              borderRadius: Radius.card,
+              borderWidth: 1,
+              minHeight: 64,
+              opacity: pressed ? 0.65 : 1,
+              padding: Space.lg,
+            })}>
+            <AppText variant="bodyStrong">Your travel Notebooks</AppText>
+            <AppText color={Palette.textMuted}>
+              Keep private notes and ideas together.
+            </AppText>
+          </Pressable>
+        </View>
+
+        <View style={{ marginBottom: Space.xxxl }}>
+          <AppText style={{ marginBottom: Space.md }} variant="section">
             My Trips
           </AppText>
 
