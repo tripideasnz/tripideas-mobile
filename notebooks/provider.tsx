@@ -166,7 +166,6 @@ export function NotebookProvider({ children }: PropsWithChildren) {
         await storeDetail(ownerId, latest);
         return latest;
       } catch (error) {
-        if (cached && classifyNotebookError(error) === 'offline') return cached;
         throw error;
       }
     },
