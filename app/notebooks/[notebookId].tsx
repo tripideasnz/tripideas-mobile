@@ -17,6 +17,7 @@ import { AppTextInput } from '@/components/ui/app-text-input';
 import { LoadingView } from '@/components/ui/loading-view';
 import { Palette, Radius, Screen, Space } from '@/constants/design';
 import { classifyNotebookError } from '@/notebooks/errors';
+import { shouldAdoptAutosaveResponse } from '@/notebooks/autosave';
 import {
   moveNotebookItemIds,
   notebookBlockIndexLabel,
@@ -26,7 +27,9 @@ import {
 import { useNotebooks } from '@/notebooks/provider';
 import type { NotebookDetail } from '@/notebooks/types';
 
-type SaveState = 'changed' | 'failed' | 'idle' | 'saved' | 'saving';
+type SaveState = 'failed' | 'idle' | 'saving';
+type RetryConflict = () => Promise<void>;
+const AUTOSAVE_DELAY_MS = 650;
 
 export default function NotebookDetailScreen() {
   const router = useRouter();
@@ -54,62 +57,90 @@ export default function NotebookDetailScreen() {
   const [metadataState, setMetadataState] = useState<SaveState>('idle');
   const [itemStates, setItemStates] = useState<Record<string, SaveState>>({});
   const [actionError, setActionError] = useState<string | null>(null);
+  const titleRef = useRef('');
+  const descriptionRef = useRef('');
+  const titleDraftsRef = useRef<Record<string, string>>({});
+  const textDraftsRef = useRef<Record<string, string>>({});
+  const metadataRevisionRef = useRef(0);
+  const itemRevisionsRef = useRef<Record<string, number>>({});
+  const metadataTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const itemTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const retryConflictRef = useRef<RetryConflict | null>(null);
+  const initializedNotebookRef = useRef<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
   const blockSectionOffset = useRef(0);
   const blockOffsets = useRef<Record<string, number>>({});
 
   const applyAuthoritativeDetail = useCallback((
     next: NotebookDetail,
-    options: { resetDrafts?: boolean; savedItemId?: string; savedMetadata?: boolean } = {}
+    options: {
+      metadataRevision?: number;
+      resetDrafts?: boolean;
+      savedItem?: { id: string; revision: number };
+    } = {}
   ) => {
-    const { resetDrafts = false, savedItemId, savedMetadata = false } = options;
-    setTitle((current) =>
-      resetDrafts || savedMetadata || !['changed', 'failed'].includes(metadataState)
-        ? next.title
-        : current
-    );
-    setDescription((current) =>
-      resetDrafts || savedMetadata || !['changed', 'failed'].includes(metadataState)
-        ? next.description ?? ''
-        : current
-    );
-    setTextDrafts((current) =>
-      Object.fromEntries(
-        next.items.map((item) => [
-          item.id,
-          resetDrafts ||
-          savedItemId === item.id ||
-          !['changed', 'failed'].includes(itemStates[item.id] ?? 'idle')
-            ? item.text
-            : current[item.id] ?? item.text,
-        ])
-      )
-    );
-    setTitleDrafts((current) =>
-      Object.fromEntries(
-        next.items.map((item) => [
-          item.id,
-          resetDrafts ||
-          savedItemId === item.id ||
-          !['changed', 'failed'].includes(itemStates[item.id] ?? 'idle')
-            ? item.title ?? ''
-            : current[item.id] ?? item.title ?? '',
-        ])
-      )
-    );
+    const { metadataRevision, resetDrafts = false, savedItem } = options;
+    const adoptMetadata =
+      resetDrafts ||
+      metadataRevisionRef.current === 0 ||
+      (metadataRevision !== undefined &&
+        shouldAdoptAutosaveResponse(
+          metadataRevisionRef.current,
+          metadataRevision
+        ));
+    if (adoptMetadata) {
+      titleRef.current = next.title;
+      descriptionRef.current = next.description ?? '';
+      setTitle(next.title);
+      setDescription(next.description ?? '');
+    }
+
+    const nextTitles: Record<string, string> = {};
+    const nextTexts: Record<string, string> = {};
+    const nextRevisions: Record<string, number> = {};
+    for (const item of next.items) {
+      const revision = itemRevisionsRef.current[item.id] ?? 0;
+      const adoptItem =
+        resetDrafts ||
+        revision === 0 ||
+        (savedItem?.id === item.id &&
+          shouldAdoptAutosaveResponse(revision, savedItem.revision));
+      nextTitles[item.id] = adoptItem
+        ? item.title ?? ''
+        : titleDraftsRef.current[item.id] ?? item.title ?? '';
+      nextTexts[item.id] = adoptItem
+        ? item.text
+        : textDraftsRef.current[item.id] ?? item.text;
+      nextRevisions[item.id] = adoptItem ? 0 : revision;
+    }
+    titleDraftsRef.current = nextTitles;
+    textDraftsRef.current = nextTexts;
+    itemRevisionsRef.current = nextRevisions;
+    setTitleDrafts(nextTitles);
+    setTextDrafts(nextTexts);
+
     if (resetDrafts) {
-      setMetadataState('saved');
+      metadataRevisionRef.current = 0;
+      setMetadataState('idle');
       setItemStates({});
-    } else {
-      if (savedMetadata) setMetadataState('saved');
-      if (savedItemId) {
-        setItemStates((current) => ({ ...current, [savedItemId]: 'saved' }));
-      }
+    } else if (
+      metadataRevision !== undefined &&
+      metadataRevisionRef.current === metadataRevision
+    ) {
+      metadataRevisionRef.current = 0;
+      setMetadataState('idle');
+    }
+    if (
+      savedItem &&
+      itemRevisionsRef.current[savedItem.id] === 0
+    ) {
+      setItemStates((current) => ({ ...current, [savedItem.id]: 'idle' }));
     }
     setConflict(false);
+    retryConflictRef.current = null;
     setActionError(null);
     setIsOffline(false);
-  }, [itemStates, metadataState]);
+  }, []);
 
   const reload = useCallback(
     async (replaceDrafts: boolean) => {
@@ -155,16 +186,27 @@ export default function NotebookDetailScreen() {
   }, [notebookId, session?.userId]);
 
   useEffect(() => {
-    if (detail && !title && metadataState === 'idle') {
+    if (detail && initializedNotebookRef.current !== detail.id) {
+      initializedNotebookRef.current = detail.id;
       applyAuthoritativeDetail(detail, { resetDrafts: true });
     }
-  }, [applyAuthoritativeDetail, detail, metadataState, title]);
+  }, [applyAuthoritativeDetail, detail]);
 
-  const handleMutationError = (error: unknown, itemId?: string) => {
+  useEffect(() => () => {
+    if (metadataTimerRef.current) clearTimeout(metadataTimerRef.current);
+    Object.values(itemTimersRef.current).forEach(clearTimeout);
+  }, []);
+
+  const handleMutationError = (
+    error: unknown,
+    itemId?: string,
+    retry?: RetryConflict
+  ) => {
     const failure = classifyNotebookError(error);
     if (failure === 'conflict') {
       setConflict(true);
       setActionError('This Notebook changed elsewhere.');
+      retryConflictRef.current = retry ?? null;
     } else if (failure === 'offline') {
       setIsOffline(true);
       setActionError('You appear to be offline. Your changes have not been saved.');
@@ -173,7 +215,7 @@ export default function NotebookDetailScreen() {
     } else if (failure === 'validation') {
       setActionError('Check this content and try again.');
     } else {
-      setActionError('Could not save. Please try again.');
+      setActionError('Could not save.');
     }
     if (itemId) {
       setItemStates((current) => ({ ...current, [itemId]: 'failed' }));
@@ -222,8 +264,11 @@ export default function NotebookDetailScreen() {
   }
 
   const mutationDisabled = isOffline || conflict;
-  const saveMetadata = async () => {
-    const validation = validateNotebookMetadata(title, description);
+  const saveMetadata = async (revision: number) => {
+    const validation = validateNotebookMetadata(
+      titleRef.current,
+      descriptionRef.current
+    );
     if (!validation.valid) {
       setActionError(validation.message);
       setMetadataState('failed');
@@ -236,16 +281,27 @@ export default function NotebookDetailScreen() {
         title: validation.title,
         description: validation.description,
       });
-      applyAuthoritativeDetail(latest, { savedMetadata: true });
+      applyAuthoritativeDetail(latest, { metadataRevision: revision });
     } catch (error) {
-      handleMutationError(error);
+      handleMutationError(error, undefined, () =>
+        saveMetadata(metadataRevisionRef.current)
+      );
     }
   };
 
-  const saveText = async (itemId: string) => {
-    const blockTitle = titleDrafts[itemId] ?? '';
+  const scheduleMetadataSave = () => {
+    if (metadataTimerRef.current) clearTimeout(metadataTimerRef.current);
+    const revision = metadataRevisionRef.current;
+    metadataTimerRef.current = setTimeout(() => {
+      metadataTimerRef.current = null;
+      void saveMetadata(revision);
+    }, AUTOSAVE_DELAY_MS);
+  };
+
+  const saveText = async (itemId: string, revision: number) => {
+    const blockTitle = titleDraftsRef.current[itemId] ?? '';
     if (blockTitle.length > 200) {
-      setActionError('Keep block titles under 200 characters.');
+      setActionError('Keep page titles under 200 characters.');
       setItemStates((current) => ({ ...current, [itemId]: 'failed' }));
       return;
     }
@@ -254,22 +310,60 @@ export default function NotebookDetailScreen() {
     try {
       const latest = await mutate.updateText(detail.id, itemId, {
         title: blockTitle.trim() || null,
-        text: textDrafts[itemId] ?? '',
+        text: textDraftsRef.current[itemId] ?? '',
       });
-      applyAuthoritativeDetail(latest, { savedItemId: itemId });
+      applyAuthoritativeDetail(latest, {
+        savedItem: { id: itemId, revision },
+      });
     } catch (error) {
-      handleMutationError(error, itemId);
+      handleMutationError(error, itemId, () =>
+        saveText(itemId, itemRevisionsRef.current[itemId] ?? revision)
+      );
+    }
+  };
+
+  const scheduleTextSave = (itemId: string) => {
+    const existing = itemTimersRef.current[itemId];
+    if (existing) clearTimeout(existing);
+    const revision = itemRevisionsRef.current[itemId];
+    itemTimersRef.current[itemId] = setTimeout(() => {
+      delete itemTimersRef.current[itemId];
+      void saveText(itemId, revision);
+    }, AUTOSAVE_DELAY_MS);
+  };
+
+  const runImmediateMutation = async (
+    operation: () => Promise<NotebookDetail>,
+    itemId?: string
+  ) => {
+    setActionError(null);
+    try {
+      applyAuthoritativeDetail(await operation());
+    } catch (error) {
+      handleMutationError(error, itemId, () =>
+        runImmediateMutation(operation, itemId)
+      );
     }
   };
 
   const reorder = async (itemId: string, offset: -1 | 1) => {
     const ids = moveNotebookItemIds(detail.items, itemId, offset);
     if (!ids) return;
+    const operation = () => mutate.reorder(detail.id, ids);
+    await runImmediateMutation(operation, itemId);
+  };
+
+  const keepMyVersion = async () => {
+    const retry = retryConflictRef.current;
+    if (!retry || !notebookId) return;
     setActionError(null);
     try {
-      applyAuthoritativeDetail(await mutate.reorder(detail.id, ids));
+      await loadNotebook(notebookId, true);
+      setConflict(false);
+      retryConflictRef.current = null;
+      await retry();
     } catch (error) {
-      handleMutationError(error, itemId);
+      handleMutationError(error, undefined, retry);
     }
   };
 
@@ -302,12 +396,14 @@ export default function NotebookDetailScreen() {
                   onPress={() => reload(true)}
                   style={{ flex: 1 }}
                 />
-                <AppButton
-                  label="Keep draft"
-                  onPress={() => setActionError('Draft kept locally. Reload before saving.')}
-                  style={{ flex: 1 }}
-                  variant="secondary"
-                />
+                {retryConflictRef.current ? (
+                  <AppButton
+                    label="Keep my version"
+                    onPress={keepMyVersion}
+                    style={{ flex: 1 }}
+                    variant="secondary"
+                  />
+                ) : null}
               </View>
             </View>
           ) : null}
@@ -320,8 +416,11 @@ export default function NotebookDetailScreen() {
               editable={!mutationDisabled}
               maxLength={200}
               onChangeText={(value) => {
+                titleRef.current = value;
                 setTitle(value);
-                setMetadataState('changed');
+                metadataRevisionRef.current += 1;
+                setMetadataState('idle');
+                scheduleMetadataSave();
               }}
               value={title}
             />
@@ -331,21 +430,17 @@ export default function NotebookDetailScreen() {
               maxLength={10_000}
               multiline
               onChangeText={(value) => {
+                descriptionRef.current = value;
                 setDescription(value);
-                setMetadataState('changed');
+                metadataRevisionRef.current += 1;
+                setMetadataState('idle');
+                scheduleMetadataSave();
               }}
               placeholder="Optional description"
               style={{ minHeight: 96, textAlignVertical: 'top' }}
               value={description}
             />
-            <View style={{ alignItems: 'center', flexDirection: 'row', gap: Space.md }}>
-              <AppButton
-                disabled={mutationDisabled || metadataState === 'saving'}
-                label={metadataState === 'saving' ? 'Saving…' : 'Save details'}
-                onPress={saveMetadata}
-              />
-              <SaveLabel state={metadataState} />
-            </View>
+            <SaveLabel state={metadataState} />
           </View>
 
           <View
@@ -373,14 +468,9 @@ export default function NotebookDetailScreen() {
                 accessibilityLabel="Add empty text block"
                 disabled={mutationDisabled}
                 label="Add block"
-                onPress={async () => {
-                  setActionError(null);
-                  try {
-                    applyAuthoritativeDetail(await mutate.addText(detail.id, ''));
-                  } catch (error) {
-                    handleMutationError(error);
-                  }
-                }}
+                onPress={() =>
+                  runImmediateMutation(() => mutate.addText(detail.id, ''))
+                }
               />
             </View>
             {indexOpen ? (
@@ -434,8 +524,15 @@ export default function NotebookDetailScreen() {
                     editable={!mutationDisabled}
                     maxLength={200}
                     onChangeText={(value) => {
+                      titleDraftsRef.current = {
+                        ...titleDraftsRef.current,
+                        [item.id]: value,
+                      };
                       setTitleDrafts((current) => ({ ...current, [item.id]: value }));
-                      setItemStates((current) => ({ ...current, [item.id]: 'changed' }));
+                      itemRevisionsRef.current[item.id] =
+                        (itemRevisionsRef.current[item.id] ?? 0) + 1;
+                      setItemStates((current) => ({ ...current, [item.id]: 'idle' }));
+                      scheduleTextSave(item.id);
                     }}
                     placeholder="Optional block title"
                     value={titleDrafts[item.id] ?? item.title ?? ''}
@@ -446,20 +543,21 @@ export default function NotebookDetailScreen() {
                     maxLength={100_000}
                     multiline
                     onChangeText={(value) => {
+                      textDraftsRef.current = {
+                        ...textDraftsRef.current,
+                        [item.id]: value,
+                      };
                       setTextDrafts((current) => ({ ...current, [item.id]: value }));
-                      setItemStates((current) => ({ ...current, [item.id]: 'changed' }));
+                      itemRevisionsRef.current[item.id] =
+                        (itemRevisionsRef.current[item.id] ?? 0) + 1;
+                      setItemStates((current) => ({ ...current, [item.id]: 'idle' }));
+                      scheduleTextSave(item.id);
                     }}
                     placeholder="Write a note…"
                     style={{ minHeight: 112, textAlignVertical: 'top' }}
                     value={textDrafts[item.id] ?? item.text}
                   />
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm }}>
-                    <AppButton
-                      accessibilityLabel={`Save text block ${index + 1}`}
-                      disabled={mutationDisabled || itemStates[item.id] === 'saving'}
-                      label={itemStates[item.id] === 'saving' ? 'Saving…' : 'Save'}
-                      onPress={() => saveText(item.id)}
-                    />
                     <AppButton
                       accessibilityLabel={`Move text block ${index + 1} up`}
                       disabled={mutationDisabled || index === 0}
@@ -485,10 +583,13 @@ export default function NotebookDetailScreen() {
                             text: 'Delete',
                             style: 'destructive',
                             onPress: () => {
-                              void mutate
-                                .deleteText(detail.id, item.id)
-                                .then(applyAuthoritativeDetail)
-                                .catch((error) => handleMutationError(error, item.id));
+                              const timer = itemTimersRef.current[item.id];
+                              if (timer) clearTimeout(timer);
+                              delete itemTimersRef.current[item.id];
+                              void runImmediateMutation(
+                                () => mutate.deleteText(detail.id, item.id),
+                                item.id
+                              );
                             },
                           },
                         ])
@@ -549,14 +650,10 @@ function Notice({ text }: { text: string }) {
 function SaveLabel({ state }: { state: SaveState }) {
   const label =
     state === 'saving'
-      ? 'Saving'
-      : state === 'saved'
-        ? 'Saved'
-        : state === 'failed'
-          ? 'Failed to save'
-          : state === 'changed'
-            ? 'Unsaved changes'
-            : '';
+      ? 'Saving…'
+      : state === 'failed'
+        ? 'Could not save'
+        : '';
   return label ? (
     <AppText
       accessibilityLiveRegion="polite"
