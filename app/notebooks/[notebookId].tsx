@@ -17,11 +17,16 @@ import { AppTextInput } from '@/components/ui/app-text-input';
 import { LoadingView } from '@/components/ui/loading-view';
 import { Palette, Radius, Screen, Space } from '@/constants/design';
 import { classifyNotebookError } from '@/notebooks/errors';
-import { shouldAdoptAutosaveResponse } from '@/notebooks/autosave';
+import {
+  reconcileAutosaveDraft,
+  retryNotebookConflict,
+  shouldAdoptAutosaveResponse,
+} from '@/notebooks/autosave';
 import {
   moveNotebookItemIds,
   notebookBlockIndexLabel,
   notebookBlockScrollOffset,
+  shouldShowNotebookIndex,
   validateNotebookMetadata,
 } from '@/notebooks/model';
 import { useNotebooks } from '@/notebooks/provider';
@@ -105,12 +110,20 @@ export default function NotebookDetailScreen() {
         revision === 0 ||
         (savedItem?.id === item.id &&
           shouldAdoptAutosaveResponse(revision, savedItem.revision));
-      nextTitles[item.id] = adoptItem
-        ? item.title ?? ''
-        : titleDraftsRef.current[item.id] ?? item.title ?? '';
-      nextTexts[item.id] = adoptItem
-        ? item.text
-        : textDraftsRef.current[item.id] ?? item.text;
+      nextTitles[item.id] = reconcileAutosaveDraft(
+        item.title ?? '',
+        titleDraftsRef.current[item.id] ?? item.title ?? '',
+        revision,
+        savedItem?.id === item.id ? savedItem.revision : -1,
+        resetDrafts || revision === 0
+      );
+      nextTexts[item.id] = reconcileAutosaveDraft(
+        item.text,
+        textDraftsRef.current[item.id] ?? item.text,
+        revision,
+        savedItem?.id === item.id ? savedItem.revision : -1,
+        resetDrafts || revision === 0
+      );
       nextRevisions[item.id] = adoptItem ? 0 : revision;
     }
     titleDraftsRef.current = nextTitles;
@@ -204,7 +217,8 @@ export default function NotebookDetailScreen() {
   const handleMutationError = (
     error: unknown,
     itemId?: string,
-    retry?: RetryConflict
+    retry?: RetryConflict,
+    metadata = false
   ) => {
     const failure = classifyNotebookError(error);
     if (failure === 'conflict') {
@@ -223,7 +237,7 @@ export default function NotebookDetailScreen() {
     }
     if (itemId) {
       setItemStates((current) => ({ ...current, [itemId]: 'failed' }));
-    } else {
+    } else if (metadata) {
       setMetadataState('failed');
     }
   };
@@ -278,6 +292,17 @@ export default function NotebookDetailScreen() {
       setMetadataState('failed');
       return;
     }
+    const current = detailRef.current;
+    if (
+      current &&
+      validation.title === current.title &&
+      validation.description === current.description
+    ) {
+      metadataRevisionRef.current = 0;
+      setMetadataState('idle');
+      setActionError(null);
+      return;
+    }
     setMetadataState('saving');
     setActionError(null);
     try {
@@ -287,8 +312,11 @@ export default function NotebookDetailScreen() {
       });
       applyAuthoritativeDetail(latest, { metadataRevision: revision });
     } catch (error) {
-      handleMutationError(error, undefined, () =>
-        saveMetadata(metadataRevisionRef.current)
+      handleMutationError(
+        error,
+        undefined,
+        () => saveMetadata(metadataRevisionRef.current),
+        true
       );
     }
   };
@@ -309,12 +337,25 @@ export default function NotebookDetailScreen() {
       setItemStates((current) => ({ ...current, [itemId]: 'failed' }));
       return;
     }
+    const normalizedTitle = blockTitle.trim() || null;
+    const body = textDraftsRef.current[itemId] ?? '';
+    const currentItem = detailRef.current?.items.find((item) => item.id === itemId);
+    if (
+      currentItem &&
+      normalizedTitle === currentItem.title &&
+      body === currentItem.text
+    ) {
+      itemRevisionsRef.current[itemId] = 0;
+      setItemStates((current) => ({ ...current, [itemId]: 'idle' }));
+      setActionError(null);
+      return;
+    }
     setItemStates((current) => ({ ...current, [itemId]: 'saving' }));
     setActionError(null);
     try {
       const latest = await mutate.updateText(detail.id, itemId, {
-        title: blockTitle.trim() || null,
-        text: textDraftsRef.current[itemId] ?? '',
+        title: normalizedTitle,
+        text: body,
       });
       applyAuthoritativeDetail(latest, {
         savedItem: { id: itemId, revision },
@@ -362,10 +403,14 @@ export default function NotebookDetailScreen() {
     if (!retry || !notebookId) return;
     setActionError(null);
     try {
-      await loadNotebook(notebookId, true);
-      setConflict(false);
-      retryConflictRef.current = null;
-      await retry();
+      await retryNotebookConflict(
+        () => loadNotebook(notebookId, true),
+        async () => {
+          setConflict(false);
+          retryConflictRef.current = null;
+          await retry();
+        }
+      );
     } catch (error) {
       handleMutationError(error, undefined, retry);
     }
@@ -411,7 +456,7 @@ export default function NotebookDetailScreen() {
           ) : null}
           {actionError ? <AppText color={Palette.danger}>{actionError}</AppText> : null}
 
-          {detail.items.length >= 2 ? (
+          {shouldShowNotebookIndex(detail.items.length) ? (
             <View style={{ alignItems: 'flex-start', gap: Space.sm }}>
               <AppButton
                 accessibilityLabel={indexOpen ? 'Hide Index' : 'Show Index'}

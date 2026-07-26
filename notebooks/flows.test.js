@@ -7,8 +7,19 @@ import {
   notebookBlockIndexLabel,
   notebookBlockScrollOffset,
   orderedNotebookItems,
+  shouldShowNotebookIndex,
   validateNotebookMetadata,
 } from './model.ts';
+import {
+  reconcileAutosaveDraft,
+  retryNotebookConflict,
+  shouldAdoptAutosaveResponse,
+} from './autosave.ts';
+import {
+  createKeyedMutationQueue,
+  mergeNotebookSummaries,
+  preferNewerDetail,
+} from './state.ts';
 
 const item = (id, position, text = '') => ({
   id,
@@ -42,7 +53,9 @@ assert.equal(
   notebookBlockIndexLabel({ title: null, text: 'First line\nsecond line' }, 1),
   'First line second line'
 );
-assert.equal(notebookBlockIndexLabel({ title: '', text: '   ' }, 2), 'Block 3');
+assert.equal(notebookBlockIndexLabel({ title: '', text: '   ' }, 2), 'Page 3');
+assert.equal(shouldShowNotebookIndex(1), false);
+assert.equal(shouldShowNotebookIndex(2), true);
 console.log('✓ block index follows titles, body previews, and ordered fallbacks');
 assert.equal(notebookBlockScrollOffset(420, 180), 584);
 assert.equal(notebookBlockScrollOffset(0, 8), 0);
@@ -81,3 +94,69 @@ const localCanonical = serverResponse;
 assert.equal(localCanonical.version, 8);
 assert.equal(localCanonical.items[0].text, 'From server');
 console.log('✓ successful mutation state is replaced by the authoritative response');
+
+const newerDetail = { ...serverResponse, version: 9, title: 'Newest' };
+assert.equal(preferNewerDetail(newerDetail, serverResponse), newerDetail);
+assert.equal(
+  mergeNotebookSummaries(
+    [{ ...serverResponse, itemCount: 1 }],
+    { [newerDetail.id]: newerDetail }
+  )[0].version,
+  9
+);
+console.log('✓ stale detail and list responses cannot replace newer authoritative versions');
+
+const enqueue = createKeyedMutationQueue();
+const order = [];
+let releaseFirst;
+const firstQueued = enqueue('notebook-1', async () => {
+  order.push('first-start');
+  await new Promise((resolve) => { releaseFirst = resolve; });
+  order.push('first-end');
+  return 2;
+});
+const secondQueued = enqueue('notebook-1', async () => {
+  order.push('second');
+  return 3;
+});
+await new Promise((resolve) => setTimeout(resolve, 0));
+assert.deepEqual(order, ['first-start']);
+releaseFirst();
+assert.deepEqual(await Promise.all([firstQueued, secondQueued]), [2, 3]);
+assert.deepEqual(order, ['first-start', 'first-end', 'second']);
+console.log('✓ same-Notebook mutations serialize and advance one authoritative version at a time');
+
+let authoritativeVersion = 1;
+const expectedVersions = [];
+const pageThenMetadata = [
+  enqueue('versioned', async () => {
+    expectedVersions.push(authoritativeVersion);
+    authoritativeVersion += 1;
+  }),
+  enqueue('versioned', async () => {
+    expectedVersions.push(authoritativeVersion);
+    authoritativeVersion += 1;
+  }),
+];
+await Promise.all(pageThenMetadata);
+expectedVersions.push(authoritativeVersion);
+assert.deepEqual(expectedVersions, [1, 2, 3]);
+console.log('✓ page, metadata, and subsequent list deletion consume advancing versions');
+
+assert.equal(shouldAdoptAutosaveResponse(4, 4), true);
+assert.equal(shouldAdoptAutosaveResponse(5, 4), false);
+assert.equal(reconcileAutosaveDraft('old response', 'new typing', 5, 4), 'new typing');
+assert.equal(reconcileAutosaveDraft('latest server', 'local', 5, 4, true), 'latest server');
+console.log('✓ slower autosave responses cannot overwrite newer local typing');
+
+const conflictSteps = [];
+const retried = await retryNotebookConflict(
+  async () => { conflictSteps.push('reload'); },
+  async () => {
+    conflictSteps.push('retry');
+    return 'saved';
+  }
+);
+assert.equal(retried, 'saved');
+assert.deepEqual(conflictSteps, ['reload', 'retry']);
+console.log('✓ keep-my-version reloads authority before one explicit retry');

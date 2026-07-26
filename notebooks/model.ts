@@ -43,6 +43,10 @@ export function notebookBlockScrollOffset(sectionY: number, blockY: number): num
   return Math.max(0, sectionY + blockY - 16);
 }
 
+export function shouldShowNotebookIndex(pageCount: number): boolean {
+  return pageCount >= 2;
+}
+
 export function moveNotebookItemIds(
   items: NotebookTextItem[],
   itemId: string,

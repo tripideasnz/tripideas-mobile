@@ -254,12 +254,14 @@ function NotebookRow({
             label="Open"
             onPress={onOpen}
             style={{ minHeight: 40, paddingVertical: Space.sm }}
+            testID="notebook-open-action"
           />
           <AppButton
             accessibilityLabel={`Delete ${notebook.title}`}
             label="Delete"
             onPress={onDelete}
             style={{ minHeight: 40, paddingVertical: Space.sm }}
+            testID="notebook-delete-action"
             variant="danger"
           />
         </View>
