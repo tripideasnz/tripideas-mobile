@@ -45,7 +45,7 @@ export function AppButton({
           backgroundColor: isPrimary ? Palette.primary : Palette.surface,
           borderColor: isDanger ? Palette.danger : Palette.border,
           borderRadius: Radius.control,
-          borderWidth: 1,
+          borderWidth: isCompact ? 1 : isPrimary ? 0 : 1,
           justifyContent: 'center',
           minHeight: isCompact ? 44 : 46,
           opacity: disabled ? 0.4 : pressed ? 0.68 : 1,
