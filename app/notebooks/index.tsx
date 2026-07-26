@@ -4,7 +4,6 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   RefreshControl,
   ScrollView,
   View,
@@ -119,10 +118,10 @@ export default function NotebookListScreen() {
             />
           }>
           <View style={{ alignItems: 'center', flexDirection: 'row', gap: Space.md }}>
-            <AppText style={{ flex: 1 }} variant="display">Notebooks</AppText>
+            <AppText style={{ flex: 1 }} variant="section">Notebooks</AppText>
             <AppButton
-              accessibilityLabel="Create a Notebook"
-              label={showCreate ? 'Cancel' : 'Create'}
+              accessibilityLabel="Add Notebook"
+              label={showCreate ? 'Cancel' : 'Add Notebook'}
               onPress={() => {
                 setFormError(null);
                 setShowCreate((current) => !current);
@@ -181,7 +180,7 @@ export default function NotebookListScreen() {
             <LoadingView />
           ) : notebooks.length === 0 ? (
             <AppText color={Palette.textMuted}>
-              No Notebooks yet. Create one for notes, plans, and travel ideas.
+                No Notebooks yet. Add one for notes, plans, and travel ideas.
             </AppText>
           ) : (
             notebooks.map((notebook) => (
@@ -191,7 +190,7 @@ export default function NotebookListScreen() {
                 onDelete={() =>
                   Alert.alert(
                     'Delete Notebook?',
-                    'This removes the Notebook and its text blocks.',
+                    'This removes the Notebook and its pages.',
                     [
                       { text: 'Cancel', style: 'cancel' },
                       {
@@ -238,15 +237,7 @@ function NotebookRow({
         borderWidth: 1,
         overflow: 'hidden',
       }}>
-      <Pressable
-        accessibilityLabel={`Open ${notebook.title}`}
-        accessibilityRole="button"
-        onPress={onOpen}
-        style={({ pressed }) => ({
-          minHeight: 72,
-          opacity: pressed ? 0.65 : 1,
-          padding: Space.lg,
-        })}>
+      <View style={{ gap: Space.xs, padding: Space.lg }}>
         <AppText numberOfLines={2} variant="cardTitle">{notebook.title}</AppText>
         {notebook.description ? (
           <AppText color={Palette.textMuted} numberOfLines={2}>
@@ -254,17 +245,25 @@ function NotebookRow({
           </AppText>
         ) : null}
         <AppText color={Palette.textMuted} variant="caption">
-          {notebook.itemCount} {notebook.itemCount === 1 ? 'block' : 'blocks'}
+          {notebook.itemCount} {notebook.itemCount === 1 ? 'page' : 'pages'}
           {displayDate(notebook.updatedAt) ? ` · Updated ${displayDate(notebook.updatedAt)}` : ''}
         </AppText>
-      </Pressable>
-      <AppButton
-        accessibilityLabel={`Delete ${notebook.title}`}
-        label="Delete"
-        onPress={onDelete}
-        style={{ margin: Space.sm }}
-        variant="danger"
-      />
+        <View style={{ flexDirection: 'row', gap: Space.sm, marginTop: Space.sm }}>
+          <AppButton
+            accessibilityLabel={`Open ${notebook.title}`}
+            label="Open"
+            onPress={onOpen}
+            style={{ minHeight: 40, paddingVertical: Space.sm }}
+          />
+          <AppButton
+            accessibilityLabel={`Delete ${notebook.title}`}
+            label="Delete"
+            onPress={onDelete}
+            style={{ minHeight: 40, paddingVertical: Space.sm }}
+            variant="danger"
+          />
+        </View>
+      </View>
     </View>
   );
 }

@@ -36,7 +36,7 @@ export function notebookBlockIndexLabel(
   const title = item.title?.trim();
   if (title) return title;
   const preview = item.text.trim().replace(/\s+/g, ' ');
-  return preview ? preview.slice(0, 48) : `Block ${index + 1}`;
+  return preview ? preview.slice(0, 48) : `Page ${index + 1}`;
 }
 
 export function notebookBlockScrollOffset(sectionY: number, blockY: number): number {
