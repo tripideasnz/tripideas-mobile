@@ -27,9 +27,7 @@ import {
 } from '@/notebooks/autosave';
 import {
   adjacentNotebookItemId,
-  notebookBlockIndexLabel,
   notebookBlockScrollOffset,
-  shouldShowNotebookIndex,
   validateNotebookMetadata,
 } from '@/notebooks/model';
 import { useNotebooks } from '@/notebooks/provider';
@@ -64,7 +62,6 @@ export default function NotebookDetailScreen() {
   const [descriptionOverflows, setDescriptionOverflows] = useState(false);
   const [titleDrafts, setTitleDrafts] = useState<Record<string, string>>({});
   const [textDrafts, setTextDrafts] = useState<Record<string, string>>({});
-  const [indexOpen, setIndexOpen] = useState(false);
   const [metadataState, setMetadataState] = useState<SaveState>('idle');
   const [itemStates, setItemStates] = useState<Record<string, SaveState>>({});
   const [actionError, setActionError] = useState<string | null>(null);
@@ -252,10 +249,6 @@ export default function NotebookDetailScreen() {
       applyAuthoritativeDetail(detail, { resetDrafts: true });
     }
   }, [applyAuthoritativeDetail, detail]);
-
-  useEffect(() => {
-    if ((detail?.items.length ?? 0) < 2) setIndexOpen(false);
-  }, [detail?.items.length]);
 
   useEffect(() => () => {
     if (metadataTimerRef.current) clearTimeout(metadataTimerRef.current);
@@ -609,18 +602,9 @@ export default function NotebookDetailScreen() {
             style={{
               backgroundColor: Palette.background,
               flexDirection: 'row',
-              justifyContent: 'space-between',
+              justifyContent: 'flex-end',
               paddingVertical: Space.sm,
             }}>
-            <AppButton
-              accessibilityLabel={indexOpen ? 'Hide Index' : 'Show Index'}
-              disabled={!shouldShowNotebookIndex(detail.items.length)}
-              label="Index"
-              onPress={() => setIndexOpen((current) => !current)}
-              size="compact"
-              style={{ width: 112 }}
-              variant="secondary"
-            />
             <AppButton
               accessibilityLabel="Add Page"
               disabled={mutationDisabled}
@@ -636,31 +620,6 @@ export default function NotebookDetailScreen() {
               blockSectionOffset.current = event.nativeEvent.layout.y;
             }}
             style={{ gap: Space.md }}>
-            {indexOpen ? (
-              <View
-                accessibilityLabel="Notebook page index"
-                style={{
-                  backgroundColor: Palette.surfaceMuted,
-                  borderRadius: Radius.control,
-                  gap: Space.xs,
-                  padding: Space.md,
-                }}>
-                {detail.items.map((item, index) => (
-                  <AppButton
-                    key={item.id}
-                    accessibilityLabel={`Go to page ${index + 1}`}
-                    label={`${index + 1}. ${notebookBlockIndexLabel(item, index)}`}
-                    onPress={() => {
-                      navigateToPage(item.id);
-                      setIndexOpen(false);
-                    }}
-                    size="compact"
-                    style={{ alignItems: 'flex-start' }}
-                    variant="secondary"
-                  />
-                ))}
-              </View>
-            ) : null}
             {detail.items.length === 0 ? (
               <AppText color={Palette.textMuted}>
                 No pages yet. Add one to start writing.

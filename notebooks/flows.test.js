@@ -5,10 +5,8 @@ import { classifyNotebookError } from './errors.ts';
 import {
   adjacentNotebookItemId,
   moveNotebookItemIds,
-  notebookBlockIndexLabel,
   notebookBlockScrollOffset,
   orderedNotebookItems,
-  shouldShowNotebookIndex,
   validateNotebookMetadata,
 } from './model.ts';
 import {
@@ -55,18 +53,9 @@ assert.deepEqual(moveNotebookItemIds(items, 'second', 1), [
 assert.equal(moveNotebookItemIds(items, 'first', -1), null);
 console.log('✓ reorder sends a complete ordered item-ID permutation');
 
-assert.equal(notebookBlockIndexLabel({ title: '  Arrival  ', text: '' }, 0), 'Arrival');
-assert.equal(
-  notebookBlockIndexLabel({ title: null, text: 'First line\nsecond line' }, 1),
-  'Page 2'
-);
-assert.equal(notebookBlockIndexLabel({ title: '', text: '   ' }, 2), 'Page 3');
-assert.equal(shouldShowNotebookIndex(1), false);
-assert.equal(shouldShowNotebookIndex(2), true);
-console.log('✓ block index follows titles and ordered page-number fallbacks');
 assert.equal(notebookBlockScrollOffset(420, 180), 584);
 assert.equal(notebookBlockScrollOffset(0, 8), 0);
-console.log('✓ block index scroll targets include the section offset');
+console.log('✓ page navigation scroll targets include the section offset');
 
 assert.deepEqual(validateNotebookMetadata('  Fiordland  ', ''), {
   valid: true,
