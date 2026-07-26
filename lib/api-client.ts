@@ -3,12 +3,20 @@ export const API_BASE_URL =
 
 // Set by AuthProvider when a token is acquired or cleared.
 let _activeToken: string | null = null;
+type AuthenticatedSessionHandlers = {
+  invalidate: () => Promise<void>;
+  refresh: () => Promise<boolean>;
+};
+let _authenticatedSessionHandlers: AuthenticatedSessionHandlers | null = null;
+
 export function setActiveToken(token: string | null): void {
   _activeToken = token;
 }
 
-export function hasActiveToken(): boolean {
-  return Boolean(_activeToken);
+export function setAuthenticatedSessionHandlers(
+  handlers: AuthenticatedSessionHandlers | null
+): void {
+  _authenticatedSessionHandlers = handlers;
 }
 
 export function getSignInUrl(): string {
@@ -45,10 +53,15 @@ function parseError(responseText: string): { code?: string; message?: string } {
   }
 }
 
-export async function apiFetch<T>(
+type ApiResponse = {
+  response: Response;
+  responseText: string;
+};
+
+async function performRequest(
   path: string,
   options?: RequestInit
-): Promise<T> {
+): Promise<ApiResponse> {
   const headers: Record<string, string> = {};
   if (options?.body != null) {
     headers['Content-Type'] = 'application/json';
@@ -66,6 +79,10 @@ export async function apiFetch<T>(
   // Some endpoints (e.g. POST/DELETE /favourite) return a 200 with an empty
   // body. response.json() throws on empty input, so parse manually.
   const responseText = await response.text();
+  return { response, responseText };
+}
+
+function parseResponse<T>({ response, responseText }: ApiResponse): T {
   if (!response.ok) {
     const error = parseError(responseText);
     throw new ApiError(
@@ -84,6 +101,22 @@ export async function apiFetch<T>(
   }
 }
 
+export async function apiFetch<T>(
+  path: string,
+  options?: RequestInit
+): Promise<T> {
+  return parseResponse<T>(await performRequest(path, options));
+}
+
+function hasReplayableBody(options?: RequestInit): boolean {
+  const body = options?.body;
+  return (
+    body == null ||
+    typeof body === 'string' ||
+    body instanceof URLSearchParams
+  );
+}
+
 export async function authenticatedApiFetch<T>(
   path: string,
   options?: RequestInit
@@ -91,5 +124,21 @@ export async function authenticatedApiFetch<T>(
   if (!_activeToken) {
     throw new ApiError(401, 'mobile_session_required', 'Please sign in again.');
   }
-  return apiFetch<T>(path, options);
+  const first = await performRequest(path, options);
+  if (
+    first.response.status !== 401 ||
+    !_authenticatedSessionHandlers ||
+    !hasReplayableBody(options)
+  ) {
+    return parseResponse<T>(first);
+  }
+
+  const refreshed = await _authenticatedSessionHandlers.refresh();
+  if (!refreshed) return parseResponse<T>(first);
+
+  const retry = await performRequest(path, options);
+  if (retry.response.status === 401) {
+    await _authenticatedSessionHandlers.invalidate();
+  }
+  return parseResponse<T>(retry);
 }

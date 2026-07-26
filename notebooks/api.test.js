@@ -5,6 +5,7 @@ import {
   apiFetch,
   authenticatedApiFetch,
   setActiveToken,
+  setAuthenticatedSessionHandlers,
 } from '../lib/api-client.ts';
 import {
   addNotebookTextItem,
@@ -137,6 +138,39 @@ test('protected requests are not sent without a bearer token', async () => {
   assert.equal(calls, 0);
 });
 
+test('Notebook creation succeeds after one bearer refresh', async () => {
+  const authorizations = [];
+  let refreshCalls = 0;
+  setActiveToken('expired-token');
+  setAuthenticatedSessionHandlers({
+    invalidate: async () => {},
+    refresh: async () => {
+      refreshCalls += 1;
+      setActiveToken('replacement-token');
+      return true;
+    },
+  });
+  globalThis.fetch = async (_input, init) => {
+    const authorization = new Headers(init?.headers).get('Authorization');
+    authorizations.push(authorization);
+    if (authorization === 'Bearer expired-token') {
+      return Response.json(
+        { error: { code: 'unauthorized' } },
+        { status: 401 }
+      );
+    }
+    return Response.json(detail, { status: 201 });
+  };
+
+  const created = await createNotebook({ title: 'South Island' });
+  assert.equal(created.id, detail.id);
+  assert.equal(refreshCalls, 1);
+  assert.deepEqual(authorizations, [
+    'Bearer expired-token',
+    'Bearer replacement-token',
+  ]);
+});
+
 let failed = false;
 for (const { name, run } of tests) {
   try {
@@ -149,6 +183,7 @@ for (const { name, run } of tests) {
   } finally {
     globalThis.fetch = originalFetch;
     setActiveToken(null);
+    setAuthenticatedSessionHandlers(null);
   }
 }
 

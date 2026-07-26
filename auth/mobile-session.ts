@@ -16,11 +16,34 @@ export type MobileSessionDependencies = {
   storeRefreshToken: (token: string) => Promise<void>;
 };
 
+export type RefreshInFlight = {
+  current: Promise<boolean> | null;
+};
+
+export function runCoalescedRefresh(
+  inFlight: RefreshInFlight,
+  refresh: () => Promise<boolean>
+): Promise<boolean> {
+  if (inFlight.current) return inFlight.current;
+  const attempt = refresh().finally(() => {
+    inFlight.current = null;
+  });
+  inFlight.current = attempt;
+  return attempt;
+}
+
 export const signedOutSession = (): SessionState => ({
   isLoading: false,
   session: null,
   user: null,
 });
+
+export function selectRefreshUser(
+  refreshedUser: AuthUser | null,
+  authenticatedUser: AuthUser | null
+): AuthUser | null {
+  return refreshedUser ?? authenticatedUser;
+}
 
 export function authenticatedSession(
   user: AuthUser | null,

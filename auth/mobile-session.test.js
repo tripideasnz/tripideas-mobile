@@ -5,6 +5,8 @@ import {
   clearMobileSession,
   persistMobileSession,
   restoreMobileSession,
+  runCoalescedRefresh,
+  selectRefreshUser,
 } from './mobile-session.ts';
 
 const user = { id: 'user-1', email: 'person@example.com' };
@@ -27,6 +29,29 @@ function dependencies(overrides = {}) {
 async function run() {
   assert.equal(authenticatedSession(user, '').session, null);
   assert.equal(authenticatedSession(user, '').user, null);
+  assert.equal(selectRefreshUser(null, user), user);
+  assert.equal(selectRefreshUser(user, null), user);
+
+  {
+    const inFlight = { current: null };
+    let release;
+    const gate = new Promise((resolve) => {
+      release = resolve;
+    });
+    let refreshCalls = 0;
+    const refresh = () => runCoalescedRefresh(inFlight, async () => {
+      refreshCalls += 1;
+      await gate;
+      return true;
+    });
+    const first = refresh();
+    const second = refresh();
+    assert.equal(first, second);
+    assert.equal(refreshCalls, 1);
+    release();
+    assert.deepEqual(await Promise.all([first, second]), [true, true]);
+    assert.equal(inFlight.current, null);
+  }
 
   {
   let refreshCalls = 0;

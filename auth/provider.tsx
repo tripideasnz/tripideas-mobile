@@ -23,10 +23,15 @@ import {
   clearMobileSession,
   persistMobileSession,
   restoreMobileSession,
+  runCoalescedRefresh,
+  selectRefreshUser,
 } from '@/auth/mobile-session';
 import { generateCodeChallenge, generateCodeVerifier } from '@/auth/pkce';
 import { clearAuthStorage } from '@/auth/storage';
-import { setActiveToken } from '@/lib/api-client';
+import {
+  setActiveToken,
+  setAuthenticatedSessionHandlers,
+} from '@/lib/api-client';
 import { clearNotebookCache } from '@/notebooks/storage';
 import type { AuthContextValue, AuthUser, SessionState } from '@/auth/session';
 import {
@@ -42,6 +47,15 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 const MOBILE_REDIRECT_URI = 'tripideas://auth/callback';
 
 // ─── SecureStore helpers ──────────────────────────────────────────────────────
+
+async function loadCachedUser(): Promise<AuthUser | null> {
+  try {
+    const raw = await SecureStore.getItemAsync(USER_SECURE_KEY);
+    return raw ? (JSON.parse(raw) as AuthUser) : null;
+  } catch {
+    return null;
+  }
+}
 
 async function cacheUser(user: AuthUser | null): Promise<void> {
   try {
@@ -120,6 +134,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [authError, setAuthError] = useState<string | null>(null);
   const hasAuthenticatedUserRef = useRef(false);
   const isRestoringRef = useRef(false);
+  const refreshInFlightRef = useRef<Promise<boolean> | null>(null);
 
   const restoreSession = useCallback(async () => {
     if (isRestoringRef.current) return;
@@ -133,7 +148,13 @@ export function AuthProvider({ children }: PropsWithChildren) {
         loadRefreshToken,
         refresh: async (refreshToken) => {
           const result = await mobileRefresh(refreshToken);
-          return { ...result, user: mapTokenUser(result.user) };
+          return {
+            ...result,
+            user: selectRefreshUser(
+              mapTokenUser(result.user),
+              await loadCachedUser()
+            ),
+          };
         },
         setActiveToken,
         storeRefreshToken,
@@ -319,6 +340,54 @@ export function AuthProvider({ children }: PropsWithChildren) {
     setAuthError(null);
     setState(nextState);
   }, [state.session?.userId, state.user?.id]);
+
+  const refreshBearer = useCallback(() => {
+    return runCoalescedRefresh(refreshInFlightRef, async () => {
+      const restored = await restoreMobileSession({
+        cacheUser,
+        clearAuthStorage,
+        clearNotebookCache,
+        loadRefreshToken,
+        refresh: async (refreshToken) => {
+          const result = await mobileRefresh(refreshToken);
+          return {
+            ...result,
+            user: selectRefreshUser(
+              mapTokenUser(result.user),
+              state.user ?? await loadCachedUser()
+            ),
+          };
+        },
+        setActiveToken,
+        storeRefreshToken,
+      });
+
+      if (!restored.session) {
+        const signedOutUserId = state.session?.userId ?? state.user?.id;
+        const signedOut = await clearMobileSession(signedOutUserId, {
+          clearAuthStorage,
+          clearNotebookCache,
+          setActiveToken,
+        });
+        hasAuthenticatedUserRef.current = false;
+        setState(signedOut);
+        return false;
+      }
+
+      hasAuthenticatedUserRef.current = true;
+      setAuthError(null);
+      setState(restored);
+      return true;
+    });
+  }, [state.session?.userId, state.user?.id]);
+
+  useEffect(() => {
+    setAuthenticatedSessionHandlers({
+      invalidate: signOut,
+      refresh: refreshBearer,
+    });
+    return () => setAuthenticatedSessionHandlers(null);
+  }, [refreshBearer, signOut]);
 
   const value = useMemo<AuthContextValue>(
     () => ({ ...state, acceptMobileTokens, authError, signIn, signOut }),
