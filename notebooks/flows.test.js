@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { ApiError } from '../lib/api-client.ts';
 import { classifyNotebookError } from './errors.ts';
 import {
+  adjacentNotebookItemId,
   moveNotebookItemIds,
   notebookBlockIndexLabel,
   notebookBlockScrollOffset,
@@ -39,6 +40,12 @@ assert.deepEqual(
 console.log('✓ detail renders text items in authoritative position order');
 
 const items = [item('first', 0), item('second', 1), item('third', 2)];
+assert.equal(adjacentNotebookItemId(items, 'second', -1), 'first');
+assert.equal(adjacentNotebookItemId(items, 'second', 1), 'third');
+assert.equal(adjacentNotebookItemId(items, 'first', -1), null);
+assert.deepEqual(items.map(({ id }) => id), ['first', 'second', 'third']);
+console.log('✓ page navigation resolves adjacent IDs without changing order');
+
 assert.deepEqual(moveNotebookItemIds(items, 'second', -1), [
   'second', 'first', 'third',
 ]);
@@ -51,12 +58,12 @@ console.log('✓ reorder sends a complete ordered item-ID permutation');
 assert.equal(notebookBlockIndexLabel({ title: '  Arrival  ', text: '' }, 0), 'Arrival');
 assert.equal(
   notebookBlockIndexLabel({ title: null, text: 'First line\nsecond line' }, 1),
-  'First line second line'
+  'Page 2'
 );
 assert.equal(notebookBlockIndexLabel({ title: '', text: '   ' }, 2), 'Page 3');
 assert.equal(shouldShowNotebookIndex(1), false);
 assert.equal(shouldShowNotebookIndex(2), true);
-console.log('✓ block index follows titles, body previews, and ordered fallbacks');
+console.log('✓ block index follows titles and ordered page-number fallbacks');
 assert.equal(notebookBlockScrollOffset(420, 180), 584);
 assert.equal(notebookBlockScrollOffset(0, 8), 0);
 console.log('✓ block index scroll targets include the section offset');
