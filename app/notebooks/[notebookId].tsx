@@ -61,6 +61,7 @@ export default function NotebookDetailScreen() {
   const [description, setDescription] = useState('');
   const [descriptionEditing, setDescriptionEditing] = useState(false);
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
+  const [descriptionOverflows, setDescriptionOverflows] = useState(false);
   const [titleDrafts, setTitleDrafts] = useState<Record<string, string>>({});
   const [textDrafts, setTextDrafts] = useState<Record<string, string>>({});
   const [indexOpen, setIndexOpen] = useState(false);
@@ -77,6 +78,7 @@ export default function NotebookDetailScreen() {
   const itemTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const retryConflictRef = useRef<RetryConflict | null>(null);
   const initializedNotebookRef = useRef<string | null>(null);
+  const hadAuthenticatedSessionRef = useRef(false);
   const scrollRef = useRef<ScrollView>(null);
   const blockSectionOffset = useRef(0);
   const blockOffsets = useRef<Record<string, number>>({});
@@ -222,6 +224,17 @@ export default function NotebookDetailScreen() {
     },
     [applyAuthoritativeDetail, loadNotebook, notebookId]
   );
+
+  useEffect(() => {
+    if (session) {
+      hadAuthenticatedSessionRef.current = true;
+      return;
+    }
+    if (!isLoadingSession && hadAuthenticatedSessionRef.current) {
+      hadAuthenticatedSessionRef.current = false;
+      router.replace('/notebooks');
+    }
+  }, [isLoadingSession, router, session]);
 
   useEffect(() => {
     if (!session || !notebookId) {
@@ -542,35 +555,51 @@ export default function NotebookDetailScreen() {
                 value={description}
               />
             ) : (
-              <Pressable
-                accessibilityLabel={
-                  description
-                    ? descriptionExpanded
-                      ? 'Edit Notebook description'
-                      : 'Expand Notebook description'
-                    : 'Add Notebook description'
-                }
-                accessibilityRole="button"
-                disabled={mutationDisabled}
-                onPress={() => {
-                  if (description.length > 180 && !descriptionExpanded) {
-                    setDescriptionExpanded(true);
-                  } else {
-                    setDescriptionEditing(true);
-                  }
-                }}
-                style={{ gap: Space.xs }}>
-                <AppText
-                  color={description ? Palette.textBody : Palette.textMuted}
-                  numberOfLines={descriptionExpanded ? undefined : 3}>
-                  {description || 'Add a description'}
-                </AppText>
-                <AppText color={Palette.textMuted} variant="caption">
-                  {description.length > 180 && !descriptionExpanded
-                    ? '…read more'
-                    : 'Tap to edit'}
-                </AppText>
-              </Pressable>
+              <View style={{ gap: Space.xs }}>
+                <View
+                  style={
+                    descriptionExpanded
+                      ? undefined
+                      : { maxHeight: 72, overflow: 'hidden' }
+                  }>
+                  <Pressable
+                    accessibilityLabel={
+                      description ? 'Edit Notebook description' : 'Add Notebook description'
+                    }
+                    accessibilityRole="button"
+                    disabled={mutationDisabled}
+                    onPress={() => setDescriptionEditing(true)}>
+                    <AppText
+                      color={description ? Palette.textBody : Palette.textMuted}
+                      onTextLayout={(event) => {
+                        setDescriptionOverflows(event.nativeEvent.lines.length > 3);
+                      }}>
+                      {description || 'Add a description'}
+                    </AppText>
+                  </Pressable>
+                </View>
+                {descriptionOverflows || descriptionExpanded ? (
+                  <Pressable
+                    accessibilityLabel={
+                      descriptionExpanded
+                        ? 'Collapse Notebook description'
+                        : 'Expand Notebook description'
+                    }
+                    accessibilityRole="button"
+                    onPress={() => setDescriptionExpanded((current) => !current)}>
+                    <AppText
+                      color={Palette.textMuted}
+                      style={{ fontStyle: 'italic' }}
+                      variant="caption">
+                      {descriptionExpanded ? '... show less' : '... read more'}
+                    </AppText>
+                  </Pressable>
+                ) : (
+                  <AppText color={Palette.textMuted} variant="caption">
+                    Tap to edit
+                  </AppText>
+                )}
+              </View>
             )}
               <SaveLabel state={metadataState} />
             </View>
