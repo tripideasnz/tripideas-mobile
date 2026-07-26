@@ -12,6 +12,7 @@ type AppButtonVariant = 'primary' | 'secondary' | 'danger';
 
 type AppButtonProps = Omit<PressableProps, 'style'> & {
   label: string;
+  size?: 'compact' | 'default';
   style?: StyleProp<ViewStyle>;
   variant?: AppButtonVariant;
 };
@@ -19,10 +20,12 @@ type AppButtonProps = Omit<PressableProps, 'style'> & {
 export function AppButton({
   disabled,
   label,
+  size = 'default',
   style,
   variant = 'primary',
   ...props
 }: AppButtonProps) {
+  const isCompact = size === 'compact';
   const isPrimary = variant === 'primary';
   const isDanger = variant === 'danger';
   const foreground = isPrimary
@@ -42,12 +45,12 @@ export function AppButton({
           backgroundColor: isPrimary ? Palette.primary : Palette.surface,
           borderColor: isDanger ? Palette.danger : Palette.border,
           borderRadius: Radius.control,
-          borderWidth: isPrimary ? 0 : 1,
+          borderWidth: 1,
           justifyContent: 'center',
-          minHeight: 46,
+          minHeight: isCompact ? 44 : 46,
           opacity: disabled ? 0.4 : pressed ? 0.68 : 1,
-          paddingHorizontal: Space.lg,
-          paddingVertical: Space.md,
+          paddingHorizontal: isCompact ? Space.md : Space.lg,
+          paddingVertical: isCompact ? Space.sm : Space.md,
         },
         style,
       ]}>

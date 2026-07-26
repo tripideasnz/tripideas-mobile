@@ -2,10 +2,13 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
+  Keyboard,
   KeyboardAvoidingView,
   type LayoutChangeEvent,
   Platform,
+  Pressable,
   ScrollView,
+  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -23,7 +26,7 @@ import {
   shouldAdoptAutosaveResponse,
 } from '@/notebooks/autosave';
 import {
-  moveNotebookItemIds,
+  adjacentNotebookItemId,
   notebookBlockIndexLabel,
   notebookBlockScrollOffset,
   shouldShowNotebookIndex,
@@ -56,6 +59,8 @@ export default function NotebookDetailScreen() {
   const [conflict, setConflict] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [descriptionEditing, setDescriptionEditing] = useState(false);
+  const [descriptionExpanded, setDescriptionExpanded] = useState(false);
   const [titleDrafts, setTitleDrafts] = useState<Record<string, string>>({});
   const [textDrafts, setTextDrafts] = useState<Record<string, string>>({});
   const [indexOpen, setIndexOpen] = useState(false);
@@ -75,6 +80,36 @@ export default function NotebookDetailScreen() {
   const scrollRef = useRef<ScrollView>(null);
   const blockSectionOffset = useRef(0);
   const blockOffsets = useRef<Record<string, number>>({});
+  const pageTitleRefs = useRef<Record<string, TextInput | null>>({});
+  const pendingScrollRef = useRef<{ focusTitle: boolean; itemId: string } | null>(null);
+
+  const finishPendingScroll = useCallback(() => {
+    const pending = pendingScrollRef.current;
+    if (!pending) return false;
+    const { focusTitle, itemId } = pending;
+    const y = blockOffsets.current[itemId];
+    if (y === undefined) return false;
+    scrollRef.current?.scrollTo({
+      animated: true,
+      y: notebookBlockScrollOffset(blockSectionOffset.current, y),
+    });
+    if (focusTitle) {
+      requestAnimationFrame(() => pageTitleRefs.current[itemId]?.focus());
+    }
+    pendingScrollRef.current = null;
+    return true;
+  }, []);
+
+  const navigateToPage = useCallback((
+    itemId: string,
+    focusTitle = false
+  ) => {
+    pendingScrollRef.current = { focusTitle, itemId };
+    Keyboard.dismiss();
+    requestAnimationFrame(() => {
+      finishPendingScroll();
+    });
+  }, [finishPendingScroll]);
 
   const applyAuthoritativeDetail = useCallback((
     next: NotebookDetail,
@@ -391,11 +426,19 @@ export default function NotebookDetailScreen() {
     }
   };
 
-  const reorder = async (itemId: string, offset: -1 | 1) => {
-    const ids = moveNotebookItemIds(detail.items, itemId, offset);
-    if (!ids) return;
-    const operation = () => mutate.reorder(detail.id, ids);
-    await runImmediateMutation(operation, itemId);
+  const addPage = async () => {
+    setActionError(null);
+    const previousIds = new Set(detail.items.map((item) => item.id));
+    try {
+      const latest = await mutate.addText(detail.id, '');
+      const newPage =
+        latest.items.find((item) => !previousIds.has(item.id)) ??
+        latest.items.at(-1);
+      applyAuthoritativeDetail(latest);
+      if (newPage) navigateToPage(newPage.id, true);
+    } catch (error) {
+      handleMutationError(error, undefined, addPage);
+    }
   };
 
   const keepMyVersion = async () => {
@@ -430,75 +473,36 @@ export default function NotebookDetailScreen() {
             paddingHorizontal: Screen.gutter,
             paddingTop: Screen.top,
           }}
-          keyboardShouldPersistTaps="handled">
-          {isOffline ? (
-            <Notice text="Offline: showing saved content. Editing is unavailable." />
-          ) : null}
-          {conflict ? (
-            <View style={{ gap: Space.md }}>
-              <Notice text="This Notebook changed elsewhere. Your unsaved text is still here." />
-              <View style={{ flexDirection: 'row', gap: Space.sm }}>
-                <AppButton
-                  label="Reload latest"
-                  onPress={() => reload(true)}
-                  style={{ flex: 1 }}
-                />
-                {retryConflictRef.current ? (
+          keyboardShouldPersistTaps="handled"
+          onContentSizeChange={() => requestAnimationFrame(finishPendingScroll)}
+          stickyHeaderIndices={[1]}>
+          <View style={{ gap: Space.xl }}>
+            {isOffline ? (
+              <Notice text="Offline: showing saved content. Editing is unavailable." />
+            ) : null}
+            {conflict ? (
+              <View style={{ gap: Space.md }}>
+                <Notice text="This Notebook changed elsewhere. Your unsaved text is still here." />
+                <View style={{ flexDirection: 'row', gap: Space.sm }}>
                   <AppButton
-                    label="Keep my version"
-                    onPress={keepMyVersion}
+                    label="Reload latest"
+                    onPress={() => reload(true)}
                     style={{ flex: 1 }}
-                    variant="secondary"
                   />
-                ) : null}
-              </View>
-            </View>
-          ) : null}
-          {actionError ? <AppText color={Palette.danger}>{actionError}</AppText> : null}
-
-          {shouldShowNotebookIndex(detail.items.length) ? (
-            <View style={{ alignItems: 'flex-start', gap: Space.sm }}>
-              <AppButton
-                accessibilityLabel={indexOpen ? 'Hide Index' : 'Show Index'}
-                label={indexOpen ? 'Hide Index' : 'Index'}
-                onPress={() => setIndexOpen((current) => !current)}
-                style={{ minHeight: 40, paddingVertical: Space.sm }}
-                variant="secondary"
-              />
-              {indexOpen ? (
-                <View
-                  accessibilityLabel="Notebook page index"
-                  style={{
-                    alignSelf: 'stretch',
-                    backgroundColor: Palette.surfaceMuted,
-                    borderRadius: Radius.control,
-                    gap: Space.xs,
-                    padding: Space.md,
-                  }}>
-                  {detail.items.map((item, index) => (
+                  {retryConflictRef.current ? (
                     <AppButton
-                      key={item.id}
-                      accessibilityLabel={`Go to page ${index + 1}`}
-                      label={`${index + 1}. ${notebookBlockIndexLabel(item, index)}`}
-                      onPress={() => {
-                        const y = blockOffsets.current[item.id];
-                        if (y !== undefined) {
-                          scrollRef.current?.scrollTo({
-                            animated: true,
-                            y: notebookBlockScrollOffset(blockSectionOffset.current, y),
-                          });
-                        }
-                      }}
+                      label="Keep my version"
+                      onPress={keepMyVersion}
+                      style={{ flex: 1 }}
                       variant="secondary"
                     />
-                  ))}
+                  ) : null}
                 </View>
-              ) : null}
-            </View>
-          ) : null}
+              </View>
+            ) : null}
+            {actionError ? <AppText color={Palette.danger}>{actionError}</AppText> : null}
 
-          <View style={{ gap: Space.md }}>
-            <AppText variant="section">Details</AppText>
+            <View style={{ gap: Space.md }}>
             <AppTextInput
               accessibilityLabel="Notebook title"
               editable={!mutationDisabled}
@@ -510,25 +514,92 @@ export default function NotebookDetailScreen() {
                 setMetadataState('idle');
                 scheduleMetadataSave();
               }}
+              style={{
+                fontSize: 28,
+                fontWeight: '700',
+                lineHeight: 34,
+                minHeight: 58,
+              }}
               value={title}
             />
-            <AppTextInput
-              accessibilityLabel="Notebook description"
-              editable={!mutationDisabled}
-              maxLength={10_000}
-              multiline
-              onChangeText={(value) => {
-                descriptionRef.current = value;
-                setDescription(value);
-                metadataRevisionRef.current += 1;
-                setMetadataState('idle');
-                scheduleMetadataSave();
-              }}
-              placeholder="Optional description"
-              style={{ minHeight: 96, textAlignVertical: 'top' }}
-              value={description}
+            {descriptionEditing ? (
+              <AppTextInput
+                accessibilityLabel="Notebook description"
+                autoFocus
+                editable={!mutationDisabled}
+                maxLength={10_000}
+                multiline
+                onBlur={() => setDescriptionEditing(false)}
+                onChangeText={(value) => {
+                  descriptionRef.current = value;
+                  setDescription(value);
+                  metadataRevisionRef.current += 1;
+                  setMetadataState('idle');
+                  scheduleMetadataSave();
+                }}
+                placeholder="Optional description"
+                style={{ minHeight: 96, textAlignVertical: 'top' }}
+                value={description}
+              />
+            ) : (
+              <Pressable
+                accessibilityLabel={
+                  description
+                    ? descriptionExpanded
+                      ? 'Edit Notebook description'
+                      : 'Expand Notebook description'
+                    : 'Add Notebook description'
+                }
+                accessibilityRole="button"
+                disabled={mutationDisabled}
+                onPress={() => {
+                  if (description.length > 180 && !descriptionExpanded) {
+                    setDescriptionExpanded(true);
+                  } else {
+                    setDescriptionEditing(true);
+                  }
+                }}
+                style={{ gap: Space.xs }}>
+                <AppText
+                  color={description ? Palette.textBody : Palette.textMuted}
+                  numberOfLines={descriptionExpanded ? undefined : 3}>
+                  {description || 'Add a description'}
+                </AppText>
+                <AppText color={Palette.textMuted} variant="caption">
+                  {description.length > 180 && !descriptionExpanded
+                    ? '…read more'
+                    : 'Tap to edit'}
+                </AppText>
+              </Pressable>
+            )}
+              <SaveLabel state={metadataState} />
+            </View>
+          </View>
+
+          <View
+            style={{
+              backgroundColor: Palette.background,
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              paddingVertical: Space.sm,
+            }}>
+            <AppButton
+              accessibilityLabel={indexOpen ? 'Hide Index' : 'Show Index'}
+              disabled={!shouldShowNotebookIndex(detail.items.length)}
+              label="Index"
+              onPress={() => setIndexOpen((current) => !current)}
+              size="compact"
+              style={{ width: 112 }}
+              variant="secondary"
             />
-            <SaveLabel state={metadataState} />
+            <AppButton
+              accessibilityLabel="Add Page"
+              disabled={mutationDisabled}
+              label="Add Page"
+              onPress={() => void addPage()}
+              size="compact"
+              style={{ width: 112 }}
+            />
           </View>
 
           <View
@@ -536,23 +607,31 @@ export default function NotebookDetailScreen() {
               blockSectionOffset.current = event.nativeEvent.layout.y;
             }}
             style={{ gap: Space.md }}>
-            <View
-              style={{
-                alignItems: 'center',
-                flexDirection: 'row',
-                flexWrap: 'wrap',
-                gap: Space.md,
-              }}>
-              <AppText style={{ flex: 1 }} variant="section">Pages</AppText>
-              <AppButton
-                accessibilityLabel="Add Page"
-                disabled={mutationDisabled}
-                label="Add Page"
-                onPress={() =>
-                  runImmediateMutation(() => mutate.addText(detail.id, ''))
-                }
-              />
-            </View>
+            {indexOpen ? (
+              <View
+                accessibilityLabel="Notebook page index"
+                style={{
+                  backgroundColor: Palette.surfaceMuted,
+                  borderRadius: Radius.control,
+                  gap: Space.xs,
+                  padding: Space.md,
+                }}>
+                {detail.items.map((item, index) => (
+                  <AppButton
+                    key={item.id}
+                    accessibilityLabel={`Go to page ${index + 1}`}
+                    label={`${index + 1}. ${notebookBlockIndexLabel(item, index)}`}
+                    onPress={() => {
+                      navigateToPage(item.id);
+                      setIndexOpen(false);
+                    }}
+                    size="compact"
+                    style={{ alignItems: 'flex-start' }}
+                    variant="secondary"
+                  />
+                ))}
+              </View>
+            ) : null}
             {detail.items.length === 0 ? (
               <AppText color={Palette.textMuted}>
                 No pages yet. Add one to start writing.
@@ -563,6 +642,7 @@ export default function NotebookDetailScreen() {
                   key={item.id}
                   onLayout={(event: LayoutChangeEvent) => {
                     blockOffsets.current[item.id] = event.nativeEvent.layout.y;
+                    requestAnimationFrame(finishPendingScroll);
                   }}
                   style={{
                     borderColor: Palette.border,
@@ -572,6 +652,9 @@ export default function NotebookDetailScreen() {
                     padding: Space.lg,
                   }}>
                   <AppTextInput
+                    ref={(input) => {
+                      pageTitleRefs.current[item.id] = input;
+                    }}
                     accessibilityLabel={`Page ${index + 1} title`}
                     editable={!mutationDisabled}
                     maxLength={200}
@@ -609,23 +692,38 @@ export default function NotebookDetailScreen() {
                     style={{ minHeight: 112, textAlignVertical: 'top' }}
                     value={textDrafts[item.id] ?? item.text}
                   />
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm }}>
-                    <AppButton
-                      accessibilityLabel="Move page up"
-                      disabled={mutationDisabled || index === 0}
-                      label="↑"
-                      onPress={() => reorder(item.id, -1)}
-                      style={{ minHeight: 40, minWidth: 44, paddingHorizontal: Space.md }}
-                      variant="secondary"
-                    />
-                    <AppButton
-                      accessibilityLabel="Move page down"
-                      disabled={mutationDisabled || index === detail.items.length - 1}
-                      label="↓"
-                      onPress={() => reorder(item.id, 1)}
-                      style={{ minHeight: 40, minWidth: 44, paddingHorizontal: Space.md }}
-                      variant="secondary"
-                    />
+                  <View
+                    style={{
+                      alignItems: 'center',
+                      flexDirection: 'row',
+                      justifyContent: 'space-between',
+                    }}>
+                    <View style={{ flexDirection: 'row', gap: Space.sm }}>
+                      <AppButton
+                        accessibilityLabel="Go to previous page"
+                        disabled={mutationDisabled || index === 0}
+                        label="↑"
+                        onPress={() => {
+                          const target = adjacentNotebookItemId(detail.items, item.id, -1);
+                          if (target) navigateToPage(target);
+                        }}
+                        size="compact"
+                        style={{ width: 44 }}
+                        variant="secondary"
+                      />
+                      <AppButton
+                        accessibilityLabel="Go to next page"
+                        disabled={mutationDisabled || index === detail.items.length - 1}
+                        label="↓"
+                        onPress={() => {
+                          const target = adjacentNotebookItemId(detail.items, item.id, 1);
+                          if (target) navigateToPage(target);
+                        }}
+                        size="compact"
+                        style={{ width: 44 }}
+                        variant="secondary"
+                      />
+                    </View>
                     <AppButton
                       accessibilityLabel="Delete page"
                       disabled={mutationDisabled}
@@ -648,6 +746,8 @@ export default function NotebookDetailScreen() {
                           },
                         ])
                       }
+                      size="compact"
+                      style={{ width: 112 }}
                       variant="danger"
                     />
                   </View>
@@ -679,6 +779,7 @@ export default function NotebookDetailScreen() {
                 ]
               )
             }
+            size="compact"
             variant="danger"
           />
         </ScrollView>

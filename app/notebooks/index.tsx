@@ -133,19 +133,20 @@ export default function NotebookListScreen() {
               refreshing={isLoading}
             />
           }>
-          <View style={{ alignItems: 'center', flexDirection: 'row', gap: Space.md }}>
-            <AppText style={{ flex: 1 }} variant="section">Notebooks</AppText>
-            <AppButton
-              accessibilityLabel="Add Notebook"
-              label={showCreate ? 'Cancel' : 'Add Notebook'}
-              onPress={() => {
-                if (showCreate) resetCreateForm();
-                else setFormError(null);
-                setShowCreate(!showCreate);
-              }}
-              variant="secondary"
-            />
-          </View>
+          {!showCreate ? (
+            <View style={{ alignItems: 'flex-start' }}>
+              <AppButton
+                accessibilityLabel="Add Notebook"
+                label="Add Notebook"
+                onPress={() => {
+                  setFormError(null);
+                  setShowCreate(true);
+                }}
+                size="compact"
+                variant="secondary"
+              />
+            </View>
+          ) : null}
 
           {showCreate ? (
             <View
@@ -176,15 +177,28 @@ export default function NotebookListScreen() {
                   setFormError(null);
                 }}
                 placeholder="Optional description"
-                style={{ minHeight: 96, textAlignVertical: 'top' }}
+                style={{ minHeight: 72, textAlignVertical: 'top' }}
                 value={description}
               />
               {formError ? <AppText color={Palette.danger}>{formError}</AppText> : null}
-              <AppButton
-                disabled={isCreating}
-                label={isCreating ? 'Creating…' : 'Create Notebook'}
-                onPress={submitCreate}
-              />
+              <View style={{ flexDirection: 'row', gap: Space.sm }}>
+                <AppButton
+                  disabled={isCreating}
+                  label={isCreating ? 'Creating…' : 'Create'}
+                  onPress={submitCreate}
+                  size="compact"
+                />
+                <AppButton
+                  disabled={isCreating}
+                  label="Cancel"
+                  onPress={() => {
+                    resetCreateForm();
+                    setShowCreate(false);
+                  }}
+                  size="compact"
+                  variant="secondary"
+                />
+              </View>
             </View>
           ) : null}
 
@@ -267,23 +281,33 @@ function NotebookRow({
             {notebook.description}
           </AppText>
         ) : null}
-        <AppText color={Palette.textMuted} variant="caption">
+        <AppText
+          color={Palette.textMuted}
+          style={{ textAlign: 'right' }}
+          variant="caption">
           {notebook.itemCount} {notebook.itemCount === 1 ? 'page' : 'pages'}
           {displayDate(notebook.updatedAt) ? ` · Updated ${displayDate(notebook.updatedAt)}` : ''}
         </AppText>
-        <View style={{ flexDirection: 'row', gap: Space.sm, marginTop: Space.sm }}>
+        <View
+          style={{
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            marginTop: Space.sm,
+          }}>
           <AppButton
             accessibilityLabel={`Open ${notebook.title}`}
             label="Open"
             onPress={onOpen}
-            style={{ minHeight: 40, paddingVertical: Space.sm }}
+            size="compact"
+            style={{ width: 112 }}
             testID="notebook-open-action"
           />
           <AppButton
             accessibilityLabel={`Delete ${notebook.title}`}
             label="Delete"
             onPress={onDelete}
-            style={{ minHeight: 40, paddingVertical: Space.sm }}
+            size="compact"
+            style={{ width: 112 }}
             testID="notebook-delete-action"
             variant="danger"
           />

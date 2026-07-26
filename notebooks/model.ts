@@ -35,8 +35,7 @@ export function notebookBlockIndexLabel(
 ): string {
   const title = item.title?.trim();
   if (title) return title;
-  const preview = item.text.trim().replace(/\s+/g, ' ');
-  return preview ? preview.slice(0, 48) : `Page ${index + 1}`;
+  return `Page ${index + 1}`;
 }
 
 export function notebookBlockScrollOffset(sectionY: number, blockY: number): number {
@@ -45,6 +44,16 @@ export function notebookBlockScrollOffset(sectionY: number, blockY: number): num
 
 export function shouldShowNotebookIndex(pageCount: number): boolean {
   return pageCount >= 2;
+}
+
+export function adjacentNotebookItemId(
+  items: NotebookTextItem[],
+  itemId: string,
+  offset: -1 | 1
+): string | null {
+  const ordered = orderedNotebookItems(items);
+  const index = ordered.findIndex((item) => item.id === itemId);
+  return ordered[index + offset]?.id ?? null;
 }
 
 export function moveNotebookItemIds(
