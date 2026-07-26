@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 
-import { ApiError, apiFetch, setActiveToken } from '../lib/api-client.ts';
+import {
+  ApiError,
+  apiFetch,
+  authenticatedApiFetch,
+  setActiveToken,
+} from '../lib/api-client.ts';
 import {
   addNotebookTextItem,
   createNotebook,
@@ -70,6 +75,7 @@ test('list, create, read, update, delete and item requests match the contract', 
 });
 
 test('safe structured conflicts and malformed error bodies are mapped', async () => {
+  setActiveToken('mobile-token');
   globalThis.fetch = async () =>
     Response.json(
       { error: { code: 'notebook_conflict', message: 'Changed elsewhere.' } },
@@ -92,6 +98,7 @@ test('safe structured conflicts and malformed error bodies are mapped', async ()
 });
 
 test('malformed successful responses are rejected', async () => {
+  setActiveToken('mobile-token');
   globalThis.fetch = async () => Response.json({ items: 'wrong' });
   await assert.rejects(readNotebook('one'), ApiError);
 });
@@ -110,6 +117,24 @@ test('bodyless requests omit JSON content type and parse an empty body', async (
     new Headers(requestInit?.headers).get('Authorization'),
     'Bearer mobile-token'
   );
+});
+
+test('protected requests are not sent without a bearer token', async () => {
+  let calls = 0;
+  setActiveToken(null);
+  globalThis.fetch = async () => {
+    calls += 1;
+    return Response.json({});
+  };
+
+  await assert.rejects(
+    authenticatedApiFetch('/notebooks'),
+    (error) =>
+      error instanceof ApiError &&
+      error.status === 401 &&
+      error.code === 'mobile_session_required'
+  );
+  assert.equal(calls, 0);
 });
 
 let failed = false;

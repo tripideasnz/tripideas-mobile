@@ -1,4 +1,7 @@
-import { ApiError, apiFetch } from '@/lib/api-client';
+import {
+  ApiError,
+  authenticatedApiFetch as apiFetch,
+} from '@/lib/api-client';
 import type {
   CreateNotebookInput,
   NotebookDeletion,

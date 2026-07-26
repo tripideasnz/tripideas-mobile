@@ -1,4 +1,4 @@
-import { apiFetch } from '@/lib/api-client';
+import { authenticatedApiFetch as apiFetch } from '@/lib/api-client';
 
 export type FavouriteRecord = {
   id: string;

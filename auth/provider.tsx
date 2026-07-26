@@ -13,12 +13,17 @@ import type { PropsWithChildren } from 'react';
 import { AppState } from 'react-native';
 
 import {
-  getCurrentUser,
   mapTokenUser,
   mobileAuthorize,
   mobileExchange,
   mobileRefresh,
 } from '@/auth/api';
+import {
+  authenticatedSession,
+  clearMobileSession,
+  persistMobileSession,
+  restoreMobileSession,
+} from '@/auth/mobile-session';
 import { generateCodeChallenge, generateCodeVerifier } from '@/auth/pkce';
 import { clearAuthStorage } from '@/auth/storage';
 import { setActiveToken } from '@/lib/api-client';
@@ -37,15 +42,6 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 const MOBILE_REDIRECT_URI = 'tripideas://auth/callback';
 
 // ─── SecureStore helpers ──────────────────────────────────────────────────────
-
-async function loadCachedUser(): Promise<AuthUser | null> {
-  try {
-    const raw = await SecureStore.getItemAsync(USER_SECURE_KEY);
-    return raw ? (JSON.parse(raw) as AuthUser) : null;
-  } catch {
-    return null;
-  }
-}
 
 async function cacheUser(user: AuthUser | null): Promise<void> {
   try {
@@ -85,14 +81,6 @@ export async function consumeCodeVerifier(): Promise<{ verifier: string; expecte
   } catch {
     return null;
   }
-}
-
-// ─── Session state helpers ────────────────────────────────────────────────────
-
-function userToSession(user: AuthUser | null, accessToken = ''): SessionState {
-  return user
-    ? { isLoading: false, session: { userId: user.id, accessToken }, user }
-    : { isLoading: false, session: null, user: null };
 }
 
 // ─── Callback URL parsing ─────────────────────────────────────────────────────
@@ -138,35 +126,26 @@ export function AuthProvider({ children }: PropsWithChildren) {
     isRestoringRef.current = true;
 
     try {
-      const storedRefreshToken = await loadRefreshToken();
-
-      if (storedRefreshToken) {
-        try {
-          const result = await mobileRefresh(storedRefreshToken);
-          setActiveToken(result.accessToken);
-          await storeRefreshToken(result.refreshToken);
-          const user = mapTokenUser(result.user);
-          await cacheUser(user);
-          hasAuthenticatedUserRef.current = Boolean(user);
-          if (user) setAuthError(null);
-          setState(userToSession(user, result.accessToken));
-          return;
-        } catch {
-          // Refresh token expired or revoked.
-          console.warn('[Auth] restoreSession refresh failed — clearing auth storage');
-          await clearAuthStorage();
-          setActiveToken(null);
-        }
-      }
-
-      // Cookie-based fallback.
-      const user = await getCurrentUser();
-      await cacheUser(user);
-      hasAuthenticatedUserRef.current = Boolean(user);
-      if (user) setAuthError(null);
-      setState(userToSession(user));
+      const restored = await restoreMobileSession({
+        cacheUser,
+        clearAuthStorage,
+        clearNotebookCache,
+        loadRefreshToken,
+        refresh: async (refreshToken) => {
+          const result = await mobileRefresh(refreshToken);
+          return { ...result, user: mapTokenUser(result.user) };
+        },
+        setActiveToken,
+        storeRefreshToken,
+      });
+      hasAuthenticatedUserRef.current = Boolean(restored.session);
+      if (restored.session) setAuthError(null);
+      setState(restored);
     } catch {
-      setState((prev) => ({ ...prev, isLoading: false }));
+      setActiveToken(null);
+      await clearAuthStorage();
+      hasAuthenticatedUserRef.current = false;
+      setState(authenticatedSession(null, ''));
     } finally {
       isRestoringRef.current = false;
     }
@@ -175,8 +154,6 @@ export function AuthProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     let isMounted = true;
     (async () => {
-      const cached = await loadCachedUser();
-      if (isMounted && cached) setState((prev) => ({ ...prev, user: cached, isLoading: true }));
       if (isMounted) await restoreSession();
     })();
     return () => { isMounted = false; };
@@ -194,6 +171,23 @@ export function AuthProvider({ children }: PropsWithChildren) {
     hasAuthenticatedUserRef.current = true;
     if (authError) setAuthError(null);
   }, [authError, state.user]);
+
+  const acceptMobileTokens = useCallback(async (tokens: {
+    accessToken: string;
+    refreshToken: string;
+    user: AuthUser | null;
+  }) => {
+    const nextState = await persistMobileSession(tokens, {
+      cacheUser,
+      clearAuthStorage,
+      setActiveToken,
+      storeRefreshToken,
+    });
+    hasAuthenticatedUserRef.current = Boolean(nextState.session);
+    if (nextState.session) setAuthError(null);
+    setState(nextState);
+    return Boolean(nextState.session);
+  }, []);
 
   const signIn = useCallback(async () => {
     setAuthError(null);
@@ -290,48 +284,45 @@ export function AuthProvider({ children }: PropsWithChildren) {
     let tokens;
     try {
       tokens = await mobileExchange(parsed.code, codeVerifier);
-    } catch {
-      console.error('[Auth] Token exchange failed.');
+    } catch (error) {
+      const stage =
+        error instanceof Error && 'stage' in error
+          ? String(error.stage)
+          : 'unexpected';
+      console.error(`[Auth] Token exchange failed at safe stage: ${stage}.`);
       if (hasAuthenticatedUserRef.current) {
         setAuthError(null);
         return;
       }
       setAuthError('Sign-in could not be completed. Please try again later.');
+      setActiveToken(null);
       await clearAuthStorage();
+      setState(authenticatedSession(null, ''));
       return;
     }
 
-    setActiveToken(tokens.accessToken);
-    await storeRefreshToken(tokens.refreshToken);
     const user = mapTokenUser(tokens.user);
-    await cacheUser(user);
-    hasAuthenticatedUserRef.current = Boolean(user);
-    if (user) setAuthError(null);
-    setState(userToSession(user, tokens.accessToken));
-  }, []);
+    await acceptMobileTokens({ ...tokens, user });
+  }, [acceptMobileTokens]);
 
   const signOut = useCallback(async () => {
     // TODO: Call POST /auth/mobile/logout once backend implements it.
     // Until then, sign-out is local-only. The WorkOS hosted session remains
     // active, so re-signing in immediately will skip the WorkOS UI.
-    setActiveToken(null);
     const signedOutUserId = state.session?.userId ?? state.user?.id;
-    if (signedOutUserId) {
-      try {
-        await clearNotebookCache(signedOutUserId);
-      } catch {
-        console.warn('[Notebooks] cache cleanup failed during sign-out.');
-      }
-    }
-    await clearAuthStorage();
+    const nextState = await clearMobileSession(signedOutUserId, {
+      clearAuthStorage,
+      clearNotebookCache,
+      setActiveToken,
+    });
     hasAuthenticatedUserRef.current = false;
     setAuthError(null);
-    setState({ isLoading: false, session: null, user: null });
+    setState(nextState);
   }, [state.session?.userId, state.user?.id]);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ ...state, authError, signIn, signOut }),
-    [state, authError, signIn, signOut]
+    () => ({ ...state, acceptMobileTokens, authError, signIn, signOut }),
+    [state, acceptMobileTokens, authError, signIn, signOut]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

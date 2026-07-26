@@ -17,6 +17,11 @@ export type SessionState = {
 
 export type AuthContextValue = SessionState & {
   authError: string | null;
+  acceptMobileTokens: (tokens: {
+    accessToken: string;
+    refreshToken: string;
+    user: AuthUser | null;
+  }) => Promise<boolean>;
   signIn: () => Promise<void>;
   signOut: () => Promise<void>;
 };

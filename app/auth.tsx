@@ -2,7 +2,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 
-import { mobileExchange } from '@/auth/api';
+import { mapTokenUser, mobileExchange } from '@/auth/api';
 import { consumeCodeVerifier } from '@/auth/provider';
 import { useSession } from '@/auth/use-session';
 import { Palette } from '@/constants/design';
@@ -23,7 +23,7 @@ export default function AuthCallbackScreen() {
     error?: string;
     error_description?: string;
   }>();
-  const { isLoading, user } = useSession();
+  const { acceptMobileTokens, isLoading, user } = useSession();
   const hasExchanged = useRef(false);
 
   useEffect(() => {
@@ -59,7 +59,12 @@ export default function AuthCallbackScreen() {
       }
 
       try {
-        await mobileExchange(code, pkce.verifier);
+        const tokens = await mobileExchange(code, pkce.verifier);
+        const accepted = await acceptMobileTokens({
+          ...tokens,
+          user: mapTokenUser(tokens.user),
+        });
+        if (!accepted) throw new Error('Incomplete mobile token response');
         console.log('[AuthCallback] Exchange successful');
       } catch (err) {
         console.error('[AuthCallback] Exchange failed:', err);

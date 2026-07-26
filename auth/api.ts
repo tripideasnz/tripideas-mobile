@@ -43,6 +43,39 @@ export type TokenResponse = {
   user: WorkOSUser | null;
 };
 
+export type MobileExchangeStage =
+  | 'workos_exchange'
+  | 'user_reconciliation'
+  | 'unexpected';
+
+export class MobileExchangeError extends Error {
+  readonly code = 'mobile_exchange_failed';
+
+  constructor(readonly stage: MobileExchangeStage) {
+    super('Mobile token exchange failed');
+    this.name = 'MobileExchangeError';
+  }
+}
+
+function safeExchangeStage(responseText: string): MobileExchangeStage {
+  try {
+    const body = JSON.parse(responseText) as {
+      error?: { code?: unknown; stage?: unknown };
+    };
+    if (
+      body.error?.code === 'mobile_exchange_failed' &&
+      (body.error.stage === 'workos_exchange' ||
+        body.error.stage === 'user_reconciliation' ||
+        body.error.stage === 'unexpected')
+    ) {
+      return body.error.stage;
+    }
+  } catch {
+    // The response is deliberately collapsed to a safe internal category.
+  }
+  return 'unexpected';
+}
+
 export function mapTokenUser(workosUser: WorkOSUser | null | undefined): AuthUser | null {
   if (!workosUser?.id || !workosUser?.email) return null;
   const nameParts = [workosUser.firstName, workosUser.lastName].filter(Boolean);
@@ -67,7 +100,7 @@ export async function mobileExchange(
   const responseText = await response.text();
 
   if (!response.ok) {
-    throw new Error('Mobile token exchange request failed');
+    throw new MobileExchangeError(safeExchangeStage(responseText));
   }
 
   return JSON.parse(responseText) as TokenResponse;

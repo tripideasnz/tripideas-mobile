@@ -7,6 +7,10 @@ export function setActiveToken(token: string | null): void {
   _activeToken = token;
 }
 
+export function hasActiveToken(): boolean {
+  return Boolean(_activeToken);
+}
+
 export function getSignInUrl(): string {
   return `${API_BASE_URL}/auth/authenticate`;
 }
@@ -78,4 +82,14 @@ export async function apiFetch<T>(
   } catch {
     throw new ApiError(500, 'malformed_response');
   }
+}
+
+export async function authenticatedApiFetch<T>(
+  path: string,
+  options?: RequestInit
+): Promise<T> {
+  if (!_activeToken) {
+    throw new ApiError(401, 'mobile_session_required', 'Please sign in again.');
+  }
+  return apiFetch<T>(path, options);
 }
