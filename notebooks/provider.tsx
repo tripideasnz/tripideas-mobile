@@ -27,6 +27,12 @@ import {
   updateNotebookTextItem,
 } from '@/notebooks/api';
 import { notebookStorage } from '@/notebooks/storage';
+import {
+  createKeyedMutationQueue,
+  mergeNotebookSummaries,
+  preferNewerDetail,
+  summaryFromNotebookDetail,
+} from '@/notebooks/state';
 import type {
   CreateNotebookInput,
   NotebookDetail,
@@ -36,25 +42,21 @@ import type {
 
 type NotebookContextValue = {
   createNotebook: (input: CreateNotebookInput) => Promise<NotebookDetail>;
-  deleteNotebook: (id: string, expectedVersion: number) => Promise<void>;
+  deleteNotebook: (id: string) => Promise<void>;
   details: Record<string, NotebookDetail>;
   isLoading: boolean;
   listError: NotebookFailure | null;
   loadNotebook: (id: string, refresh?: boolean) => Promise<NotebookDetail | null>;
   mutate: {
-    addText: (
-      detail: NotebookDetail,
-      text?: string,
-      title?: string | null
-    ) => Promise<NotebookDetail>;
-    deleteText: (detail: NotebookDetail, itemId: string) => Promise<NotebookDetail>;
-    reorder: (detail: NotebookDetail, itemIds: string[]) => Promise<NotebookDetail>;
+    addText: (id: string, text?: string, title?: string | null) => Promise<NotebookDetail>;
+    deleteText: (id: string, itemId: string) => Promise<NotebookDetail>;
+    reorder: (id: string, itemIds: string[]) => Promise<NotebookDetail>;
     updateMetadata: (
-      detail: NotebookDetail,
+      id: string,
       input: Omit<UpdateNotebookInput, 'expectedVersion'>
     ) => Promise<NotebookDetail>;
     updateText: (
-      detail: NotebookDetail,
+      id: string,
       itemId: string,
       input: { title?: string | null; text?: string }
     ) => Promise<NotebookDetail>;
@@ -65,44 +67,64 @@ type NotebookContextValue = {
 
 const NotebookContext = createContext<NotebookContextValue | null>(null);
 
-function summaryFromDetail(detail: NotebookDetail): NotebookSummary {
-  return { ...detail, itemCount: detail.items.length };
-}
-
 export function NotebookProvider({ children }: PropsWithChildren) {
   const { session } = useSession();
   const userId = session?.userId ?? null;
   const activeUserIdRef = useRef<string | null>(null);
+  const detailsRef = useRef<Record<string, NotebookDetail>>({});
+  const enqueueMutation = useRef(createKeyedMutationQueue()).current;
+  const listRequestRef = useRef(0);
   const [notebooks, setNotebooks] = useState<NotebookSummary[]>([]);
   const [details, setDetails] = useState<Record<string, NotebookDetail>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [listError, setListError] = useState<NotebookFailure | null>(null);
 
-  const storeDetail = useCallback(async (ownerId: string, detail: NotebookDetail) => {
-    if (activeUserIdRef.current !== ownerId) return;
-    setDetails((current) => ({ ...current, [detail.id]: detail }));
+  const storeDetail = useCallback(async (
+    ownerId: string,
+    incoming: NotebookDetail
+  ): Promise<NotebookDetail> => {
+    if (activeUserIdRef.current !== ownerId) return incoming;
+    const detail = preferNewerDetail(detailsRef.current[incoming.id], incoming);
+    detailsRef.current = { ...detailsRef.current, [detail.id]: detail };
+    setDetails(detailsRef.current);
     setNotebooks((current) => {
-      const summary = summaryFromDetail(detail);
+      const summary = summaryFromNotebookDetail(detail);
       const index = current.findIndex((item) => item.id === detail.id);
       return index < 0
         ? [summary, ...current]
-        : current.map((item) => (item.id === detail.id ? summary : item));
+        : current.map((item) =>
+            item.id === detail.id && item.version <= detail.version ? summary : item
+          );
     });
     await notebookStorage.setDetail(ownerId, detail);
+    const current = detailsRef.current[detail.id];
+    if (current.version > detail.version) {
+      await notebookStorage.setDetail(ownerId, current);
+      return current;
+    }
+    return detail;
   }, []);
 
   const refresh = useCallback(async () => {
     const ownerId = activeUserIdRef.current;
     if (!ownerId) return;
+    const requestId = ++listRequestRef.current;
     setIsLoading(true);
     setListError(null);
     try {
       const latest = await listNotebooks();
-      if (activeUserIdRef.current !== ownerId) return;
-      setNotebooks(latest);
-      await notebookStorage.setList(ownerId, latest);
+      if (
+        activeUserIdRef.current !== ownerId ||
+        requestId !== listRequestRef.current
+      ) return;
+      const merged = mergeNotebookSummaries(latest, detailsRef.current);
+      setNotebooks(merged);
+      await notebookStorage.setList(ownerId, merged);
     } catch (error) {
-      if (activeUserIdRef.current === ownerId) {
+      if (
+        activeUserIdRef.current === ownerId &&
+        requestId === listRequestRef.current
+      ) {
         setListError(classifyNotebookError(error));
       }
     } finally {
@@ -113,6 +135,7 @@ export function NotebookProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     let mounted = true;
     activeUserIdRef.current = userId;
+    detailsRef.current = {};
     setDetails({});
     setNotebooks([]);
     setListError(null);
@@ -150,17 +173,12 @@ export function NotebookProvider({ children }: PropsWithChildren) {
 
       const cached = await notebookStorage.getDetail(ownerId, id);
       if (cached && activeUserIdRef.current === ownerId) {
-        setDetails((current) => ({ ...current, [id]: cached }));
-        if (!forceRefresh) return cached;
+        const stored = await storeDetail(ownerId, cached);
+        if (!forceRefresh) return stored;
       }
 
-      try {
-        const latest = await readNotebook(id);
-        await storeDetail(ownerId, latest);
-        return latest;
-      } catch (error) {
-        throw error;
-      }
+      const latest = await readNotebook(id);
+      return storeDetail(ownerId, latest);
     },
     [storeDetail]
   );
@@ -176,47 +194,62 @@ export function NotebookProvider({ children }: PropsWithChildren) {
     [storeDetail]
   );
 
-  const deleteNotebook = useCallback(async (id: string, expectedVersion: number) => {
+  const currentDetail = useCallback(async (
+    ownerId: string,
+    id: string
+  ): Promise<NotebookDetail> => {
+    const current = detailsRef.current[id];
+    if (current) return current;
+    return storeDetail(ownerId, await readNotebook(id));
+  }, [storeDetail]);
+
+  const deleteNotebook = useCallback(async (id: string) => {
     const ownerId = activeUserIdRef.current;
     if (!ownerId) throw new ApiError(401, 'unauthenticated');
-    await deleteNotebookRequest(id, expectedVersion);
-    if (activeUserIdRef.current !== ownerId) return;
-    setNotebooks((current) => current.filter((item) => item.id !== id));
-    setDetails((current) => {
-      const next = { ...current };
+    await enqueueMutation(id, async () => {
+      const latest = await storeDetail(ownerId, await readNotebook(id));
+      await deleteNotebookRequest(id, latest.version);
+      if (activeUserIdRef.current !== ownerId) return;
+      setNotebooks((current) => current.filter((item) => item.id !== id));
+      const next = { ...detailsRef.current };
       delete next[id];
-      return next;
+      detailsRef.current = next;
+      setDetails(next);
+      await notebookStorage.removeDetail(ownerId, id);
     });
-    await notebookStorage.removeDetail(ownerId, id);
-  }, []);
+  }, [enqueueMutation, storeDetail]);
 
   const authoritativeMutation = useCallback(
-    async (request: () => Promise<NotebookDetail>) => {
+    async (
+      id: string,
+      request: (detail: NotebookDetail) => Promise<NotebookDetail>
+    ) => {
       const ownerId = activeUserIdRef.current;
       if (!ownerId) throw new ApiError(401, 'unauthenticated');
-      const detail = await request();
-      await storeDetail(ownerId, detail);
-      return detail;
+      return enqueueMutation(id, async () => {
+        const detail = await currentDetail(ownerId, id);
+        return storeDetail(ownerId, await request(detail));
+      });
     },
-    [storeDetail]
+    [currentDetail, enqueueMutation, storeDetail]
   );
 
   const mutate = useMemo(
     () => ({
       updateMetadata: (
-        detail: NotebookDetail,
+        id: string,
         input: Omit<UpdateNotebookInput, 'expectedVersion'>
       ) =>
-        authoritativeMutation(() =>
-          updateNotebookRequest(detail.id, {
+        authoritativeMutation(id, (detail) =>
+          updateNotebookRequest(id, {
             ...input,
             expectedVersion: detail.version,
           })
         ),
-      addText: (detail: NotebookDetail, text = '', title: string | null = null) =>
-        authoritativeMutation(() =>
+      addText: (id: string, text = '', title: string | null = null) =>
+        authoritativeMutation(id, (detail) =>
           addNotebookTextItem(
-            detail.id,
+            id,
             detail.version,
             text,
             detail.items.length,
@@ -224,20 +257,20 @@ export function NotebookProvider({ children }: PropsWithChildren) {
           )
         ),
       updateText: (
-        detail: NotebookDetail,
+        id: string,
         itemId: string,
         input: { title?: string | null; text?: string }
       ) =>
-        authoritativeMutation(() =>
-          updateNotebookTextItem(detail.id, itemId, detail.version, input)
+        authoritativeMutation(id, (detail) =>
+          updateNotebookTextItem(id, itemId, detail.version, input)
         ),
-      deleteText: (detail: NotebookDetail, itemId: string) =>
-        authoritativeMutation(() =>
-          deleteNotebookTextItem(detail.id, itemId, detail.version)
+      deleteText: (id: string, itemId: string) =>
+        authoritativeMutation(id, (detail) =>
+          deleteNotebookTextItem(id, itemId, detail.version)
         ),
-      reorder: (detail: NotebookDetail, itemIds: string[]) =>
-        authoritativeMutation(() =>
-          reorderNotebookItems(detail.id, detail.version, itemIds)
+      reorder: (id: string, itemIds: string[]) =>
+        authoritativeMutation(id, (detail) =>
+          reorderNotebookItems(id, detail.version, itemIds)
         ),
     }),
     [authoritativeMutation]

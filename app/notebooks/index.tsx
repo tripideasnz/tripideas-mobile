@@ -198,7 +198,7 @@ export default function NotebookListScreen() {
                         text: 'Delete',
                         style: 'destructive',
                         onPress: () => {
-                          void deleteNotebook(notebook.id, notebook.version).catch(() => {
+                          void deleteNotebook(notebook.id).catch(() => {
                             Alert.alert(
                               'Could not delete Notebook',
                               'It may have changed elsewhere. Open it and reload before trying again.'

@@ -40,6 +40,8 @@ export default function NotebookDetailScreen() {
     mutate,
   } = useNotebooks();
   const detail = notebookId ? details[notebookId] : undefined;
+  const detailRef = useRef(detail);
+  detailRef.current = detail;
   const [isLoading, setIsLoading] = useState(true);
   const [isOffline, setIsOffline] = useState(false);
   const [notFound, setNotFound] = useState(false);
@@ -120,12 +122,19 @@ export default function NotebookDetailScreen() {
         if (latest && replaceDrafts) {
           applyAuthoritativeDetail(latest, { resetDrafts: true });
         }
+        setConflict(false);
+        setActionError(null);
+        setNotFound(false);
         setIsOffline(false);
       } catch (error) {
         const failure = classifyNotebookError(error);
         setIsOffline(failure === 'offline');
         setNotFound(failure === 'not-found');
-        if (failure !== 'offline' && failure !== 'not-found') {
+        if (
+          !detailRef.current &&
+          failure !== 'offline' &&
+          failure !== 'not-found'
+        ) {
           setActionError('Could not load this Notebook. Please try again.');
         }
       } finally {
@@ -223,7 +232,7 @@ export default function NotebookDetailScreen() {
     setMetadataState('saving');
     setActionError(null);
     try {
-      const latest = await mutate.updateMetadata(detail, {
+      const latest = await mutate.updateMetadata(detail.id, {
         title: validation.title,
         description: validation.description,
       });
@@ -243,7 +252,7 @@ export default function NotebookDetailScreen() {
     setItemStates((current) => ({ ...current, [itemId]: 'saving' }));
     setActionError(null);
     try {
-      const latest = await mutate.updateText(detail, itemId, {
+      const latest = await mutate.updateText(detail.id, itemId, {
         title: blockTitle.trim() || null,
         text: textDrafts[itemId] ?? '',
       });
@@ -258,7 +267,7 @@ export default function NotebookDetailScreen() {
     if (!ids) return;
     setActionError(null);
     try {
-      applyAuthoritativeDetail(await mutate.reorder(detail, ids));
+      applyAuthoritativeDetail(await mutate.reorder(detail.id, ids));
     } catch (error) {
       handleMutationError(error, itemId);
     }
@@ -367,7 +376,7 @@ export default function NotebookDetailScreen() {
                 onPress={async () => {
                   setActionError(null);
                   try {
-                    applyAuthoritativeDetail(await mutate.addText(detail, ''));
+                    applyAuthoritativeDetail(await mutate.addText(detail.id, ''));
                   } catch (error) {
                     handleMutationError(error);
                   }
@@ -477,7 +486,7 @@ export default function NotebookDetailScreen() {
                             style: 'destructive',
                             onPress: () => {
                               void mutate
-                                .deleteText(detail, item.id)
+                                .deleteText(detail.id, item.id)
                                 .then(applyAuthoritativeDetail)
                                 .catch((error) => handleMutationError(error, item.id));
                             },
@@ -507,7 +516,7 @@ export default function NotebookDetailScreen() {
                     text: 'Delete',
                     style: 'destructive',
                     onPress: () => {
-                      void deleteNotebook(detail.id, detail.version)
+                      void deleteNotebook(detail.id)
                         .then(() => router.replace('/notebooks'))
                         .catch(handleMutationError);
                     },
