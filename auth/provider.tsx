@@ -317,7 +317,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
     setActiveToken(null);
     const signedOutUserId = state.session?.userId ?? state.user?.id;
     if (signedOutUserId) {
-      await clearNotebookCache(signedOutUserId);
+      try {
+        await clearNotebookCache(signedOutUserId);
+      } catch {
+        console.warn('[Notebooks] cache cleanup failed during sign-out.');
+      }
     }
     await clearAuthStorage();
     hasAuthenticatedUserRef.current = false;

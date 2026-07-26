@@ -17,7 +17,9 @@ import { AppText } from '@/components/ui/app-text';
 import { AppTextInput } from '@/components/ui/app-text-input';
 import { LoadingView } from '@/components/ui/loading-view';
 import { Palette, Radius, Screen, Space } from '@/constants/design';
-import { classifyNotebookError, useNotebooks } from '@/notebooks/provider';
+import { classifyNotebookError } from '@/notebooks/errors';
+import { validateNotebookMetadata } from '@/notebooks/model';
+import { useNotebooks } from '@/notebooks/provider';
 import type { NotebookSummary } from '@/notebooks/types';
 
 function displayDate(value: string): string {
@@ -49,13 +51,9 @@ export default function NotebookListScreen() {
   const [isCreating, setIsCreating] = useState(false);
 
   const submitCreate = async () => {
-    const nextTitle = title.trim();
-    if (!nextTitle) {
-      setFormError('Add a title for your Notebook.');
-      return;
-    }
-    if (nextTitle.length > 200 || description.length > 10_000) {
-      setFormError('Keep the title under 200 and description under 10,000 characters.');
+    const validation = validateNotebookMetadata(title, description);
+    if (!validation.valid) {
+      setFormError(validation.message);
       return;
     }
 
@@ -63,8 +61,8 @@ export default function NotebookListScreen() {
     setFormError(null);
     try {
       const detail = await createNotebook({
-        title: nextTitle,
-        description: description.trim() ? description : null,
+        title: validation.title,
+        description: validation.description,
       });
       setTitle('');
       setDescription('');

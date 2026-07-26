@@ -15,7 +15,12 @@ import { AppText } from '@/components/ui/app-text';
 import { AppTextInput } from '@/components/ui/app-text-input';
 import { LoadingView } from '@/components/ui/loading-view';
 import { Palette, Radius, Screen, Space } from '@/constants/design';
-import { classifyNotebookError, useNotebooks } from '@/notebooks/provider';
+import { classifyNotebookError } from '@/notebooks/errors';
+import {
+  moveNotebookItemIds,
+  validateNotebookMetadata,
+} from '@/notebooks/model';
+import { useNotebooks } from '@/notebooks/provider';
 import type { NotebookDetail } from '@/notebooks/types';
 
 type SaveState = 'changed' | 'failed' | 'idle' | 'saved' | 'saving';
@@ -189,14 +194,9 @@ export default function NotebookDetailScreen() {
 
   const mutationDisabled = isOffline || conflict;
   const saveMetadata = async () => {
-    const nextTitle = title.trim();
-    if (!nextTitle) {
-      setActionError('Notebook title is required.');
-      setMetadataState('failed');
-      return;
-    }
-    if (nextTitle.length > 200 || description.length > 10_000) {
-      setActionError('Keep the title under 200 and description under 10,000 characters.');
+    const validation = validateNotebookMetadata(title, description);
+    if (!validation.valid) {
+      setActionError(validation.message);
       setMetadataState('failed');
       return;
     }
@@ -204,8 +204,8 @@ export default function NotebookDetailScreen() {
     setActionError(null);
     try {
       const latest = await mutate.updateMetadata(detail, {
-        title: nextTitle,
-        description: description.trim() ? description : null,
+        title: validation.title,
+        description: validation.description,
       });
       applyAuthoritativeDetail(latest, { savedMetadata: true });
     } catch (error) {
@@ -225,11 +225,8 @@ export default function NotebookDetailScreen() {
   };
 
   const reorder = async (itemId: string, offset: -1 | 1) => {
-    const index = detail.items.findIndex((item) => item.id === itemId);
-    const target = index + offset;
-    if (index < 0 || target < 0 || target >= detail.items.length) return;
-    const ids = detail.items.map((item) => item.id);
-    [ids[index], ids[target]] = [ids[target], ids[index]];
+    const ids = moveNotebookItemIds(detail.items, itemId, offset);
+    if (!ids) return;
     setActionError(null);
     try {
       applyAuthoritativeDetail(await mutate.reorder(detail, ids));
