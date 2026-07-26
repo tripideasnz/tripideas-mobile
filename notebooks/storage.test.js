@@ -25,7 +25,15 @@ const detail = {
   version: 1,
   createdAt: 'now',
   updatedAt: 'now',
-  items: [],
+  items: [{
+    id: 'item-1',
+    type: 'text',
+    position: 0,
+    title: 'Arrival',
+    text: 'https://www.example.com\nSecond line',
+    createdAt: 'now',
+    updatedAt: 'now',
+  }],
 };
 
 await cache.setList('user-a', [{ ...detail, itemCount: 0 }]);
@@ -33,7 +41,14 @@ await cache.setDetail('user-a', detail);
 assert.equal((await cache.getList('user-b')).length, 0);
 assert.equal(await cache.getDetail('user-b', detail.id), null);
 assert.equal((await cache.getDetail('user-a', detail.id))?.title, 'A');
+assert.deepEqual((await cache.getDetail('user-a', detail.id))?.items[0], detail.items[0]);
 console.log('✓ cache is namespaced by authenticated user');
+
+const legacy = { ...detail, id: 'legacy', items: [{ ...detail.items[0] }] };
+delete legacy.items[0].title;
+await cache.setDetail('user-a', legacy);
+assert.equal((await cache.getDetail('user-a', legacy.id))?.items[0].title, undefined);
+console.log('✓ existing cached blocks without titles remain readable');
 
 await cache.clearUser('user-a');
 assert.equal(first.values.has(notebookListKey('user-a')), false);

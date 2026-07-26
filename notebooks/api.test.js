@@ -57,8 +57,11 @@ test('list, create, read, update, delete and item requests match the contract', 
   await createNotebook({ title: 'South Island' });
   await readNotebook('notebook-1');
   await updateNotebook('notebook-1', { expectedVersion: 2, title: 'NZ' });
-  await addNotebookTextItem('notebook-1', 2, '', 0);
-  await updateNotebookTextItem('notebook-1', 'item-1', 2, 'Hello');
+  await addNotebookTextItem('notebook-1', 2, '', 0, 'Arrival');
+  await updateNotebookTextItem('notebook-1', 'item-1', 2, {
+    title: null,
+    text: 'Hello',
+  });
   await deleteNotebookTextItem('notebook-1', 'item-1', 2);
   await reorderNotebookItems('notebook-1', 2, ['item-2', 'item-1']);
   await deleteNotebook('notebook-1', 2);
@@ -73,6 +76,38 @@ test('list, create, read, update, delete and item requests match the contract', 
     expectedVersion: 2,
     itemIds: ['item-2', 'item-1'],
   });
+  assert.deepEqual(JSON.parse(String(calls[4][1]?.body)), {
+    expectedVersion: 2,
+    position: 0,
+    text: '',
+    title: 'Arrival',
+  });
+  assert.deepEqual(JSON.parse(String(calls[5][1]?.body)), {
+    expectedVersion: 2,
+    text: 'Hello',
+    title: null,
+  });
+});
+
+test('text item responses preserve nullable titles and pasted plain text', async () => {
+  setActiveToken('mobile-token');
+  globalThis.fetch = async () =>
+    Response.json({
+      ...detail,
+      items: [{
+        id: 'item-1',
+        type: 'text',
+        position: 0,
+        title: null,
+        text: 'https://www.example.com\nSecond line',
+        createdAt: detail.createdAt,
+        updatedAt: detail.updatedAt,
+      }],
+    });
+
+  const parsed = await readNotebook('notebook-1');
+  assert.equal(parsed.items[0].title, null);
+  assert.equal(parsed.items[0].text, 'https://www.example.com\nSecond line');
 });
 
 test('safe structured conflicts and malformed error bodies are mapped', async () => {

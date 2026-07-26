@@ -42,7 +42,11 @@ type NotebookContextValue = {
   listError: NotebookFailure | null;
   loadNotebook: (id: string, refresh?: boolean) => Promise<NotebookDetail | null>;
   mutate: {
-    addText: (detail: NotebookDetail, text?: string) => Promise<NotebookDetail>;
+    addText: (
+      detail: NotebookDetail,
+      text?: string,
+      title?: string | null
+    ) => Promise<NotebookDetail>;
     deleteText: (detail: NotebookDetail, itemId: string) => Promise<NotebookDetail>;
     reorder: (detail: NotebookDetail, itemIds: string[]) => Promise<NotebookDetail>;
     updateMetadata: (
@@ -52,7 +56,7 @@ type NotebookContextValue = {
     updateText: (
       detail: NotebookDetail,
       itemId: string,
-      text: string
+      input: { title?: string | null; text?: string }
     ) => Promise<NotebookDetail>;
   };
   notebooks: NotebookSummary[];
@@ -209,18 +213,23 @@ export function NotebookProvider({ children }: PropsWithChildren) {
             expectedVersion: detail.version,
           })
         ),
-      addText: (detail: NotebookDetail, text = '') =>
+      addText: (detail: NotebookDetail, text = '', title: string | null = null) =>
         authoritativeMutation(() =>
           addNotebookTextItem(
             detail.id,
             detail.version,
             text,
-            detail.items.length
+            detail.items.length,
+            title
           )
         ),
-      updateText: (detail: NotebookDetail, itemId: string, text: string) =>
+      updateText: (
+        detail: NotebookDetail,
+        itemId: string,
+        input: { title?: string | null; text?: string }
+      ) =>
         authoritativeMutation(() =>
-          updateNotebookTextItem(detail.id, itemId, detail.version, text)
+          updateNotebookTextItem(detail.id, itemId, detail.version, input)
         ),
       deleteText: (detail: NotebookDetail, itemId: string) =>
         authoritativeMutation(() =>

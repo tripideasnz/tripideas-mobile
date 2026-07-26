@@ -4,6 +4,8 @@ import { ApiError } from '../lib/api-client.ts';
 import { classifyNotebookError } from './errors.ts';
 import {
   moveNotebookItemIds,
+  notebookBlockIndexLabel,
+  notebookBlockScrollOffset,
   orderedNotebookItems,
   validateNotebookMetadata,
 } from './model.ts';
@@ -12,6 +14,7 @@ const item = (id, position, text = '') => ({
   id,
   type: 'text',
   position,
+  title: null,
   text,
   createdAt: 'now',
   updatedAt: 'now',
@@ -33,6 +36,17 @@ assert.deepEqual(moveNotebookItemIds(items, 'second', 1), [
 ]);
 assert.equal(moveNotebookItemIds(items, 'first', -1), null);
 console.log('✓ reorder sends a complete ordered item-ID permutation');
+
+assert.equal(notebookBlockIndexLabel({ title: '  Arrival  ', text: '' }, 0), 'Arrival');
+assert.equal(
+  notebookBlockIndexLabel({ title: null, text: 'First line\nsecond line' }, 1),
+  'First line second line'
+);
+assert.equal(notebookBlockIndexLabel({ title: '', text: '   ' }, 2), 'Block 3');
+console.log('✓ block index follows titles, body previews, and ordered fallbacks');
+assert.equal(notebookBlockScrollOffset(420, 180), 584);
+assert.equal(notebookBlockScrollOffset(0, 8), 0);
+console.log('✓ block index scroll targets include the section offset');
 
 assert.deepEqual(validateNotebookMetadata('  Fiordland  ', ''), {
   valid: true,

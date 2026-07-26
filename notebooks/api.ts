@@ -51,6 +51,7 @@ export function parseNotebookDetail(value: unknown): NotebookDetail {
           id: string(item.id),
           type: 'text' as const,
           position: integer(item.position),
+          title: nullableString(item.title),
           text: string(item.text),
           createdAt: string(item.createdAt),
           updatedAt: string(item.updatedAt),
@@ -133,12 +134,13 @@ export async function addNotebookTextItem(
   notebookId: string,
   expectedVersion: number,
   text: string,
-  position: number
+  position: number,
+  title?: string | null
 ): Promise<NotebookDetail> {
   return parseNotebookDetail(
     await apiFetch(`/notebooks/${encodeURIComponent(notebookId)}/items/text`, {
       method: 'POST',
-      ...json({ expectedVersion, position, text }),
+      ...json({ expectedVersion, position, text, title }),
     })
   );
 }
@@ -147,12 +149,12 @@ export async function updateNotebookTextItem(
   notebookId: string,
   itemId: string,
   expectedVersion: number,
-  text: string
+  input: { title?: string | null; text?: string }
 ): Promise<NotebookDetail> {
   return parseNotebookDetail(
     await apiFetch(
       `/notebooks/${encodeURIComponent(notebookId)}/items/${encodeURIComponent(itemId)}`,
-      { method: 'PATCH', ...json({ expectedVersion, text }) }
+      { method: 'PATCH', ...json({ expectedVersion, ...input }) }
     )
   );
 }

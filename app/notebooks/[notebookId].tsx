@@ -1,8 +1,9 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
+  type LayoutChangeEvent,
   Platform,
   ScrollView,
   View,
@@ -18,6 +19,8 @@ import { Palette, Radius, Screen, Space } from '@/constants/design';
 import { classifyNotebookError } from '@/notebooks/errors';
 import {
   moveNotebookItemIds,
+  notebookBlockIndexLabel,
+  notebookBlockScrollOffset,
   validateNotebookMetadata,
 } from '@/notebooks/model';
 import { useNotebooks } from '@/notebooks/provider';
@@ -43,10 +46,15 @@ export default function NotebookDetailScreen() {
   const [conflict, setConflict] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [titleDrafts, setTitleDrafts] = useState<Record<string, string>>({});
   const [textDrafts, setTextDrafts] = useState<Record<string, string>>({});
+  const [indexOpen, setIndexOpen] = useState(false);
   const [metadataState, setMetadataState] = useState<SaveState>('idle');
   const [itemStates, setItemStates] = useState<Record<string, SaveState>>({});
   const [actionError, setActionError] = useState<string | null>(null);
+  const scrollRef = useRef<ScrollView>(null);
+  const blockSectionOffset = useRef(0);
+  const blockOffsets = useRef<Record<string, number>>({});
 
   const applyAuthoritativeDetail = useCallback((
     next: NotebookDetail,
@@ -72,6 +80,18 @@ export default function NotebookDetailScreen() {
           !['changed', 'failed'].includes(itemStates[item.id] ?? 'idle')
             ? item.text
             : current[item.id] ?? item.text,
+        ])
+      )
+    );
+    setTitleDrafts((current) =>
+      Object.fromEntries(
+        next.items.map((item) => [
+          item.id,
+          resetDrafts ||
+          savedItemId === item.id ||
+          !['changed', 'failed'].includes(itemStates[item.id] ?? 'idle')
+            ? item.title ?? ''
+            : current[item.id] ?? item.title ?? '',
         ])
       )
     );
@@ -214,10 +234,19 @@ export default function NotebookDetailScreen() {
   };
 
   const saveText = async (itemId: string) => {
+    const blockTitle = titleDrafts[itemId] ?? '';
+    if (blockTitle.length > 200) {
+      setActionError('Keep block titles under 200 characters.');
+      setItemStates((current) => ({ ...current, [itemId]: 'failed' }));
+      return;
+    }
     setItemStates((current) => ({ ...current, [itemId]: 'saving' }));
     setActionError(null);
     try {
-      const latest = await mutate.updateText(detail, itemId, textDrafts[itemId] ?? '');
+      const latest = await mutate.updateText(detail, itemId, {
+        title: blockTitle.trim() || null,
+        text: textDrafts[itemId] ?? '',
+      });
       applyAuthoritativeDetail(latest, { savedItemId: itemId });
     } catch (error) {
       handleMutationError(error, itemId);
@@ -242,6 +271,7 @@ export default function NotebookDetailScreen() {
         keyboardVerticalOffset={88}
         style={{ flex: 1 }}>
         <ScrollView
+          ref={scrollRef}
           contentContainerStyle={{
             gap: Space.xl,
             paddingBottom: Screen.bottom,
@@ -309,9 +339,27 @@ export default function NotebookDetailScreen() {
             </View>
           </View>
 
-          <View style={{ gap: Space.md }}>
-            <View style={{ alignItems: 'center', flexDirection: 'row', gap: Space.md }}>
+          <View
+            onLayout={(event: LayoutChangeEvent) => {
+              blockSectionOffset.current = event.nativeEvent.layout.y;
+            }}
+            style={{ gap: Space.md }}>
+            <View
+              style={{
+                alignItems: 'center',
+                flexDirection: 'row',
+                flexWrap: 'wrap',
+                gap: Space.md,
+              }}>
               <AppText style={{ flex: 1 }} variant="section">Text blocks</AppText>
+              {detail.items.length > 0 ? (
+                <AppButton
+                  accessibilityLabel={indexOpen ? 'Hide block index' : 'Show block index'}
+                  label={indexOpen ? 'Hide index' : 'Block index'}
+                  onPress={() => setIndexOpen((current) => !current)}
+                  variant="secondary"
+                />
+              ) : null}
               <AppButton
                 accessibilityLabel="Add empty text block"
                 disabled={mutationDisabled}
@@ -326,6 +374,34 @@ export default function NotebookDetailScreen() {
                 }}
               />
             </View>
+            {indexOpen ? (
+              <View
+                accessibilityLabel="Notebook block index"
+                style={{
+                  backgroundColor: Palette.surfaceMuted,
+                  borderRadius: Radius.control,
+                  gap: Space.xs,
+                  padding: Space.md,
+                }}>
+                {detail.items.map((item, index) => (
+                  <AppButton
+                    key={item.id}
+                    accessibilityLabel={`Go to block ${index + 1}`}
+                    label={`${index + 1}. ${notebookBlockIndexLabel(item, index)}`}
+                    onPress={() => {
+                      const y = blockOffsets.current[item.id];
+                      if (y !== undefined) {
+                        scrollRef.current?.scrollTo({
+                          animated: true,
+                          y: notebookBlockScrollOffset(blockSectionOffset.current, y),
+                        });
+                      }
+                    }}
+                    variant="secondary"
+                  />
+                ))}
+              </View>
+            ) : null}
             {detail.items.length === 0 ? (
               <AppText color={Palette.textMuted}>
                 No text blocks yet. Add one to start writing.
@@ -334,6 +410,9 @@ export default function NotebookDetailScreen() {
               detail.items.map((item, index) => (
                 <View
                   key={item.id}
+                  onLayout={(event: LayoutChangeEvent) => {
+                    blockOffsets.current[item.id] = event.nativeEvent.layout.y;
+                  }}
                   style={{
                     borderColor: Palette.border,
                     borderRadius: Radius.card,
@@ -341,6 +420,17 @@ export default function NotebookDetailScreen() {
                     gap: Space.md,
                     padding: Space.lg,
                   }}>
+                  <AppTextInput
+                    accessibilityLabel={`Text block ${index + 1} title`}
+                    editable={!mutationDisabled}
+                    maxLength={200}
+                    onChangeText={(value) => {
+                      setTitleDrafts((current) => ({ ...current, [item.id]: value }));
+                      setItemStates((current) => ({ ...current, [item.id]: 'changed' }));
+                    }}
+                    placeholder="Optional block title"
+                    value={titleDrafts[item.id] ?? item.title ?? ''}
+                  />
                   <AppTextInput
                     accessibilityLabel={`Text block ${index + 1}`}
                     editable={!mutationDisabled}

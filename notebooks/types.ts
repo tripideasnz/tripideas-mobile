@@ -12,6 +12,7 @@ export type NotebookTextItem = {
   id: string;
   type: 'text';
   position: number;
+  title: string | null;
   text: string;
   createdAt: string;
   updatedAt: string;

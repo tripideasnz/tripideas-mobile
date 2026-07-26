@@ -29,6 +29,20 @@ export function orderedNotebookItems(items: NotebookTextItem[]): NotebookTextIte
   return [...items].sort((a, b) => a.position - b.position);
 }
 
+export function notebookBlockIndexLabel(
+  item: Pick<NotebookTextItem, 'text' | 'title'>,
+  index: number
+): string {
+  const title = item.title?.trim();
+  if (title) return title;
+  const preview = item.text.trim().replace(/\s+/g, ' ');
+  return preview ? preview.slice(0, 48) : `Block ${index + 1}`;
+}
+
+export function notebookBlockScrollOffset(sectionY: number, blockY: number): number {
+  return Math.max(0, sectionY + blockY - 16);
+}
+
 export function moveNotebookItemIds(
   items: NotebookTextItem[],
   itemId: string,
