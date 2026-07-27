@@ -1,4 +1,9 @@
-import type { NotebookTextItem } from '@/notebooks/types';
+import {
+  adjacentContentBlockId,
+  moveContentBlockIds,
+  orderedContentBlocks,
+} from '@/content-blocks/ordering';
+import type { ContentBlock } from '@/content-blocks/types';
 
 export type NotebookMetadataValidation =
   | { valid: true; title: string; description: string | null }
@@ -25,34 +30,24 @@ export function validateNotebookMetadata(
   };
 }
 
-export function orderedNotebookItems(items: NotebookTextItem[]): NotebookTextItem[] {
-  return [...items].sort((a, b) => a.position - b.position);
-}
-
 export function notebookBlockScrollOffset(sectionY: number, blockY: number): number {
   return Math.max(0, sectionY + blockY - 16);
 }
 
 export function adjacentNotebookItemId(
-  items: NotebookTextItem[],
+  items: ContentBlock[],
   itemId: string,
   offset: -1 | 1
 ): string | null {
-  const ordered = orderedNotebookItems(items);
-  const index = ordered.findIndex((item) => item.id === itemId);
-  return ordered[index + offset]?.id ?? null;
+  return adjacentContentBlockId(items, itemId, offset);
 }
 
 export function moveNotebookItemIds(
-  items: NotebookTextItem[],
+  items: ContentBlock[],
   itemId: string,
   offset: -1 | 1
 ): string[] | null {
-  const ordered = orderedNotebookItems(items);
-  const index = ordered.findIndex((item) => item.id === itemId);
-  const target = index + offset;
-  if (index < 0 || target < 0 || target >= ordered.length) return null;
-  const ids = ordered.map((item) => item.id);
-  [ids[index], ids[target]] = [ids[target], ids[index]];
-  return ids;
+  return moveContentBlockIds(items, itemId, offset);
 }
+
+export const orderedNotebookItems = orderedContentBlocks;

@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Keyboard,
@@ -18,6 +18,11 @@ import { AppButton } from '@/components/ui/app-button';
 import { AppText } from '@/components/ui/app-text';
 import { AppTextInput } from '@/components/ui/app-text-input';
 import { LoadingView } from '@/components/ui/loading-view';
+import {
+  adjacentContentPageId,
+  pagesFromContentBlocks,
+} from '@/content-blocks/pages';
+import { renderContentBlock } from '@/content-blocks/renderer';
 import { Palette, Radius, Screen, Space } from '@/constants/design';
 import { classifyNotebookError } from '@/notebooks/errors';
 import {
@@ -26,7 +31,6 @@ import {
   shouldAdoptAutosaveResponse,
 } from '@/notebooks/autosave';
 import {
-  adjacentNotebookItemId,
   notebookBlockScrollOffset,
   validateNotebookMetadata,
 } from '@/notebooks/model';
@@ -49,6 +53,10 @@ export default function NotebookDetailScreen() {
     mutate,
   } = useNotebooks();
   const detail = notebookId ? details[notebookId] : undefined;
+  const pages = useMemo(
+    () => detail ? pagesFromContentBlocks(detail.items) : [],
+    [detail]
+  );
   const detailRef = useRef(detail);
   detailRef.current = detail;
   const [isLoading, setIsLoading] = useState(true);
@@ -394,7 +402,8 @@ export default function NotebookDetailScreen() {
     setItemStates((current) => ({ ...current, [itemId]: 'saving' }));
     setActionError(null);
     try {
-      const latest = await mutate.updateText(detail.id, itemId, {
+      const latest = await mutate.updateBlock(detail.id, itemId, {
+        type: 'text',
         title: normalizedTitle,
         text: body,
       });
@@ -436,7 +445,10 @@ export default function NotebookDetailScreen() {
     setActionError(null);
     const previousIds = new Set(detail.items.map((item) => item.id));
     try {
-      const latest = await mutate.addText(detail.id, '');
+      const latest = await mutate.addBlock(detail.id, {
+        type: 'text',
+        text: '',
+      });
       const newPage =
         latest.items.find((item) => !previousIds.has(item.id)) ??
         latest.items.at(-1);
@@ -620,12 +632,14 @@ export default function NotebookDetailScreen() {
               blockSectionOffset.current = event.nativeEvent.layout.y;
             }}
             style={{ gap: Space.md }}>
-            {detail.items.length === 0 ? (
+            {pages.length === 0 ? (
               <AppText color={Palette.textMuted}>
                 No pages yet. Add one to start writing.
               </AppText>
             ) : (
-              detail.items.map((item, index) => (
+              pages.map((page, pageIndex) =>
+                renderContentBlock(page.blocks[0], pageIndex, {
+                  text: (item, index) => (
                 <View
                   key={item.id}
                   onLayout={(event: LayoutChangeEvent) => {
@@ -692,7 +706,7 @@ export default function NotebookDetailScreen() {
                         disabled={mutationDisabled || index === 0}
                         label="↑"
                         onPress={() => {
-                          const target = adjacentNotebookItemId(detail.items, item.id, -1);
+                          const target = adjacentContentPageId(pages, page.id, -1);
                           if (target) navigateToPage(target);
                         }}
                         size="compact"
@@ -701,10 +715,10 @@ export default function NotebookDetailScreen() {
                       />
                       <AppButton
                         accessibilityLabel="Go to next page"
-                        disabled={mutationDisabled || index === detail.items.length - 1}
+                        disabled={mutationDisabled || index === pages.length - 1}
                         label="↓"
                         onPress={() => {
-                          const target = adjacentNotebookItemId(detail.items, item.id, 1);
+                          const target = adjacentContentPageId(pages, page.id, 1);
                           if (target) navigateToPage(target);
                         }}
                         size="compact"
@@ -727,7 +741,7 @@ export default function NotebookDetailScreen() {
                               if (timer) clearTimeout(timer);
                               delete itemTimersRef.current[item.id];
                               void runImmediateMutation(
-                                () => mutate.deleteText(detail.id, item.id),
+                                () => mutate.deleteBlock(detail.id, item.id),
                                 item.id
                               );
                             },
@@ -741,7 +755,9 @@ export default function NotebookDetailScreen() {
                   </View>
                   <SaveLabel state={itemStates[item.id] ?? 'idle'} />
                 </View>
-              ))
+                  ),
+                })
+              )
             )}
           </View>
 

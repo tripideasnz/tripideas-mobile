@@ -2,6 +2,7 @@ import {
   ApiError,
   authenticatedApiFetch as apiFetch,
 } from '@/lib/api-client';
+import { parseContentBlock } from '@/content-blocks/registry';
 import type {
   CreateNotebookInput,
   NotebookDeletion,
@@ -45,17 +46,17 @@ export function parseNotebookDetail(value: unknown): NotebookDetail {
     updatedAt: string(data.updatedAt),
     items: data.items
       .map((itemValue) => {
-        const item = object(itemValue);
-        if (item.type !== 'text') throw new ApiError(500, 'malformed_response');
-        return {
-          id: string(item.id),
-          type: 'text' as const,
-          position: integer(item.position),
-          title: nullableString(item.title),
-          text: string(item.text),
-          createdAt: string(item.createdAt),
-          updatedAt: string(item.updatedAt),
-        };
+        try {
+          return parseContentBlock(itemValue, {
+            integer,
+            nullableString,
+            object,
+            string,
+          });
+        } catch (error) {
+          if (error instanceof ApiError) throw error;
+          throw new ApiError(500, 'malformed_response');
+        }
       })
       .sort((a, b) => a.position - b.position),
   };

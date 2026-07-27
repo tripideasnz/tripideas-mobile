@@ -1,3 +1,8 @@
+import type {
+  ContentBlock,
+  TextContentBlock,
+} from '@/content-blocks/types';
+
 export type NotebookSummary = {
   id: string;
   title: string;
@@ -8,15 +13,7 @@ export type NotebookSummary = {
   updatedAt: string;
 };
 
-export type NotebookTextItem = {
-  id: string;
-  type: 'text';
-  position: number;
-  title: string | null;
-  text: string;
-  createdAt: string;
-  updatedAt: string;
-};
+export type NotebookTextItem = TextContentBlock;
 
 export type NotebookDetail = {
   id: string;
@@ -25,7 +22,7 @@ export type NotebookDetail = {
   version: number;
   createdAt: string;
   updatedAt: string;
-  items: NotebookTextItem[];
+  items: ContentBlock[];
 };
 
 export type NotebookDeletion = {

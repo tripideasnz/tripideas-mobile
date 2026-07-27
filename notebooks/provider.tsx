@@ -10,21 +10,27 @@ import {
 } from 'react';
 
 import { useSession } from '@/auth/provider';
+import {
+  createContentBlock,
+  deleteContentBlock,
+  reorderContentBlocks,
+  updateContentBlock,
+} from '@/content-blocks/lifecycle';
+import type {
+  CreateContentBlockInput,
+  UpdateContentBlockInput,
+} from '@/content-blocks/types';
 import { ApiError } from '@/lib/api-client';
 import {
   classifyNotebookError,
   type NotebookFailure,
 } from '@/notebooks/errors';
 import {
-  addNotebookTextItem,
   createNotebook as createNotebookRequest,
   deleteNotebook as deleteNotebookRequest,
-  deleteNotebookTextItem,
   listNotebooks,
   readNotebook,
-  reorderNotebookItems,
   updateNotebook as updateNotebookRequest,
-  updateNotebookTextItem,
 } from '@/notebooks/api';
 import { notebookStorage } from '@/notebooks/storage';
 import {
@@ -48,17 +54,20 @@ type NotebookContextValue = {
   listError: NotebookFailure | null;
   loadNotebook: (id: string, refresh?: boolean) => Promise<NotebookDetail | null>;
   mutate: {
-    addText: (id: string, text?: string, title?: string | null) => Promise<NotebookDetail>;
-    deleteText: (id: string, itemId: string) => Promise<NotebookDetail>;
-    reorder: (id: string, itemIds: string[]) => Promise<NotebookDetail>;
+    addBlock: (
+      id: string,
+      input: CreateContentBlockInput
+    ) => Promise<NotebookDetail>;
+    deleteBlock: (id: string, blockId: string) => Promise<NotebookDetail>;
+    reorderBlocks: (id: string, blockIds: string[]) => Promise<NotebookDetail>;
     updateMetadata: (
       id: string,
       input: Omit<UpdateNotebookInput, 'expectedVersion'>
     ) => Promise<NotebookDetail>;
-    updateText: (
+    updateBlock: (
       id: string,
-      itemId: string,
-      input: { title?: string | null; text?: string }
+      blockId: string,
+      input: UpdateContentBlockInput
     ) => Promise<NotebookDetail>;
   };
   notebooks: NotebookSummary[];
@@ -246,31 +255,30 @@ export function NotebookProvider({ children }: PropsWithChildren) {
             expectedVersion: detail.version,
           })
         ),
-      addText: (id: string, text = '', title: string | null = null) =>
+      addBlock: (id: string, input: CreateContentBlockInput) =>
         authoritativeMutation(id, (detail) =>
-          addNotebookTextItem(
+          createContentBlock(
             id,
             detail.version,
-            text,
             detail.items.length,
-            title
+            input
           )
         ),
-      updateText: (
+      updateBlock: (
         id: string,
-        itemId: string,
-        input: { title?: string | null; text?: string }
+        blockId: string,
+        input: UpdateContentBlockInput
       ) =>
         authoritativeMutation(id, (detail) =>
-          updateNotebookTextItem(id, itemId, detail.version, input)
+          updateContentBlock(id, blockId, detail.version, input)
         ),
-      deleteText: (id: string, itemId: string) =>
+      deleteBlock: (id: string, blockId: string) =>
         authoritativeMutation(id, (detail) =>
-          deleteNotebookTextItem(id, itemId, detail.version)
+          deleteContentBlock(id, blockId, detail.version)
         ),
-      reorder: (id: string, itemIds: string[]) =>
+      reorderBlocks: (id: string, blockIds: string[]) =>
         authoritativeMutation(id, (detail) =>
-          reorderNotebookItems(id, detail.version, itemIds)
+          reorderContentBlocks(id, detail.version, blockIds)
         ),
     }),
     [authoritativeMutation]
