@@ -19,6 +19,10 @@ import {
   mobileRefresh,
 } from '@/auth/api';
 import {
+  authBrowserFailureMessage,
+  openAuthBrowserSafely,
+} from '@/auth/browser';
+import {
   authenticatedSession,
   clearMobileSession,
   persistMobileSession,
@@ -84,6 +88,15 @@ async function storeCodeVerifier(verifier: string, expectedState: string): Promi
   await SecureStore.setItemAsync(EXPECTED_STATE_KEY, expectedState);
 }
 
+async function clearCodeVerifier(): Promise<void> {
+  try {
+    await Promise.all([
+      SecureStore.deleteItemAsync(CODE_VERIFIER_KEY),
+      SecureStore.deleteItemAsync(EXPECTED_STATE_KEY),
+    ]);
+  } catch { /* non-critical */ }
+}
+
 export async function consumeCodeVerifier(): Promise<{ verifier: string; expectedState: string } | null> {
   try {
     const verifier = await SecureStore.getItemAsync(CODE_VERIFIER_KEY);
@@ -135,6 +148,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const hasAuthenticatedUserRef = useRef(false);
   const isRestoringRef = useRef(false);
   const refreshInFlightRef = useRef<Promise<boolean> | null>(null);
+  const signInInFlightRef = useRef<Promise<void> | null>(null);
 
   const restoreSession = useCallback(async () => {
     if (isRestoringRef.current) return;
@@ -210,7 +224,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     return Boolean(nextState.session);
   }, []);
 
-  const signIn = useCallback(async () => {
+  const performSignIn = useCallback(async () => {
     setAuthError(null);
     const codeVerifier = generateCodeVerifier();
     const codeChallenge = await generateCodeChallenge(codeVerifier);
@@ -241,41 +255,34 @@ export function AuthProvider({ children }: PropsWithChildren) {
       await storeCodeVerifier(codeVerifier, expectedState);
     }
 
-    let result: WebBrowser.WebBrowserAuthSessionResult;
-    try {
-      result = await WebBrowser.openAuthSessionAsync(authorizationUrl, MOBILE_REDIRECT_URI);
-    } catch {
-      console.error('[Auth] Auth browser failed.');
-      if (hasAuthenticatedUserRef.current) {
-        setAuthError(null);
-        return;
-      }
-      setAuthError('Sign-in could not open. Please try again.');
-      await clearAuthStorage();
+    const browserOutcome = await openAuthBrowserSafely(() =>
+      WebBrowser.openAuthSessionAsync(authorizationUrl, MOBILE_REDIRECT_URI)
+    );
+
+    if (browserOutcome.status === 'cancelled') {
+      await clearCodeVerifier();
+      setAuthError(null);
       return;
     }
 
-    if (result.type === 'cancel' || result.type === 'dismiss') {
-      if (hasAuthenticatedUserRef.current) {
+    if (browserOutcome.status === 'failed') {
+      await clearCodeVerifier();
+      const message = authBrowserFailureMessage(
+        browserOutcome,
+        hasAuthenticatedUserRef.current
+      );
+      if (message) {
+        console.error(
+          `[Auth] Auth browser failed at safe stage: ${browserOutcome.category}.`
+        );
+        setAuthError(message);
+      } else {
         setAuthError(null);
-        return;
       }
-      await clearAuthStorage();
       return;
     }
 
-    if (result.type !== 'success') {
-      console.warn('[Auth] Auth browser returned an unexpected result.');
-      if (hasAuthenticatedUserRef.current) {
-        setAuthError(null);
-        return;
-      }
-      setAuthError('Sign-in did not complete. Please try again.');
-      await clearAuthStorage();
-      return;
-    }
-
-    const parsed = parseCallbackUrl(result.url);
+    const parsed = parseCallbackUrl(browserOutcome.url);
 
     if (!parsed.ok) {
       if (hasAuthenticatedUserRef.current) {
@@ -325,6 +332,18 @@ export function AuthProvider({ children }: PropsWithChildren) {
     const user = mapTokenUser(tokens.user);
     await acceptMobileTokens({ ...tokens, user });
   }, [acceptMobileTokens]);
+
+  const signIn = useCallback(() => {
+    if (signInInFlightRef.current) return signInInFlightRef.current;
+
+    const attempt = performSignIn().finally(() => {
+      if (signInInFlightRef.current === attempt) {
+        signInInFlightRef.current = null;
+      }
+    });
+    signInInFlightRef.current = attempt;
+    return attempt;
+  }, [performSignIn]);
 
   const signOut = useCallback(async () => {
     // TODO: Call POST /auth/mobile/logout once backend implements it.
