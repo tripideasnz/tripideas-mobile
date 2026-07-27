@@ -1,4 +1,10 @@
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import {
+  Stack,
+  useLocalSearchParams,
+  useNavigation,
+  useRouter,
+} from 'expo-router';
+import { HeaderBackButton } from '@react-navigation/elements';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
@@ -34,6 +40,10 @@ import {
   notebookBlockScrollOffset,
   validateNotebookMetadata,
 } from '@/notebooks/model';
+import {
+  backFromNotebook,
+  type NotebookNavigationState,
+} from '@/notebooks/navigation';
 import { useNotebooks } from '@/notebooks/provider';
 import type { NotebookDetail } from '@/notebooks/types';
 
@@ -43,6 +53,7 @@ const AUTOSAVE_DELAY_MS = 650;
 
 export default function NotebookDetailScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
   const { notebookId: rawNotebookId } = useLocalSearchParams<{ notebookId: string }>();
   const notebookId = Array.isArray(rawNotebookId) ? rawNotebookId[0] : rawNotebookId;
   const { isLoading: isLoadingSession, session, signIn } = useSession();
@@ -89,6 +100,13 @@ export default function NotebookDetailScreen() {
   const blockOffsets = useRef<Record<string, number>>({});
   const pageTitleRefs = useRef<Record<string, TextInput | null>>({});
   const pendingScrollRef = useRef<{ focusTitle: boolean; itemId: string } | null>(null);
+
+  const handleBack = useCallback(() => {
+    backFromNotebook(
+      router,
+      navigation.getState() as NotebookNavigationState
+    );
+  }, [navigation, router]);
 
   const finishPendingScroll = useCallback(() => {
     const pending = pendingScrollRef.current;
@@ -479,6 +497,11 @@ export default function NotebookDetailScreen() {
 
   return (
     <SafeAreaView edges={['bottom']} style={{ flex: 1, backgroundColor: Palette.background }}>
+      <Stack.Screen
+        options={{
+          headerLeft: () => <HeaderBackButton onPress={handleBack} />,
+        }}
+      />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={88}

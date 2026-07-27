@@ -24,6 +24,7 @@ import {
 import { useSavedPlaces } from '@/saved/provider';
 import { fetchPlaceCardsByIds } from '@/sanity/place-cards';
 import { getTripImages } from '@/trips/images';
+import { openNotebookList } from '@/notebooks/navigation';
 import { useMyTrips } from '@/trips/provider';
 import type { PlaceCardData } from '@/types/content';
 
@@ -155,7 +156,7 @@ export default function SavedScreen() {
           <Pressable
             accessibilityLabel="Open your private Notebooks"
             accessibilityRole="button"
-            onPress={() => router.push('/notebooks')}
+            onPress={() => openNotebookList(router)}
             style={({ pressed }) => ({
               backgroundColor: Palette.surfaceMuted,
               borderColor: Palette.border,

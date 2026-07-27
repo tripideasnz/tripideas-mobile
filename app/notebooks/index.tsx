@@ -1,4 +1,4 @@
-import { type Href, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
   Alert,
@@ -18,6 +18,7 @@ import { LoadingView } from '@/components/ui/loading-view';
 import { Palette, Radius, Screen, Space } from '@/constants/design';
 import { classifyNotebookError } from '@/notebooks/errors';
 import { validateNotebookMetadata } from '@/notebooks/model';
+import { openNotebook } from '@/notebooks/navigation';
 import { useNotebooks } from '@/notebooks/provider';
 import type { NotebookSummary } from '@/notebooks/types';
 
@@ -81,7 +82,7 @@ export default function NotebookListScreen() {
       });
       resetCreateForm();
       setShowCreate(false);
-      router.push(`/notebooks/${detail.id}` as Href);
+      openNotebook(router, detail.id);
     } catch (error) {
       const failure = classifyNotebookError(error);
       setFormError(
@@ -245,9 +246,7 @@ export default function NotebookListScreen() {
                     ]
                   )
                 }
-                onOpen={() =>
-                  router.push(`/notebooks/${notebook.id}` as Href)
-                }
+                onOpen={() => openNotebook(router, notebook.id)}
               />
             ))
           )}
