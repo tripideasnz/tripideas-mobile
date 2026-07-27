@@ -1,5 +1,6 @@
-import { useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { HeaderBackButton } from '@react-navigation/elements';
+import { Stack, useRouter } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -18,7 +19,10 @@ import { LoadingView } from '@/components/ui/loading-view';
 import { Palette, Radius, Screen, Space } from '@/constants/design';
 import { classifyNotebookError } from '@/notebooks/errors';
 import { validateNotebookMetadata } from '@/notebooks/model';
-import { openNotebook } from '@/notebooks/navigation';
+import {
+  backFromNotebookList,
+  openNotebook,
+} from '@/notebooks/navigation';
 import { useNotebooks } from '@/notebooks/provider';
 import type { NotebookSummary } from '@/notebooks/types';
 
@@ -50,6 +54,9 @@ export default function NotebookListScreen() {
   const [formError, setFormError] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const createInFlightRef = useRef(false);
+  const handleBack = useCallback(() => {
+    backFromNotebookList(router);
+  }, [router]);
 
   const resetCreateForm = () => {
     setTitle('');
@@ -116,6 +123,11 @@ export default function NotebookListScreen() {
 
   return (
     <SafeAreaView edges={['bottom']} style={{ flex: 1, backgroundColor: Palette.background }}>
+      <Stack.Screen
+        options={{
+          headerLeft: () => <HeaderBackButton onPress={handleBack} />,
+        }}
+      />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={{ flex: 1 }}>

@@ -1,7 +1,6 @@
 import {
   Stack,
   useLocalSearchParams,
-  useNavigation,
   useRouter,
 } from 'expo-router';
 import { HeaderBackButton } from '@react-navigation/elements';
@@ -41,8 +40,7 @@ import {
   validateNotebookMetadata,
 } from '@/notebooks/model';
 import {
-  backFromNotebook,
-  type NotebookNavigationState,
+  backFromNotebookDetail,
 } from '@/notebooks/navigation';
 import { useNotebooks } from '@/notebooks/provider';
 import type { NotebookDetail } from '@/notebooks/types';
@@ -53,7 +51,6 @@ const AUTOSAVE_DELAY_MS = 650;
 
 export default function NotebookDetailScreen() {
   const router = useRouter();
-  const navigation = useNavigation();
   const { notebookId: rawNotebookId } = useLocalSearchParams<{ notebookId: string }>();
   const notebookId = Array.isArray(rawNotebookId) ? rawNotebookId[0] : rawNotebookId;
   const { isLoading: isLoadingSession, session, signIn } = useSession();
@@ -102,11 +99,8 @@ export default function NotebookDetailScreen() {
   const pendingScrollRef = useRef<{ focusTitle: boolean; itemId: string } | null>(null);
 
   const handleBack = useCallback(() => {
-    backFromNotebook(
-      router,
-      navigation.getState() as NotebookNavigationState
-    );
-  }, [navigation, router]);
+    backFromNotebookDetail(router);
+  }, [router]);
 
   const finishPendingScroll = useCallback(() => {
     const pending = pendingScrollRef.current;
