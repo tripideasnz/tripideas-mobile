@@ -37,6 +37,7 @@ import {
   setAuthenticatedSessionHandlers,
 } from '@/lib/api-client';
 import { clearNotebookCache } from '@/notebooks/storage';
+import { cancelPhotoUploadsForUser } from '@/photo-uploads/service';
 import type { AuthContextValue, AuthUser, SessionState } from '@/auth/session';
 import {
   CODE_VERIFIER_KEY,
@@ -350,6 +351,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     // Until then, sign-out is local-only. The WorkOS hosted session remains
     // active, so re-signing in immediately will skip the WorkOS UI.
     const signedOutUserId = state.session?.userId ?? state.user?.id;
+    if (signedOutUserId) cancelPhotoUploadsForUser(signedOutUserId);
     const nextState = await clearMobileSession(signedOutUserId, {
       clearAuthStorage,
       clearNotebookCache,
