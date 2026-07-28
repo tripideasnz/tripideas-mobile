@@ -1,6 +1,7 @@
 import type {
   ContentBlock,
   TextContentBlock,
+  PhotoContentBlock,
 } from '@/content-blocks/types';
 
 export type ContentBlockReaders = {
@@ -31,8 +32,22 @@ const textBlockDefinition: ContentBlockDefinition<TextContentBlock> = {
   }),
 };
 
+const photoBlockDefinition: ContentBlockDefinition<PhotoContentBlock> = {
+  type: 'photo',
+  parse: (block, readers) => ({
+    id: readers.string(block.id),
+    type: 'photo',
+    position: readers.integer(block.position),
+    photoAssetId: readers.string(block.photoAssetId),
+    clientRequestId: readers.string(block.clientRequestId),
+    createdAt: readers.string(block.createdAt),
+    updatedAt: readers.string(block.updatedAt),
+  }),
+};
+
 const definitions = {
   text: textBlockDefinition,
+  photo: photoBlockDefinition,
 } satisfies Record<ContentBlock['type'], ContentBlockDefinition<ContentBlock>>;
 
 export function contentBlockDefinition(
@@ -46,7 +61,7 @@ export function parseContentBlock(
   readers: ContentBlockReaders
 ): ContentBlock {
   const block = readers.object(value);
-  if (block.type !== 'text') {
+  if (block.type !== 'text' && block.type !== 'photo') {
     throw new Error('unsupported_content_block');
   }
   return contentBlockDefinition(block.type).parse(block, readers);

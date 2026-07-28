@@ -11,7 +11,12 @@ export type TextContentBlock = ContentBlockBase<'text'> & {
   text: string;
 };
 
-export type ContentBlock = TextContentBlock;
+export type PhotoContentBlock = ContentBlockBase<'photo'> & {
+  photoAssetId: string;
+  clientRequestId: string;
+};
+
+export type ContentBlock = TextContentBlock | PhotoContentBlock;
 
 export type ContentPage = {
   id: string;

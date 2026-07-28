@@ -30,6 +30,9 @@ import {
   deleteNotebook as deleteNotebookRequest,
   listNotebooks,
   readNotebook,
+  readNotebookContent,
+  addNotebookPhotoBlock,
+  deleteNotebookPhotoBlock,
   updateNotebook as updateNotebookRequest,
 } from '@/notebooks/api';
 import { notebookStorage } from '@/notebooks/storage';
@@ -69,6 +72,13 @@ type NotebookContextValue = {
       blockId: string,
       input: UpdateContentBlockInput
     ) => Promise<NotebookDetail>;
+    addPhotoBlock: (input: {
+      id: string;
+      pageId: string;
+      photoAssetId: string;
+      clientRequestId: string;
+    }) => Promise<NotebookDetail>;
+    deletePhotoBlock: (id: string, blockId: string) => Promise<NotebookDetail>;
   };
   notebooks: NotebookSummary[];
   refresh: () => Promise<void>;
@@ -186,7 +196,7 @@ export function NotebookProvider({ children }: PropsWithChildren) {
         if (!forceRefresh) return stored;
       }
 
-      const latest = await readNotebook(id);
+      const latest = await readNotebookContent(id);
       return storeDetail(ownerId, latest);
     },
     [storeDetail]
@@ -209,7 +219,7 @@ export function NotebookProvider({ children }: PropsWithChildren) {
   ): Promise<NotebookDetail> => {
     const current = detailsRef.current[id];
     if (current) return current;
-    return storeDetail(ownerId, await readNotebook(id));
+    return storeDetail(ownerId, await readNotebookContent(id));
   }, [storeDetail]);
 
   const deleteNotebook = useCallback(async (id: string) => {
@@ -237,7 +247,8 @@ export function NotebookProvider({ children }: PropsWithChildren) {
       if (!ownerId) throw new ApiError(401, 'unauthenticated');
       return enqueueMutation(id, async () => {
         const detail = await currentDetail(ownerId, id);
-        return storeDetail(ownerId, await request(detail));
+        await request(detail);
+        return storeDetail(ownerId, await readNotebookContent(id));
       });
     },
     [currentDetail, enqueueMutation, storeDetail]
@@ -263,6 +274,30 @@ export function NotebookProvider({ children }: PropsWithChildren) {
             detail.items.length,
             input
           )
+        ),
+      addPhotoBlock: (input: {
+        id: string;
+        pageId: string;
+        photoAssetId: string;
+        clientRequestId: string;
+      }) =>
+        authoritativeMutation(input.id, (detail) => {
+          const page = detail.pages?.find(
+            (candidate) => candidate.id === input.pageId
+          );
+          if (!page) throw new ApiError(404, 'not_found');
+          return addNotebookPhotoBlock({
+            notebookId: input.id,
+            pageId: input.pageId,
+            photoAssetId: input.photoAssetId,
+            clientRequestId: input.clientRequestId,
+            expectedVersion: detail.version,
+            position: page.blocks.length,
+          });
+        }),
+      deletePhotoBlock: (id: string, blockId: string) =>
+        authoritativeMutation(id, (detail) =>
+          deleteNotebookPhotoBlock(id, blockId, detail.version)
         ),
       updateBlock: (
         id: string,

@@ -1,5 +1,6 @@
 import type {
   ContentBlock,
+  ContentPage,
   TextContentBlock,
 } from '@/content-blocks/types';
 
@@ -23,6 +24,7 @@ export type NotebookDetail = {
   createdAt: string;
   updatedAt: string;
   items: ContentBlock[];
+  pages?: ContentPage[];
 };
 
 export type NotebookDeletion = {

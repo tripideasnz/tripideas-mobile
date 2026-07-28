@@ -62,6 +62,41 @@ export function parseNotebookDetail(value: unknown): NotebookDetail {
   };
 }
 
+export function parseNotebookContent(value: unknown): NotebookDetail {
+  const detail = parseNotebookDetail(value);
+  const data = object(value);
+  if (!Array.isArray(data.pages)) throw new ApiError(500, 'malformed_response');
+  return {
+    ...detail,
+    pages: data.pages
+      .map((pageValue) => {
+        const page = object(pageValue);
+        if (!Array.isArray(page.blocks)) {
+          throw new ApiError(500, 'malformed_response');
+        }
+        const title = nullableString(page.title);
+        const blocks = page.blocks.map((block) => {
+          const raw = object(block);
+          return parseContentBlock(
+            raw.type === 'text' ? { ...raw, title } : raw,
+            { integer, nullableString, object, string }
+          );
+        }).sort((a, b) => a.position - b.position);
+        return {
+          id: string(page.id),
+          position: integer(page.position),
+          title,
+          createdAt: string(page.createdAt),
+          updatedAt: string(page.updatedAt),
+          blocks: blocks.map((block) =>
+            block.type === 'text' ? { ...block, title } : block
+          ),
+        };
+      })
+      .sort((a, b) => a.position - b.position),
+  };
+}
+
 function parseNotebookSummary(value: unknown): NotebookSummary {
   const data = object(value);
   return {
@@ -98,6 +133,74 @@ export async function createNotebook(
 
 export async function readNotebook(id: string): Promise<NotebookDetail> {
   return parseNotebookDetail(await apiFetch(`/notebooks/${encodeURIComponent(id)}`));
+}
+
+export async function readNotebookContent(id: string): Promise<NotebookDetail> {
+  return parseNotebookContent(
+    await apiFetch(`/notebooks/${encodeURIComponent(id)}/content`)
+  );
+}
+
+export async function addNotebookPhotoBlock(input: {
+  notebookId: string;
+  pageId: string;
+  photoAssetId: string;
+  clientRequestId: string;
+  expectedVersion: number;
+  position: number;
+}): Promise<NotebookDetail> {
+  const {
+    notebookId,
+    pageId,
+    photoAssetId,
+    clientRequestId,
+    expectedVersion,
+    position,
+  } = input;
+  return parseNotebookContent(
+    await apiFetch(
+      `/notebooks/${encodeURIComponent(notebookId)}/blocks/photo`,
+      {
+        method: 'POST',
+        ...json({
+          pageId,
+          photoAssetId,
+          clientRequestId,
+          expectedVersion,
+          position,
+        }),
+      }
+    )
+  );
+}
+
+export async function deleteNotebookPhotoBlock(
+  notebookId: string,
+  blockId: string,
+  expectedVersion: number
+): Promise<NotebookDetail> {
+  return parseNotebookContent(
+    await apiFetch(
+      `/notebooks/${encodeURIComponent(notebookId)}/blocks/${encodeURIComponent(blockId)}`,
+      { method: 'DELETE', ...json({ expectedVersion }) }
+    )
+  );
+}
+
+export async function authorizePhotoRead(
+  photoAssetId: string
+): Promise<{ method: 'GET'; url: string; expiresAt: string }> {
+  const data = object(
+    await apiFetch(
+      `/photo-assets/${encodeURIComponent(photoAssetId)}/read-authorization`
+    )
+  );
+  if (data.method !== 'GET') throw new ApiError(500, 'malformed_response');
+  return {
+    method: 'GET',
+    url: string(data.url),
+    expiresAt: string(data.expiresAt),
+  };
 }
 
 export async function updateNotebook(

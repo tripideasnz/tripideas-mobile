@@ -4,6 +4,7 @@ import {
   useRouter,
 } from 'expo-router';
 import { HeaderBackButton } from '@react-navigation/elements';
+import { Image } from 'expo-image';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
@@ -43,7 +44,13 @@ import {
   backFromNotebookDetail,
 } from '@/notebooks/navigation';
 import { useNotebooks } from '@/notebooks/provider';
+import { authorizePhotoRead } from '@/notebooks/api';
 import type { NotebookDetail } from '@/notebooks/types';
+import { pickPhotoForUpload } from '@/photo-uploads/picker';
+import {
+  addNotebookPhoto,
+  resumeNotebookPhotos,
+} from '@/notebook-photo-blocks/service';
 
 type SaveState = 'failed' | 'idle' | 'saving';
 type RetryConflict = () => Promise<void>;
@@ -62,7 +69,7 @@ export default function NotebookDetailScreen() {
   } = useNotebooks();
   const detail = notebookId ? details[notebookId] : undefined;
   const pages = useMemo(
-    () => detail ? pagesFromContentBlocks(detail.items) : [],
+    () => detail ? detail.pages ?? pagesFromContentBlocks(detail.items) : [],
     [detail]
   );
   const detailRef = useRef(detail);
@@ -81,6 +88,9 @@ export default function NotebookDetailScreen() {
   const [metadataState, setMetadataState] = useState<SaveState>('idle');
   const [itemStates, setItemStates] = useState<Record<string, SaveState>>({});
   const [actionError, setActionError] = useState<string | null>(null);
+  const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
+  const [photoBusyPage, setPhotoBusyPage] = useState<string | null>(null);
+  const [pendingPhotoRetries, setPendingPhotoRetries] = useState(0);
   const titleRef = useRef('');
   const descriptionRef = useRef('');
   const titleDraftsRef = useRef<Record<string, string>>({});
@@ -158,6 +168,7 @@ export default function NotebookDetailScreen() {
     const nextTexts: Record<string, string> = {};
     const nextRevisions: Record<string, number> = {};
     for (const item of next.items) {
+      if (item.type !== 'text') continue;
       const revision = itemRevisionsRef.current[item.id] ?? 0;
       const adoptItem =
         resetDrafts ||
@@ -247,6 +258,7 @@ export default function NotebookDetailScreen() {
       hadAuthenticatedSessionRef.current = true;
       return;
     }
+    setPhotoUrls({});
     if (!isLoadingSession && hadAuthenticatedSessionRef.current) {
       hadAuthenticatedSessionRef.current = false;
       router.replace('/notebooks');
@@ -269,6 +281,44 @@ export default function NotebookDetailScreen() {
       applyAuthoritativeDetail(detail, { resetDrafts: true });
     }
   }, [applyAuthoritativeDetail, detail]);
+
+  useEffect(() => {
+    const ownerId = session?.userId;
+    if (!ownerId || !notebookId) return;
+    void resumeNotebookPhotos(
+      ownerId,
+      notebookId,
+      mutate.addPhotoBlock
+    ).then(({ completed, pendingCount }) => {
+      setPendingPhotoRetries(pendingCount);
+      const latest = completed.at(-1);
+      if (latest) applyAuthoritativeDetail(latest);
+    });
+  }, [
+    applyAuthoritativeDetail,
+    mutate.addPhotoBlock,
+    notebookId,
+    session?.userId,
+  ]);
+
+  useEffect(() => {
+    const photoIds = pages.flatMap((page) =>
+      page.blocks
+        .filter((block) => block.type === 'photo')
+        .map((block) => block.photoAssetId)
+    );
+    for (const assetId of photoIds) {
+      if (photoUrls[assetId]) continue;
+      void authorizePhotoRead(assetId)
+        .then((authorization) => {
+          setPhotoUrls((current) => ({
+            ...current,
+            [assetId]: authorization.url,
+          }));
+        })
+        .catch(() => undefined);
+    }
+  }, [pages, photoUrls]);
 
   useEffect(() => () => {
     if (metadataTimerRef.current) clearTimeout(metadataTimerRef.current);
@@ -400,9 +450,11 @@ export default function NotebookDetailScreen() {
     }
     const normalizedTitle = blockTitle.trim() || null;
     const body = textDraftsRef.current[itemId] ?? '';
-    const currentItem = detailRef.current?.items.find((item) => item.id === itemId);
+    const currentItem = detailRef.current?.items.find(
+      (item) => item.id === itemId && item.type === 'text'
+    );
     if (
-      currentItem &&
+      currentItem?.type === 'text' &&
       normalizedTitle === currentItem.title &&
       body === currentItem.text
     ) {
@@ -471,6 +523,48 @@ export default function NotebookDetailScreen() {
     }
   };
 
+  const addPhoto = async (pageId: string) => {
+    if (!session) return;
+    setActionError(null);
+    try {
+      const selected = await pickPhotoForUpload();
+      if (!selected) return;
+      setPhotoBusyPage(pageId);
+      const latest = await addNotebookPhoto(
+        session.userId,
+        detail.id,
+        pageId,
+        selected,
+        mutate.addPhotoBlock
+      );
+      if (latest) applyAuthoritativeDetail(latest);
+      else {
+        setPendingPhotoRetries((current) => current + 1);
+        setActionError('Photo upload paused. Retry when connectivity returns.');
+      }
+    } catch (error) {
+      handleMutationError(error);
+    } finally {
+      setPhotoBusyPage(null);
+    }
+  };
+
+  const retryPhotos = async () => {
+    if (!session) return;
+    setActionError(null);
+    const { completed, pendingCount } = await resumeNotebookPhotos(
+      session.userId,
+      detail.id,
+      mutate.addPhotoBlock
+    );
+    setPendingPhotoRetries(pendingCount);
+    const latest = completed.at(-1);
+    if (latest) applyAuthoritativeDetail(latest);
+    if (pendingCount > 0) {
+      setActionError('Photo upload is still paused. Please try again.');
+    }
+  };
+
   const keepMyVersion = async () => {
     const retry = retryConflictRef.current;
     if (!retry || !notebookId) return;
@@ -536,6 +630,14 @@ export default function NotebookDetailScreen() {
               </View>
             ) : null}
             {actionError ? <AppText color={Palette.danger}>{actionError}</AppText> : null}
+            {pendingPhotoRetries > 0 ? (
+              <AppButton
+                label="Retry Photo Uploads"
+                onPress={() => void retryPhotos()}
+                size="compact"
+                variant="secondary"
+              />
+            ) : null}
 
             <View style={{ gap: Space.md }}>
             <AppTextInput
@@ -711,6 +813,62 @@ export default function NotebookDetailScreen() {
                     style={{ minHeight: 112, textAlignVertical: 'top' }}
                     value={textDrafts[item.id] ?? item.text}
                   />
+                  {page.blocks.slice(1).map((block) =>
+                    block.type === 'photo' ? (
+                      <View key={block.id} style={{ gap: Space.sm }}>
+                        {photoUrls[block.photoAssetId] ? (
+                          <Image
+                            accessibilityLabel="Notebook photo"
+                            contentFit="contain"
+                            source={{ uri: photoUrls[block.photoAssetId] }}
+                            style={{
+                              aspectRatio: 4 / 3,
+                              backgroundColor: Palette.surfaceMuted,
+                              borderRadius: Radius.control,
+                              width: '100%',
+                            }}
+                          />
+                        ) : (
+                          <View
+                            style={{
+                              alignItems: 'center',
+                              aspectRatio: 4 / 3,
+                              backgroundColor: Palette.surfaceMuted,
+                              borderRadius: Radius.control,
+                              justifyContent: 'center',
+                            }}>
+                            <AppText color={Palette.textMuted}>
+                              Loading photo…
+                            </AppText>
+                          </View>
+                        )}
+                        <AppButton
+                          accessibilityLabel="Remove photo from page"
+                          disabled={mutationDisabled}
+                          label="Remove Photo"
+                          onPress={() =>
+                            void runImmediateMutation(() =>
+                              mutate.deletePhotoBlock(detail.id, block.id)
+                            )
+                          }
+                          size="compact"
+                          style={{ alignSelf: 'flex-end', width: 132 }}
+                          variant="danger"
+                        />
+                      </View>
+                    ) : null
+                  )}
+                  <AppButton
+                    accessibilityLabel={`Add photo to page ${index + 1}`}
+                    disabled={mutationDisabled || photoBusyPage === page.id}
+                    label={
+                      photoBusyPage === page.id ? 'Uploading…' : 'Add Photo'
+                    }
+                    onPress={() => void addPhoto(page.id)}
+                    size="compact"
+                    style={{ alignSelf: 'flex-end', width: 112 }}
+                    variant="secondary"
+                  />
                   <View
                     style={{
                       alignItems: 'center',
@@ -773,6 +931,7 @@ export default function NotebookDetailScreen() {
                   <SaveLabel state={itemStates[item.id] ?? 'idle'} />
                 </View>
                   ),
+                  photo: () => <View />,
                 })
               )
             )}
