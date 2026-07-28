@@ -171,6 +171,15 @@ export default function SavedScreen() {
               Keep private notes and ideas together.
             </AppText>
           </Pressable>
+          {__DEV__ ? (
+            <AppButton
+              label="Photo transport test"
+              onPress={() => router.push('/photo-upload-dev')}
+              size="compact"
+              style={{ alignSelf: 'flex-start', marginTop: Space.md }}
+              variant="secondary"
+            />
+          ) : null}
         </View>
 
         <View style={{ marginBottom: Space.xxxl }}>

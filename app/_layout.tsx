@@ -29,6 +29,10 @@ export default function RootLayout() {
               options={{ title: 'Notebook' }}
             />
             <Stack.Screen
+              name="photo-upload-dev"
+              options={{ title: 'Photo upload verification' }}
+            />
+            <Stack.Screen
               name="trips/[tripId]/map"
               options={{ title: 'Trip Map' }}
             />
