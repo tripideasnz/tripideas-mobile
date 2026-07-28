@@ -45,7 +45,15 @@
           }
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": false,
+          "microphonePermission": false,
+          "photosPermission": "Allow TripIdeas to select a private photo for upload."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
