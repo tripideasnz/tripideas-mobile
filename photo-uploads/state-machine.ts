@@ -64,4 +64,3 @@ export function failPhotoUpload(
     lastErrorCode: retryable ? 'retry_limit_reached' : code,
   });
 }
-

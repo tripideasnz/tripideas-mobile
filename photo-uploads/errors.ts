@@ -32,4 +32,3 @@ export function safePhotoUploadMessage(code: PhotoUploadErrorCode): string {
       return 'The upload was interrupted. Try again.';
   }
 }
-

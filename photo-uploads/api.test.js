@@ -97,4 +97,3 @@ try {
   setActiveToken(null);
   setAuthenticatedSessionHandlers(null);
 }
-

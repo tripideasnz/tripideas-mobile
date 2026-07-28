@@ -136,4 +136,3 @@ export type LocalPhotoMetadata = {
   size: number;
   mimeType: string;
 };
-

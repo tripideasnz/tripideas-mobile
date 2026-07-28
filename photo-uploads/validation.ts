@@ -57,4 +57,3 @@ export function validatePhotoMetadata(
 
   return { contentType, fileSizeBytes: metadata.size };
 }
-

@@ -92,4 +92,3 @@ export const nativePhotoUploadDependencies: PhotoUploadEngineDependencies = {
   getRecord: (userId, uploadId) => photoUploadStorage.get(userId, uploadId),
   saveRecord: (record) => photoUploadStorage.set(record),
 };
-

@@ -65,4 +65,3 @@ export function createPhotoUploadStorage(storage: Storage = AsyncStorage) {
 }
 
 export const photoUploadStorage = createPhotoUploadStorage();
-

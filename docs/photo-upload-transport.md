@@ -1,6 +1,6 @@
 # Mobile photo upload transport
 
-Status: development-only foundation  
+Status: development-only foundation
 Target: staging Photo Upload API
 
 This module transports a selected private image into an owner-scoped
