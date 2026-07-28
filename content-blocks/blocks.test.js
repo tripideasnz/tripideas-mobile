@@ -47,11 +47,21 @@ const textBlock = (id, position, text = '') => ({
 assert.deepEqual(parseContentBlock(textBlock('text-1', 0, 'Milford'), readers), {
   ...textBlock('text-1', 0, 'Milford'),
 });
+const photoBlock = {
+  id: 'photo-1',
+  type: 'photo',
+  position: 1,
+  photoAssetId: 'asset-1',
+  clientRequestId: 'request-1',
+  createdAt: '2026-07-27T00:00:00.000Z',
+  updatedAt: '2026-07-27T00:00:00.000Z',
+};
+assert.deepEqual(parseContentBlock(photoBlock, readers), photoBlock);
 assert.throws(
-  () => parseContentBlock({ ...textBlock('photo-1', 0), type: 'photo' }, readers),
+  () => parseContentBlock({ ...photoBlock, type: 'map' }, readers),
   /unsupported_content_block/
 );
-console.log('✓ the registry parses Text blocks and rejects unregistered block types');
+console.log('✓ the registry parses Text and Photo blocks');
 
 const source = [
   textBlock('third', 2),
@@ -87,9 +97,24 @@ const rendered = renderContentBlock(textBlock('text-2', 4), 3, {
     renderedIndex = index;
     return createElement('TextBlock', { blockId: block.id });
   },
+  photo() {
+    return createElement('PhotoBlock');
+  },
 });
 assert.equal(renderedBlock.id, 'text-2');
 assert.equal(renderedIndex, 3);
 assert.equal(rendered.type, 'TextBlock');
 assert.equal(rendered.props.blockId, 'text-2');
 console.log('✓ the generic renderer dispatches Text through its registered renderer');
+
+const renderedPhoto = renderContentBlock(photoBlock, 1, {
+  text() {
+    return createElement('TextBlock');
+  },
+  photo(block) {
+    return createElement('PhotoBlock', { assetId: block.photoAssetId });
+  },
+});
+assert.equal(renderedPhoto.type, 'PhotoBlock');
+assert.equal(renderedPhoto.props.assetId, 'asset-1');
+console.log('✓ the generic renderer dispatches Photo blocks');

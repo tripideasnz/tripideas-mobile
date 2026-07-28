@@ -9,11 +9,14 @@ import {
 } from '../lib/api-client.ts';
 import {
   addNotebookTextItem,
+  addNotebookPhotoBlock,
+  authorizePhotoRead,
   createNotebook,
   deleteNotebook,
   deleteNotebookTextItem,
   listNotebooks,
   readNotebook,
+  readNotebookContent,
   reorderNotebookItems,
   updateNotebook,
   updateNotebookTextItem,
@@ -86,6 +89,72 @@ test('list, create, read, update, delete and item requests match the contract', 
     expectedVersion: 2,
     text: 'Hello',
     title: null,
+  });
+});
+
+test('owner Photo Block requests preserve page ordering and hide delivery details', async () => {
+  const calls = [];
+  setActiveToken('mobile-token');
+  const content = {
+    ...detail,
+    pages: [{
+      id: 'page-1',
+      position: 0,
+      title: 'Arrival',
+      createdAt: detail.createdAt,
+      updatedAt: detail.updatedAt,
+      blocks: [
+        {
+          id: 'text-1',
+          type: 'text',
+          position: 0,
+          text: 'Notes',
+          createdAt: detail.createdAt,
+          updatedAt: detail.updatedAt,
+        },
+        {
+          id: 'photo-1',
+          type: 'photo',
+          position: 1,
+          photoAssetId: 'asset-1',
+          clientRequestId: 'photo-block:request-1',
+          createdAt: detail.createdAt,
+          updatedAt: detail.updatedAt,
+        },
+      ],
+    }],
+  };
+  globalThis.fetch = async (input, init) => {
+    calls.push([String(input), init]);
+    if (String(input).endsWith('/read-authorization')) {
+      return Response.json({
+        method: 'GET',
+        url: 'https://storage.example.test/signed-read',
+        expiresAt: detail.updatedAt,
+      });
+    }
+    return Response.json(content);
+  };
+
+  const read = await readNotebookContent('notebook-1');
+  assert.equal(read.pages[0].blocks[0].title, 'Arrival');
+  assert.equal(read.pages[0].blocks[1].photoAssetId, 'asset-1');
+  await addNotebookPhotoBlock({
+    notebookId: 'notebook-1',
+    pageId: 'page-1',
+    photoAssetId: 'asset-1',
+    clientRequestId: 'photo-block:request-1',
+    expectedVersion: 2,
+    position: 1,
+  });
+  const authorization = await authorizePhotoRead('asset-1');
+  assert.equal(authorization.method, 'GET');
+  assert.deepEqual(JSON.parse(String(calls[1][1]?.body)), {
+    pageId: 'page-1',
+    photoAssetId: 'asset-1',
+    clientRequestId: 'photo-block:request-1',
+    expectedVersion: 2,
+    position: 1,
   });
 });
 
