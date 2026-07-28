@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 
 import { createNotebookPhotoBlockStorage } from './storage.ts';
+import { notebookPhotoPreviewUris } from './previews.ts';
 
 const values = new Map();
 const storage = createNotebookPhotoBlockStorage({
@@ -29,3 +30,28 @@ assert.equal(
   false
 );
 console.log('✓ pending Notebook Photo Blocks are owner-scoped and idempotent');
+
+assert.deepEqual(
+  notebookPhotoPreviewUris(
+    [pending],
+    [{
+      id: pending.uploadId,
+      userId: pending.userId,
+      localFileUri: 'file:///private/local-preview.jpg',
+      contentType: 'image/jpeg',
+      fileSizeBytes: 3,
+      checksum: 'safe-checksum',
+      clientRequestId: 'upload-request',
+      assetId: null,
+      assetVersion: null,
+      state: 'VALIDATED',
+      retryCount: 0,
+      lastErrorCode: null,
+      createdAt: pending.createdAt,
+      updatedAt: pending.createdAt,
+    }],
+    pending.notebookId
+  ),
+  { [pending.pageId]: 'file:///private/local-preview.jpg' }
+);
+console.log('✓ restart recovery restores owner-scoped local previews');

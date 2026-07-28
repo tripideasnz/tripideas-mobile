@@ -1,5 +1,6 @@
 import type { NotebookDetail } from '@/notebooks/types';
 import {
+  listNativePhotoUploads,
   prepareNativePhotoUpload,
   startNativePhotoUpload,
 } from '@/photo-uploads/service';
@@ -8,6 +9,7 @@ import {
   notebookPhotoBlockStorage,
   type PendingNotebookPhotoBlock,
 } from './storage';
+import { notebookPhotoPreviewUris } from './previews';
 
 type AddBlock = (input: {
   id: string;
@@ -79,4 +81,15 @@ export async function resumeNotebookPhotos(
     completed,
     pendingCount: Math.max(0, pending.length - completed.length),
   };
+}
+
+export async function listNotebookPhotoPreviews(
+  userId: string,
+  notebookId: string
+): Promise<Record<string, string>> {
+  const [pending, uploads] = await Promise.all([
+    notebookPhotoBlockStorage.list(userId),
+    listNativePhotoUploads(userId),
+  ]);
+  return notebookPhotoPreviewUris(pending, uploads, notebookId);
 }

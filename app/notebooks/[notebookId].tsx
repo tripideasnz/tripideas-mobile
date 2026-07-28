@@ -49,6 +49,7 @@ import type { NotebookDetail } from '@/notebooks/types';
 import { pickPhotoForUpload } from '@/photo-uploads/picker';
 import {
   addNotebookPhoto,
+  listNotebookPhotoPreviews,
   resumeNotebookPhotos,
 } from '@/notebook-photo-blocks/service';
 
@@ -89,6 +90,9 @@ export default function NotebookDetailScreen() {
   const [itemStates, setItemStates] = useState<Record<string, SaveState>>({});
   const [actionError, setActionError] = useState<string | null>(null);
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
+  const [localPhotoPreviews, setLocalPhotoPreviews] = useState<
+    Record<string, string>
+  >({});
   const [photoBusyPage, setPhotoBusyPage] = useState<string | null>(null);
   const [pendingPhotoRetries, setPendingPhotoRetries] = useState(0);
   const titleRef = useRef('');
@@ -100,6 +104,7 @@ export default function NotebookDetailScreen() {
   const metadataTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const itemTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const retryConflictRef = useRef<RetryConflict | null>(null);
+  const photoRefreshAttemptsRef = useRef<Record<string, number>>({});
   const initializedNotebookRef = useRef<string | null>(null);
   const hadAuthenticatedSessionRef = useRef(false);
   const scrollRef = useRef<ScrollView>(null);
@@ -259,6 +264,7 @@ export default function NotebookDetailScreen() {
       return;
     }
     setPhotoUrls({});
+    setLocalPhotoPreviews({});
     if (!isLoadingSession && hadAuthenticatedSessionRef.current) {
       hadAuthenticatedSessionRef.current = false;
       router.replace('/notebooks');
@@ -285,6 +291,9 @@ export default function NotebookDetailScreen() {
   useEffect(() => {
     const ownerId = session?.userId;
     if (!ownerId || !notebookId) return;
+    void listNotebookPhotoPreviews(ownerId, notebookId).then(
+      setLocalPhotoPreviews
+    );
     void resumeNotebookPhotos(
       ownerId,
       notebookId,
@@ -292,7 +301,10 @@ export default function NotebookDetailScreen() {
     ).then(({ completed, pendingCount }) => {
       setPendingPhotoRetries(pendingCount);
       const latest = completed.at(-1);
-      if (latest) applyAuthoritativeDetail(latest);
+      if (latest) {
+        setLocalPhotoPreviews({});
+        applyAuthoritativeDetail(latest);
+      }
     });
   }, [
     applyAuthoritativeDetail,
@@ -309,16 +321,19 @@ export default function NotebookDetailScreen() {
     );
     for (const assetId of photoIds) {
       if (photoUrls[assetId]) continue;
-      void authorizePhotoRead(assetId)
-        .then((authorization) => {
-          setPhotoUrls((current) => ({
-            ...current,
-            [assetId]: authorization.url,
-          }));
-        })
-        .catch(() => undefined);
+      void refreshPhotoUrl(assetId);
     }
   }, [pages, photoUrls]);
+
+  const refreshPhotoUrl = async (assetId: string) => {
+    try {
+      const authorization = await authorizePhotoRead(assetId);
+      setPhotoUrls((current) => ({
+        ...current,
+        [assetId]: authorization.url,
+      }));
+    } catch { /* keep the current safe placeholder or last in-memory URL */ }
+  };
 
   useEffect(() => () => {
     if (metadataTimerRef.current) clearTimeout(metadataTimerRef.current);
@@ -529,6 +544,10 @@ export default function NotebookDetailScreen() {
     try {
       const selected = await pickPhotoForUpload();
       if (!selected) return;
+      setLocalPhotoPreviews((current) => ({
+        ...current,
+        [pageId]: selected.uri,
+      }));
       setPhotoBusyPage(pageId);
       const latest = await addNotebookPhoto(
         session.userId,
@@ -537,7 +556,14 @@ export default function NotebookDetailScreen() {
         selected,
         mutate.addPhotoBlock
       );
-      if (latest) applyAuthoritativeDetail(latest);
+      if (latest) {
+        setLocalPhotoPreviews((current) => {
+          const next = { ...current };
+          delete next[pageId];
+          return next;
+        });
+        applyAuthoritativeDetail(latest);
+      }
       else {
         setPendingPhotoRetries((current) => current + 1);
         setActionError('Photo upload paused. Retry when connectivity returns.');
@@ -559,7 +585,12 @@ export default function NotebookDetailScreen() {
     );
     setPendingPhotoRetries(pendingCount);
     const latest = completed.at(-1);
-    if (latest) applyAuthoritativeDetail(latest);
+    if (latest) {
+      setLocalPhotoPreviews(
+        await listNotebookPhotoPreviews(session.userId, detail.id)
+      );
+      applyAuthoritativeDetail(latest);
+    }
     if (pendingCount > 0) {
       setActionError('Photo upload is still paused. Please try again.');
     }
@@ -820,6 +851,17 @@ export default function NotebookDetailScreen() {
                           <Image
                             accessibilityLabel="Notebook photo"
                             contentFit="contain"
+                            onError={() => {
+                              const attempts =
+                                photoRefreshAttemptsRef.current[
+                                  block.photoAssetId
+                                ] ?? 0;
+                              if (attempts >= 2) return;
+                              photoRefreshAttemptsRef.current[
+                                block.photoAssetId
+                              ] = attempts + 1;
+                              void refreshPhotoUrl(block.photoAssetId);
+                            }}
                             source={{ uri: photoUrls[block.photoAssetId] }}
                             style={{
                               aspectRatio: 4 / 3,
@@ -858,6 +900,24 @@ export default function NotebookDetailScreen() {
                       </View>
                     ) : null
                   )}
+                  {localPhotoPreviews[page.id] ? (
+                    <View style={{ gap: Space.sm }}>
+                      <Image
+                        accessibilityLabel="Pending Notebook photo preview"
+                        contentFit="contain"
+                        source={{ uri: localPhotoPreviews[page.id] }}
+                        style={{
+                          aspectRatio: 4 / 3,
+                          backgroundColor: Palette.surfaceMuted,
+                          borderRadius: Radius.control,
+                          width: '100%',
+                        }}
+                      />
+                      <AppText color={Palette.textMuted} variant="caption">
+                        Photo upload pending
+                      </AppText>
+                    </View>
+                  ) : null}
                   <AppButton
                     accessibilityLabel={`Add photo to page ${index + 1}`}
                     disabled={mutationDisabled || photoBusyPage === page.id}
