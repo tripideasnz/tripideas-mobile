@@ -758,6 +758,33 @@ export default function NotebookDetailScreen() {
             )}
               <SaveLabel state={metadataState} />
             </View>
+            <View
+              style={{
+                borderColor: Palette.border,
+                borderRadius: Radius.card,
+                borderWidth: 1,
+                gap: Space.sm,
+                padding: Space.lg,
+              }}>
+              <AppText variant="cardTitle">Sharing</AppText>
+              <AppText color={Palette.textMuted}>
+                Create and manage read-only links to this Notebook.
+              </AppText>
+              <AppButton
+                accessibilityLabel="Manage Notebook sharing"
+                disabled={!session}
+                label="Manage Sharing"
+                onPress={() =>
+                  router.push({
+                    pathname: '/notebooks/[notebookId]/sharing',
+                    params: { notebookId: detail.id },
+                  })
+                }
+                size="compact"
+                style={{ alignSelf: 'flex-start' }}
+                variant="secondary"
+              />
+            </View>
           </View>
 
           <View

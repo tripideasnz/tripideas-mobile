@@ -29,6 +29,10 @@ export default function RootLayout() {
               options={{ title: 'Notebook' }}
             />
             <Stack.Screen
+              name="notebooks/[notebookId]/sharing"
+              options={{ title: 'Sharing' }}
+            />
+            <Stack.Screen
               name="photo-upload-dev"
               options={{ title: 'Photo upload verification' }}
             />
