@@ -3,6 +3,7 @@ import {
   useLocalSearchParams,
   useRouter,
 } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { HeaderBackButton } from '@react-navigation/elements';
 import { Image } from 'expo-image';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -84,6 +85,7 @@ export default function NotebookDetailScreen() {
   const [descriptionEditing, setDescriptionEditing] = useState(false);
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
   const [descriptionOverflows, setDescriptionOverflows] = useState(false);
+  const [highlightedPageId, setHighlightedPageId] = useState<string | null>(null);
   const [titleDrafts, setTitleDrafts] = useState<Record<string, string>>({});
   const [textDrafts, setTextDrafts] = useState<Record<string, string>>({});
   const [metadataState, setMetadataState] = useState<SaveState>('idle');
@@ -109,9 +111,11 @@ export default function NotebookDetailScreen() {
   const hadAuthenticatedSessionRef = useRef(false);
   const scrollRef = useRef<ScrollView>(null);
   const blockSectionOffset = useRef(0);
+  const stickyToolbarHeight = useRef(0);
   const blockOffsets = useRef<Record<string, number>>({});
   const pageTitleRefs = useRef<Record<string, TextInput | null>>({});
   const pendingScrollRef = useRef<{ focusTitle: boolean; itemId: string } | null>(null);
+  const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleBack = useCallback(() => {
     backFromNotebookDetail(router);
@@ -125,7 +129,11 @@ export default function NotebookDetailScreen() {
     if (y === undefined) return false;
     scrollRef.current?.scrollTo({
       animated: true,
-      y: notebookBlockScrollOffset(blockSectionOffset.current, y),
+      y: Math.max(
+        0,
+        notebookBlockScrollOffset(blockSectionOffset.current, y) -
+          stickyToolbarHeight.current
+      ),
     });
     if (focusTitle) {
       requestAnimationFrame(() => pageTitleRefs.current[itemId]?.focus());
@@ -138,6 +146,12 @@ export default function NotebookDetailScreen() {
     itemId: string,
     focusTitle = false
   ) => {
+    if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+    setHighlightedPageId(itemId);
+    highlightTimerRef.current = setTimeout(() => {
+      setHighlightedPageId((current) => current === itemId ? null : current);
+      highlightTimerRef.current = null;
+    }, 500);
     pendingScrollRef.current = { focusTitle, itemId };
     Keyboard.dismiss();
     requestAnimationFrame(() => {
@@ -337,6 +351,7 @@ export default function NotebookDetailScreen() {
 
   useEffect(() => () => {
     if (metadataTimerRef.current) clearTimeout(metadataTimerRef.current);
+    if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
     Object.values(itemTimersRef.current).forEach(clearTimeout);
   }, []);
 
@@ -538,6 +553,56 @@ export default function NotebookDetailScreen() {
     }
   };
 
+  const confirmDeletePage = (itemId: string) => {
+    Alert.alert(
+      'Delete this page?',
+      'This page and its photos will be removed from this Notebook.',
+      [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete Page',
+        style: 'destructive',
+        onPress: () => {
+          const timer = itemTimersRef.current[itemId];
+          if (timer) clearTimeout(timer);
+          delete itemTimersRef.current[itemId];
+          const currentIndex = pages.findIndex((page) => page.id === itemId);
+          const targetId =
+            pages[currentIndex + 1]?.id ?? pages[currentIndex - 1]?.id;
+          setActionError(null);
+          void mutate.deleteBlock(detail.id, itemId)
+            .then((latest) => {
+              applyAuthoritativeDetail(latest);
+              if (targetId) navigateToPage(targetId);
+            })
+            .catch((error) => {
+              handleMutationError(error, itemId);
+            });
+        },
+      },
+      ]
+    );
+  };
+
+  const confirmDeleteNotebook = () => {
+    Alert.alert(
+      'Delete Notebook?',
+      'This removes the Notebook and all its pages.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            void deleteNotebook(detail.id)
+              .then(() => router.replace('/notebooks'))
+              .catch(handleMutationError);
+          },
+        },
+      ]
+    );
+  };
+
   const addPhoto = async (pageId: string) => {
     if (!session) return;
     setActionError(null);
@@ -683,13 +748,58 @@ export default function NotebookDetailScreen() {
                 scheduleMetadataSave();
               }}
               style={{
+                backgroundColor: 'transparent',
+                borderWidth: 0,
                 fontSize: 28,
                 fontWeight: '700',
                 lineHeight: 34,
-                minHeight: 58,
+                minHeight: 44,
+                paddingHorizontal: 0,
+                paddingVertical: 0,
               }}
               value={title}
             />
+            <View
+              style={{
+                alignItems: 'center',
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+              }}>
+              <Pressable
+                accessibilityLabel="Share this Notebook"
+                accessibilityRole="button"
+                disabled={!session}
+                onPress={() =>
+                  router.push({
+                    pathname: '/notebooks/[notebookId]/sharing',
+                    params: { notebookId: detail.id },
+                  })
+                }
+                style={({ pressed }) => ({
+                  alignItems: 'center',
+                  borderColor: Palette.trip,
+                  borderRadius: Radius.control,
+                  borderWidth: 1,
+                  height: 44,
+                  justifyContent: 'center',
+                  opacity: !session ? 0.4 : pressed ? 0.65 : 1,
+                  width: 52,
+                })}>
+                <Ionicons
+                  color={Palette.trip}
+                  name="share-outline"
+                  size={22}
+                />
+              </Pressable>
+              <AppButton
+                accessibilityLabel="Delete this Notebook"
+                disabled={mutationDisabled}
+                label="Delete"
+                onPress={confirmDeleteNotebook}
+                size="compact"
+                variant="danger"
+              />
+            </View>
             {descriptionEditing ? (
               <AppTextInput
                 accessibilityLabel="Notebook description"
@@ -706,92 +816,95 @@ export default function NotebookDetailScreen() {
                   scheduleMetadataSave();
                 }}
                 placeholder="Optional description"
-                style={{ minHeight: 96, textAlignVertical: 'top' }}
+                style={{ minHeight: 112, textAlignVertical: 'top' }}
                 value={description}
               />
             ) : (
-              <View style={{ gap: Space.xs }}>
-                <View
-                  style={
-                    descriptionExpanded
-                      ? undefined
-                      : { maxHeight: 72, overflow: 'hidden' }
-                  }>
-                  <Pressable
-                    accessibilityLabel={
-                      description ? 'Edit Notebook description' : 'Add Notebook description'
-                    }
-                    accessibilityRole="button"
-                    disabled={mutationDisabled}
-                    onPress={() => setDescriptionEditing(true)}>
+              <View
+                style={{
+                  borderColor: Palette.border,
+                  borderRadius: Radius.control,
+                  borderWidth: 1,
+                  gap: Space.sm,
+                  padding: Space.md,
+                }}>
+                <Pressable
+                  accessibilityHint="Enters description editing mode."
+                  accessibilityLabel={
+                    description
+                      ? 'Edit Notebook description'
+                      : 'Add Notebook description'
+                  }
+                  accessibilityRole="button"
+                  disabled={mutationDisabled}
+                  onPress={() => setDescriptionEditing(true)}
+                  style={({ pressed }) => ({
+                    opacity: pressed ? 0.7 : 1,
+                  })}>
+                <View>
                     <AppText
                       color={description ? Palette.textBody : Palette.textMuted}
-                      onTextLayout={(event) => {
-                        setDescriptionOverflows(event.nativeEvent.lines.length > 3);
-                      }}>
+                      numberOfLines={descriptionExpanded ? undefined : 3}>
                       {description || 'Add a description'}
                     </AppText>
-                  </Pressable>
                 </View>
+                </Pressable>
+                {description ? (
+                  <View
+                    pointerEvents="none"
+                    style={{
+                      left: 0,
+                      opacity: 0,
+                      position: 'absolute',
+                      right: 0,
+                    }}>
+                    <AppText
+                      accessibilityElementsHidden
+                      importantForAccessibility="no-hide-descendants"
+                      onTextLayout={(event) => {
+                        setDescriptionOverflows(
+                          event.nativeEvent.lines.length > 3
+                        );
+                      }}>
+                      {description}
+                    </AppText>
+                  </View>
+                ) : null}
                 {descriptionOverflows || descriptionExpanded ? (
                   <Pressable
                     accessibilityLabel={
                       descriptionExpanded
-                        ? 'Collapse Notebook description'
-                        : 'Expand Notebook description'
+                        ? 'Show less of Notebook description'
+                        : 'Show more of Notebook description'
                     }
                     accessibilityRole="button"
-                    onPress={() => setDescriptionExpanded((current) => !current)}>
+                    onPress={() =>
+                      setDescriptionExpanded((current) => !current)
+                    }
+                    style={{ alignSelf: 'flex-end' }}>
                     <AppText
                       color={Palette.textMuted}
                       style={{ fontStyle: 'italic' }}
                       variant="caption">
-                      {descriptionExpanded ? '... show less' : '... read more'}
+                      {descriptionExpanded ? '... show less' : '... show more'}
                     </AppText>
                   </Pressable>
-                ) : (
-                  <AppText color={Palette.textMuted} variant="caption">
-                    Tap to edit
-                  </AppText>
-                )}
+                ) : null}
               </View>
             )}
               <SaveLabel state={metadataState} />
             </View>
-            <View
-              style={{
-                borderColor: Palette.border,
-                borderRadius: Radius.card,
-                borderWidth: 1,
-                gap: Space.sm,
-                padding: Space.lg,
-              }}>
-              <AppText variant="cardTitle">Sharing</AppText>
-              <AppText color={Palette.textMuted}>
-                Create and manage read-only links to this Notebook.
-              </AppText>
-              <AppButton
-                accessibilityLabel="Manage Notebook sharing"
-                disabled={!session}
-                label="Manage Sharing"
-                onPress={() =>
-                  router.push({
-                    pathname: '/notebooks/[notebookId]/sharing',
-                    params: { notebookId: detail.id },
-                  })
-                }
-                size="compact"
-                style={{ alignSelf: 'flex-start' }}
-                variant="secondary"
-              />
-            </View>
           </View>
 
           <View
+            onLayout={(event: LayoutChangeEvent) => {
+              stickyToolbarHeight.current = event.nativeEvent.layout.height;
+            }}
             style={{
+              alignItems: 'center',
               backgroundColor: Palette.background,
               flexDirection: 'row',
-              justifyContent: 'flex-end',
+              justifyContent: 'space-between',
               paddingVertical: Space.sm,
             }}>
             <AppButton
@@ -800,7 +913,7 @@ export default function NotebookDetailScreen() {
               label="Add Page"
               onPress={() => void addPage()}
               size="compact"
-              style={{ width: 112 }}
+              style={{ marginLeft: 'auto', width: 112 }}
             />
           </View>
 
@@ -820,37 +933,96 @@ export default function NotebookDetailScreen() {
                 <View
                   key={item.id}
                   onLayout={(event: LayoutChangeEvent) => {
-                    blockOffsets.current[item.id] = event.nativeEvent.layout.y;
+                    const y = event.nativeEvent.layout.y;
+                    blockOffsets.current[item.id] = y;
+                    blockOffsets.current[page.id] = y;
                     requestAnimationFrame(finishPendingScroll);
                   }}
                   style={{
-                    borderColor: Palette.border,
+                    backgroundColor: Palette.background,
+                    borderColor:
+                      highlightedPageId === item.id ||
+                      highlightedPageId === page.id
+                        ? Palette.trip
+                        : Palette.border,
                     borderRadius: Radius.card,
                     borderWidth: 1,
                     gap: Space.md,
                     padding: Space.lg,
                   }}>
-                  <AppTextInput
-                    ref={(input) => {
-                      pageTitleRefs.current[item.id] = input;
-                    }}
-                    accessibilityLabel={`Page ${index + 1} title`}
-                    editable={!mutationDisabled}
-                    maxLength={200}
-                    onChangeText={(value) => {
-                      titleDraftsRef.current = {
-                        ...titleDraftsRef.current,
-                        [item.id]: value,
-                      };
-                      setTitleDrafts((current) => ({ ...current, [item.id]: value }));
-                      itemRevisionsRef.current[item.id] =
-                        (itemRevisionsRef.current[item.id] ?? 0) + 1;
-                      setItemStates((current) => ({ ...current, [item.id]: 'idle' }));
-                      scheduleTextSave(item.id);
-                    }}
-                    placeholder="Page title"
-                    value={titleDrafts[item.id] ?? item.title ?? ''}
-                  />
+                  <View
+                    style={{
+                      alignItems: 'center',
+                      flexDirection: 'row',
+                      gap: Space.xs,
+                    }}>
+                    <AppTextInput
+                      ref={(input) => {
+                        pageTitleRefs.current[item.id] = input;
+                      }}
+                      accessibilityLabel={`Page ${index + 1} title`}
+                      editable={!mutationDisabled}
+                      maxLength={200}
+                      onChangeText={(value) => {
+                        titleDraftsRef.current = {
+                          ...titleDraftsRef.current,
+                          [item.id]: value,
+                        };
+                        setTitleDrafts((current) => ({ ...current, [item.id]: value }));
+                        itemRevisionsRef.current[item.id] =
+                          (itemRevisionsRef.current[item.id] ?? 0) + 1;
+                        setItemStates((current) => ({ ...current, [item.id]: 'idle' }));
+                        scheduleTextSave(item.id);
+                      }}
+                      placeholder="Page title"
+                      style={{
+                        backgroundColor: 'transparent',
+                        borderWidth: 0,
+                        flex: 1,
+                        fontWeight: '700',
+                        paddingHorizontal: 0,
+                        paddingVertical: 0,
+                      }}
+                      value={titleDrafts[item.id] ?? item.title ?? ''}
+                    />
+                    <PageNavigationButton
+                      accessibilityLabel="Go to previous page"
+                      disabled={index === 0}
+                      icon="arrow-up"
+                      onPress={() => {
+                        const target = adjacentContentPageId(pages, page.id, -1);
+                        if (target) navigateToPage(target);
+                      }}
+                    />
+                    <PageNavigationButton
+                      accessibilityLabel="Go to next page"
+                      disabled={index === pages.length - 1}
+                      icon="arrow-down"
+                      onPress={() => {
+                        const target = adjacentContentPageId(pages, page.id, 1);
+                        if (target) navigateToPage(target);
+                      }}
+                    />
+                    <Pressable
+                      accessibilityLabel={`Delete page ${index + 1}`}
+                      accessibilityRole="button"
+                      disabled={mutationDisabled}
+                      hitSlop={8}
+                      onPress={() => confirmDeletePage(item.id)}
+                      style={({ pressed }) => ({
+                        alignItems: 'center',
+                        height: 36,
+                        justifyContent: 'center',
+                        opacity: mutationDisabled ? 0.35 : pressed ? 0.55 : 1,
+                        width: 36,
+                      })}>
+                      <Ionicons
+                        color={Palette.textMuted}
+                        name="trash-outline"
+                        size={20}
+                      />
+                    </Pressable>
+                  </View>
                   <AppTextInput
                     accessibilityLabel={`Page ${index + 1} body`}
                     editable={!mutationDisabled}
@@ -868,12 +1040,17 @@ export default function NotebookDetailScreen() {
                       scheduleTextSave(item.id);
                     }}
                     placeholder="Write something…"
-                    style={{ minHeight: 112, textAlignVertical: 'top' }}
+                    style={{
+                      minHeight: 64,
+                      textAlignVertical: 'top',
+                    }}
                     value={textDrafts[item.id] ?? item.text}
                   />
                   {page.blocks.slice(1).map((block) =>
                     block.type === 'photo' ? (
-                      <View key={block.id} style={{ gap: Space.sm }}>
+                      <View
+                        key={block.id}
+                        style={{ position: 'relative' }}>
                         {photoUrls[block.photoAssetId] ? (
                           <Image
                             accessibilityLabel="Notebook photo"
@@ -911,19 +1088,35 @@ export default function NotebookDetailScreen() {
                             </AppText>
                           </View>
                         )}
-                        <AppButton
+                        <Pressable
                           accessibilityLabel="Remove photo from page"
+                          accessibilityRole="button"
                           disabled={mutationDisabled}
-                          label="Remove Photo"
                           onPress={() =>
                             void runImmediateMutation(() =>
                               mutate.deletePhotoBlock(detail.id, block.id)
                             )
                           }
-                          size="compact"
-                          style={{ alignSelf: 'flex-end', width: 132 }}
-                          variant="danger"
-                        />
+                          style={({ pressed }) => ({
+                            alignItems: 'center',
+                            backgroundColor: Palette.surface,
+                            borderColor: Palette.trip,
+                            borderRadius: Radius.pill,
+                            borderWidth: 1,
+                            bottom: Space.sm,
+                            height: 36,
+                            justifyContent: 'center',
+                            opacity: mutationDisabled ? 0.4 : pressed ? 0.65 : 1,
+                            position: 'absolute',
+                            right: Space.sm,
+                            width: 36,
+                          })}>
+                          <AppText
+                            color={Palette.trip}
+                            style={{ fontSize: 24, lineHeight: 26 }}>
+                            ×
+                          </AppText>
+                        </Pressable>
                       </View>
                     ) : null
                   )}
@@ -956,65 +1149,6 @@ export default function NotebookDetailScreen() {
                     style={{ alignSelf: 'flex-end', width: 112 }}
                     variant="secondary"
                   />
-                  <View
-                    style={{
-                      alignItems: 'center',
-                      flexDirection: 'row',
-                      justifyContent: 'space-between',
-                    }}>
-                    <View style={{ flexDirection: 'row', gap: Space.sm }}>
-                      <AppButton
-                        accessibilityLabel="Go to previous page"
-                        disabled={mutationDisabled || index === 0}
-                        label="↑"
-                        onPress={() => {
-                          const target = adjacentContentPageId(pages, page.id, -1);
-                          if (target) navigateToPage(target);
-                        }}
-                        size="compact"
-                        style={{ width: 44 }}
-                        variant="secondary"
-                      />
-                      <AppButton
-                        accessibilityLabel="Go to next page"
-                        disabled={mutationDisabled || index === pages.length - 1}
-                        label="↓"
-                        onPress={() => {
-                          const target = adjacentContentPageId(pages, page.id, 1);
-                          if (target) navigateToPage(target);
-                        }}
-                        size="compact"
-                        style={{ width: 44 }}
-                        variant="secondary"
-                      />
-                    </View>
-                    <AppButton
-                      accessibilityLabel="Delete page"
-                      disabled={mutationDisabled}
-                      label="Delete"
-                      onPress={() =>
-                        Alert.alert('Delete page?', 'This page will be removed.', [
-                          { text: 'Cancel', style: 'cancel' },
-                          {
-                            text: 'Delete',
-                            style: 'destructive',
-                            onPress: () => {
-                              const timer = itemTimersRef.current[item.id];
-                              if (timer) clearTimeout(timer);
-                              delete itemTimersRef.current[item.id];
-                              void runImmediateMutation(
-                                () => mutate.deleteBlock(detail.id, item.id),
-                                item.id
-                              );
-                            },
-                          },
-                        ])
-                      }
-                      size="compact"
-                      style={{ width: 112 }}
-                      variant="danger"
-                    />
-                  </View>
                   <SaveLabel state={itemStates[item.id] ?? 'idle'} />
                 </View>
                   ),
@@ -1024,31 +1158,6 @@ export default function NotebookDetailScreen() {
             )}
           </View>
 
-          <AppButton
-            accessibilityLabel="Delete this Notebook"
-            disabled={mutationDisabled}
-            label="Delete Notebook"
-            onPress={() =>
-              Alert.alert(
-                'Delete Notebook?',
-                'This removes the Notebook and all its pages.',
-                [
-                  { text: 'Cancel', style: 'cancel' },
-                  {
-                    text: 'Delete',
-                    style: 'destructive',
-                    onPress: () => {
-                      void deleteNotebook(detail.id)
-                        .then(() => router.replace('/notebooks'))
-                        .catch(handleMutationError);
-                    },
-                  },
-                ]
-              )
-            }
-            size="compact"
-            variant="danger"
-          />
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -1066,6 +1175,40 @@ function Notice({ text }: { text: string }) {
       }}>
       <AppText>{text}</AppText>
     </View>
+  );
+}
+
+function PageNavigationButton({
+  accessibilityLabel,
+  disabled,
+  icon,
+  onPress,
+}: {
+  accessibilityLabel: string;
+  disabled: boolean;
+  icon: 'arrow-down' | 'arrow-up';
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityLabel={accessibilityLabel}
+      accessibilityRole="button"
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      hitSlop={8}
+      onPress={onPress}
+      style={({ pressed }) => ({
+        alignItems: 'center',
+        borderColor: Palette.border,
+        borderRadius: Radius.control,
+        borderWidth: 1,
+        height: 36,
+        justifyContent: 'center',
+        opacity: disabled ? 0.3 : pressed ? 0.55 : 1,
+        width: 36,
+      })}>
+      <Ionicons color={Palette.textBody} name={icon} size={18} />
+    </Pressable>
   );
 }
 

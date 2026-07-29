@@ -1,7 +1,10 @@
 import * as Clipboard from 'expo-clipboard';
 import * as Crypto from 'expo-crypto';
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
+  type ComponentProps,
   useCallback,
   useEffect,
   useMemo,
@@ -11,6 +14,7 @@ import {
 import {
   ActivityIndicator,
   Alert,
+  Pressable,
   RefreshControl,
   ScrollView,
   Share,
@@ -23,6 +27,7 @@ import { useSession } from '@/auth/provider';
 import { AppButton } from '@/components/ui/app-button';
 import { AppText } from '@/components/ui/app-text';
 import { Palette, Radius, Screen, Space } from '@/constants/design';
+import { pagesFromContentBlocks } from '@/content-blocks/pages';
 import {
   createNotebookShare,
   listNotebookShares,
@@ -35,7 +40,6 @@ import {
 } from '@/notebook-sharing/actions';
 import {
   activeShareCapabilities,
-  displayShareDate,
   sharingErrorMessage,
 } from '@/notebook-sharing/model';
 import type {
@@ -43,6 +47,7 @@ import type {
   NotebookShareState,
 } from '@/notebook-sharing/types';
 import { useNotebooks } from '@/notebooks/provider';
+import { authorizePhotoRead } from '@/notebooks/api';
 
 type ShareAction = 'create' | `revoke:${string}` | `rotate:${string}` | null;
 
@@ -60,6 +65,18 @@ export default function NotebookSharingScreen() {
   const { isLoading: isLoadingSession, session } = useSession();
   const { details } = useNotebooks();
   const notebook = notebookId ? details[notebookId] : undefined;
+  const pages = useMemo(
+    () =>
+      notebook
+        ? notebook.pages ?? pagesFromContentBlocks(notebook.items)
+        : [],
+    [notebook]
+  );
+  const previewPage = pages[0];
+  const previewText = previewPage?.blocks.find((block) => block.type === 'text');
+  const previewPhoto = previewPage?.blocks.find(
+    (block) => block.type === 'photo'
+  );
   const colorScheme = useColorScheme();
   const dark = colorScheme === 'dark';
   const colors = useMemo(
@@ -88,6 +105,7 @@ export default function NotebookSharingScreen() {
   const [action, setAction] = useState<ShareAction>(null);
   const [error, setError] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState('');
+  const [previewPhotoUrl, setPreviewPhotoUrl] = useState<string | null>(null);
   const mountedRef = useRef(true);
   const createRequestRef = useRef<string | null>(null);
   const rotateRequestsRef = useRef<Record<string, string>>({});
@@ -125,7 +143,22 @@ export default function NotebookSharingScreen() {
     if (!isLoadingSession && !session) router.replace('/notebooks');
   }, [isLoadingSession, router, session]);
 
+  useEffect(() => {
+    let active = true;
+    setPreviewPhotoUrl(null);
+    if (!previewPhoto || previewPhoto.type !== 'photo') return;
+    void authorizePhotoRead(previewPhoto.photoAssetId)
+      .then((authorization) => {
+        if (active) setPreviewPhotoUrl(authorization.url);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [previewPhoto]);
+
   const activeCapabilities = activeShareCapabilities(shareState);
+  const capability = activeCapabilities[0];
   const runCreate = async () => {
     if (!notebookId || action) return;
     const stableRequest =
@@ -143,7 +176,7 @@ export default function NotebookSharingScreen() {
         setAnnouncement('Share link created.');
       } else {
         setError(
-          'The link was already created, but its secure URL is no longer available. Rotate it to create a new link.'
+          'The link was already created, but its secure URL is no longer available. Generate a new link to continue.'
         );
       }
       await load(true);
@@ -177,7 +210,7 @@ export default function NotebookSharingScreen() {
       setAnnouncement('Share link rotated. The previous link no longer works.');
       if (!created.url) {
         setError(
-          'The link was rotated, but its secure URL is no longer available. Rotate the active link again.'
+          'The new link was created, but its secure URL is no longer available. Generate another link to continue.'
         );
       }
       await load(true);
@@ -251,7 +284,6 @@ export default function NotebookSharingScreen() {
     <SafeAreaView
       edges={['bottom']}
       style={{ backgroundColor: colors.background, flex: 1 }}>
-      <Stack.Screen options={{ title: 'Sharing' }} />
       <ScrollView
         contentContainerStyle={{
           gap: Space.xl,
@@ -267,15 +299,6 @@ export default function NotebookSharingScreen() {
             tintColor={colors.text}
           />
         }>
-        <View style={{ gap: Space.xs }}>
-          <AppText color={colors.text} variant="section">
-            Share this Notebook
-          </AppText>
-          <AppText color={colors.muted}>
-            Anyone with an active link can view its current text and photos.
-          </AppText>
-        </View>
-
         {error ? (
           <AppText accessibilityLiveRegion="polite" color={Palette.danger}>
             {error}
@@ -290,139 +313,227 @@ export default function NotebookSharingScreen() {
           </AppText>
         ) : null}
 
-        {activeCapabilities.length === 0 ? (
-          <View
-            style={{
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
-              borderRadius: Radius.card,
-              borderWidth: 1,
-              gap: Space.lg,
-              padding: Space.lg,
-            }}>
-            <AppText color={colors.text}>This Notebook is private.</AppText>
+        {!capability ? (
+          <View style={{ gap: Space.lg }}>
+            <View style={{ alignItems: 'center', gap: Space.md }}>
+              <View
+                style={{
+                  alignItems: 'center',
+                  backgroundColor: colors.surface,
+                  borderRadius: Radius.pill,
+                  height: 52,
+                  justifyContent: 'center',
+                  width: 52,
+                }}>
+                <Ionicons color={colors.muted} name="link-outline" size={24} />
+              </View>
+              <AppText color={colors.text} variant="section">
+                Share Notebook
+              </AppText>
+              <AppText color={colors.muted}>
+                This Notebook is currently private.
+              </AppText>
+            </View>
+            <SharingPromise
+              color={colors.text}
+              text="Anyone with the link can view this Notebook."
+            />
+            <SharingPromise
+              color={colors.text}
+              text="They cannot edit or make changes."
+            />
             <AppButton
               accessibilityLabel="Create share link"
               disabled={action !== null || !session}
-              label={action === 'create' ? 'Creating…' : 'Create share link'}
+              label={action === 'create' ? 'Creating…' : 'Create Share Link'}
               onPress={() => void runCreate()}
+            />
+            <AppButton
+              label="Cancel"
+              onPress={() => router.back()}
+              variant="secondary"
             />
           </View>
         ) : (
-          <View style={{ gap: Space.md }}>
-            {activeCapabilities.map((capability) => {
-              const urlAvailable = Boolean(availableUrls[capability.id]);
-              const isRotating = action === `rotate:${capability.id}`;
-              const isRevoking = action === `revoke:${capability.id}`;
-              return (
-                <View
-                  key={capability.id}
-                  accessibilityLabel={`Active share link created ${displayShareDate(capability.createdAt)}`}
+          <View style={{ gap: Space.lg }}>
+            <View style={{ alignItems: 'center', gap: Space.sm }}>
+              <View
+                style={{
+                  alignItems: 'center',
+                  backgroundColor: '#2e9d50',
+                  borderRadius: Radius.pill,
+                  height: 44,
+                  justifyContent: 'center',
+                  width: 44,
+                }}>
+                <Ionicons color="#ffffff" name="checkmark" size={26} />
+              </View>
+              <AppText color={colors.text} variant="section">
+                Link Active
+              </AppText>
+              <AppText color={colors.muted} style={{ textAlign: 'center' }}>
+                Anyone with this link can view this Notebook.
+              </AppText>
+            </View>
+
+            <View
+              accessibilityLabel="Shared Notebook preview"
+              style={{
+                borderColor: colors.border,
+                borderRadius: Radius.card,
+                borderWidth: 1,
+                gap: Space.sm,
+                overflow: 'hidden',
+                padding: Space.md,
+              }}>
+              <AppText color={colors.text} variant="bodyStrong">
+                {previewPage?.title || notebook?.title || 'Notebook'}
+              </AppText>
+              {previewText?.type === 'text' && previewText.text ? (
+                <AppText color={colors.muted} numberOfLines={3}>
+                  {previewText.text}
+                </AppText>
+              ) : null}
+              {previewPhotoUrl ? (
+                <Image
+                  accessibilityLabel="Shared Notebook preview photo"
+                  contentFit="cover"
+                  source={{ uri: previewPhotoUrl }}
                   style={{
-                    backgroundColor: colors.surface,
-                    borderColor: colors.border,
-                    borderRadius: Radius.card,
-                    borderWidth: 1,
-                    gap: Space.md,
-                    padding: Space.lg,
-                  }}>
-                  <View
-                    style={{
-                      alignItems: 'center',
-                      flexDirection: 'row',
-                      justifyContent: 'space-between',
-                    }}>
-                    <AppText color={colors.text} variant="bodyStrong">
-                      Active link
-                    </AppText>
-                    <AppText color={colors.muted} variant="caption">
-                      Created {displayShareDate(capability.createdAt)}
-                    </AppText>
-                  </View>
-                  {!urlAvailable ? (
-                    <AppText color={colors.muted} variant="caption">
-                      For security, an existing link cannot be shown again.
-                      Rotate it to create a new link you can copy or share.
-                    </AppText>
-                  ) : null}
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm }}>
-                    <AppButton
-                      accessibilityHint={
-                        urlAvailable
-                          ? 'Copies the private share link'
-                          : 'Rotate this link before copying'
-                      }
-                      disabled={!urlAvailable || action !== null}
-                      label="Copy Link"
-                      onPress={() => void copyLink(capability)}
-                      size="compact"
-                      variant="secondary"
-                    />
-                    <AppButton
-                      accessibilityHint={
-                        urlAvailable
-                          ? 'Opens the system share sheet'
-                          : 'Rotate this link before sharing'
-                      }
-                      disabled={!urlAvailable || action !== null}
-                      label="Share…"
-                      onPress={() => void shareLink(capability)}
-                      size="compact"
-                      variant="secondary"
-                    />
-                    <AppButton
-                      disabled={action !== null}
-                      label={isRotating ? 'Rotating…' : 'Rotate'}
-                      onPress={() =>
-                        Alert.alert(
-                          'Rotate share link?',
-                          'The current link will stop working immediately.',
-                          [
-                            { text: 'Cancel', style: 'cancel' },
-                            {
-                              text: 'Rotate',
-                              style: 'destructive',
-                              onPress: () => void runRotate(capability),
-                            },
-                          ]
-                        )
-                      }
-                      size="compact"
-                      variant="secondary"
-                    />
-                    <AppButton
-                      disabled={action !== null}
-                      label={isRevoking ? 'Revoking…' : 'Revoke'}
-                      onPress={() =>
-                        Alert.alert(
-                          'Revoke share link?',
-                          'Anyone using this link will immediately lose access.',
-                          [
-                            { text: 'Cancel', style: 'cancel' },
-                            {
-                              text: 'Revoke',
-                              style: 'destructive',
-                              onPress: () => void runRevoke(capability),
-                            },
-                          ]
-                        )
-                      }
-                      size="compact"
-                      variant="danger"
-                    />
-                  </View>
-                </View>
-              );
-            })}
+                    aspectRatio: 16 / 7,
+                    borderRadius: Radius.small,
+                    width: '100%',
+                  }}
+                />
+              ) : null}
+            </View>
+
+            {!availableUrls[capability.id] ? (
+              <AppText color={colors.muted} variant="caption">
+                For security, the existing link cannot be shown again.
+                Generate a new link to copy or share it.
+              </AppText>
+            ) : null}
+
+            <View>
+              <SharingActionRow
+                color={Palette.trip}
+                disabled={!availableUrls[capability.id] || action !== null}
+                icon="copy-outline"
+                label="Copy Link"
+                onPress={() => void copyLink(capability)}
+              />
+              <SharingActionRow
+                color={Palette.trip}
+                disabled={!availableUrls[capability.id] || action !== null}
+                icon="share-outline"
+                label="Share…"
+                onPress={() => void shareLink(capability)}
+              />
+              <SharingActionRow
+                color={Palette.trip}
+                disabled={action !== null}
+                icon="refresh-circle-outline"
+                label={
+                  action === `rotate:${capability.id}`
+                    ? 'Generating…'
+                    : 'Generate New Link'
+                }
+                onPress={() =>
+                  Alert.alert(
+                    'Generate a new link?',
+                    'The current link will stop working immediately.',
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      {
+                        text: 'Generate',
+                        style: 'destructive',
+                        onPress: () => void runRotate(capability),
+                      },
+                    ]
+                  )
+                }
+              />
+              <SharingActionRow
+                color={Palette.danger}
+                disabled={action !== null}
+                icon="trash-outline"
+                label={
+                  action === `revoke:${capability.id}`
+                    ? 'Stopping…'
+                    : 'Stop Sharing'
+                }
+                onPress={() =>
+                  Alert.alert(
+                    'Stop Sharing?',
+                    'The current link will stop working immediately.',
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      {
+                        text: 'Stop Sharing',
+                        style: 'destructive',
+                        onPress: () => void runRevoke(capability),
+                      },
+                    ]
+                  )
+                }
+              />
+            </View>
             <AppButton
-              disabled={action !== null}
-              label={action === 'create' ? 'Creating…' : 'Create another link'}
-              onPress={() => void runCreate()}
+              label="Cancel"
+              onPress={() => router.back()}
               variant="secondary"
             />
           </View>
         )}
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+function SharingPromise({ color, text }: { color: string; text: string }) {
+  return (
+    <View style={{ alignItems: 'flex-start', flexDirection: 'row', gap: Space.sm }}>
+      <Ionicons color={color} name="checkmark" size={20} />
+      <AppText color={color} style={{ flex: 1 }}>
+        {text}
+      </AppText>
+    </View>
+  );
+}
+
+function SharingActionRow({
+  color,
+  disabled,
+  icon,
+  label,
+  onPress,
+}: {
+  color: string;
+  disabled: boolean;
+  icon: ComponentProps<typeof Ionicons>['name'];
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      disabled={disabled}
+      onPress={onPress}
+      style={({ pressed }) => ({
+        alignItems: 'center',
+        borderBottomColor: Palette.border,
+        borderBottomWidth: 1,
+        flexDirection: 'row',
+        gap: Space.md,
+        minHeight: 48,
+        opacity: disabled ? 0.35 : pressed ? 0.6 : 1,
+        paddingHorizontal: Space.sm,
+      })}>
+      <Ionicons color={color} name={icon} size={20} />
+      <AppText color={color} variant="bodyStrong">
+        {label}
+      </AppText>
+    </Pressable>
   );
 }

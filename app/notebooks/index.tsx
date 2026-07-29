@@ -2,9 +2,9 @@ import { HeaderBackButton } from '@react-navigation/elements';
 import { Stack, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   RefreshControl,
   ScrollView,
   View,
@@ -42,7 +42,6 @@ export default function NotebookListScreen() {
   const { isLoading: isLoadingSession, session, signIn } = useSession();
   const {
     createNotebook,
-    deleteNotebook,
     isLoading,
     listError,
     notebooks,
@@ -111,7 +110,6 @@ export default function NotebookListScreen() {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: Palette.background }}>
         <View style={{ gap: Space.lg, padding: Screen.gutter }}>
-          <AppText variant="display">Notebooks</AppText>
           <AppText color={Palette.textBody}>
             Sign in to view and edit your private travel Notebooks.
           </AppText>
@@ -126,6 +124,27 @@ export default function NotebookListScreen() {
       <Stack.Screen
         options={{
           headerLeft: () => <HeaderBackButton onPress={handleBack} />,
+          headerRight: () => (
+            <Pressable
+              accessibilityLabel="Add Notebook"
+              accessibilityRole="button"
+              disabled={showCreate}
+              hitSlop={12}
+              onPress={() => {
+                setFormError(null);
+                setShowCreate(true);
+              }}
+              style={({ pressed }) => ({
+                opacity: showCreate ? 0.35 : pressed ? 0.55 : 1,
+                paddingHorizontal: Space.sm,
+              })}>
+              <AppText
+                color={Palette.trip}
+                style={{ fontSize: 34, fontWeight: '500', lineHeight: 34 }}>
+                +
+              </AppText>
+            </Pressable>
+          ),
         }}
       />
       <KeyboardAvoidingView
@@ -146,21 +165,6 @@ export default function NotebookListScreen() {
               refreshing={isLoading}
             />
           }>
-          {!showCreate ? (
-            <View style={{ alignItems: 'flex-start' }}>
-              <AppButton
-                accessibilityLabel="Add Notebook"
-                label="Add Notebook"
-                onPress={() => {
-                  setFormError(null);
-                  setShowCreate(true);
-                }}
-                size="compact"
-                variant="secondary"
-              />
-            </View>
-          ) : null}
-
           {showCreate ? (
             <View
               style={{
@@ -237,27 +241,6 @@ export default function NotebookListScreen() {
               <NotebookRow
                 key={notebook.id}
                 notebook={notebook}
-                onDelete={() =>
-                  Alert.alert(
-                    'Delete Notebook?',
-                    'This removes the Notebook and its pages.',
-                    [
-                      { text: 'Cancel', style: 'cancel' },
-                      {
-                        text: 'Delete',
-                        style: 'destructive',
-                        onPress: () => {
-                          void deleteNotebook(notebook.id).catch(() => {
-                            Alert.alert(
-                              'Could not delete Notebook',
-                              'It may have changed elsewhere. Open it and reload before trying again.'
-                            );
-                          });
-                        },
-                      },
-                    ]
-                  )
-                }
                 onOpen={() => openNotebook(router, notebook.id)}
               />
             ))
@@ -270,60 +253,45 @@ export default function NotebookListScreen() {
 
 function NotebookRow({
   notebook,
-  onDelete,
   onOpen,
 }: {
   notebook: NotebookSummary;
-  onDelete: () => void;
   onOpen: () => void;
 }) {
   return (
-    <View
-      style={{
-        borderColor: Palette.border,
-        borderRadius: Radius.card,
-        borderWidth: 1,
-        overflow: 'hidden',
-      }}>
-      <View style={{ gap: Space.xs, padding: Space.lg }}>
-        <AppText numberOfLines={2} variant="cardTitle">{notebook.title}</AppText>
-        {notebook.description ? (
-          <AppText color={Palette.textMuted} numberOfLines={2}>
-            {notebook.description}
-          </AppText>
-        ) : null}
+    <Pressable
+      accessibilityLabel={`Open ${notebook.title}`}
+      accessibilityRole="button"
+      onPress={onOpen}
+      style={({ pressed }) => ({
+        borderBottomColor: Palette.border,
+        borderBottomWidth: 1,
+        flexDirection: 'row',
+        gap: Space.md,
+        opacity: pressed ? 0.6 : 1,
+        paddingHorizontal: Space.xs,
+        paddingVertical: Space.lg,
+      })}>
+      <View style={{ flex: 1, gap: Space.xs }}>
+        <AppText
+          numberOfLines={2}
+          style={{ fontSize: 17, fontWeight: '700', lineHeight: 22 }}>
+          {notebook.title}
+        </AppText>
         <AppText
           color={Palette.textMuted}
-          style={{ textAlign: 'right' }}
-          variant="caption">
+          style={{ fontSize: 14, lineHeight: 18 }}>
           {notebook.itemCount} {notebook.itemCount === 1 ? 'page' : 'pages'}
           {displayDate(notebook.updatedAt) ? ` · Updated ${displayDate(notebook.updatedAt)}` : ''}
         </AppText>
-        <View
-          style={{
-            flexDirection: 'row',
-            justifyContent: 'space-between',
-            marginTop: Space.sm,
-          }}>
-          <AppButton
-            accessibilityLabel={`Open ${notebook.title}`}
-            label="Open"
-            onPress={onOpen}
-            size="compact"
-            style={{ width: 112 }}
-            testID="notebook-open-action"
-          />
-          <AppButton
-            accessibilityLabel={`Delete ${notebook.title}`}
-            label="Delete"
-            onPress={onDelete}
-            size="compact"
-            style={{ width: 112 }}
-            testID="notebook-delete-action"
-            variant="danger"
-          />
-        </View>
       </View>
-    </View>
+      <AppText
+        accessibilityElementsHidden
+        color={Palette.textMuted}
+        importantForAccessibility="no-hide-descendants"
+        style={{ alignSelf: 'center', fontSize: 24 }}>
+        ›
+      </AppText>
+    </Pressable>
   );
 }

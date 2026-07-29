@@ -7,12 +7,12 @@ const source = await readFile(
 );
 
 for (const expected of [
-  'This Notebook is private.',
-  'Create share link',
+  'This Notebook is currently private.',
+  'Create Share Link',
   'Copy Link',
   'Share…',
-  'Rotate share link?',
-  'Revoke share link?',
+  'Generate New Link',
+  'Stop Sharing',
   'Refresh sharing',
   'accessibilityLiveRegion="polite"',
   "useColorScheme()",
