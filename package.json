@@ -19,6 +19,7 @@
     "@react-navigation/native": "^7.1.8",
     "@sanity/client": "^7.22.1",
     "expo": "~54.0.34",
+    "expo-clipboard": "~8.0.8",
     "expo-constants": "~18.0.13",
     "expo-crypto": "~15.0.9",
     "expo-file-system": "~19.0.23",
