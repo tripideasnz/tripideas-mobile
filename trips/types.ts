@@ -10,6 +10,7 @@ export type MyTrip = {
   id: string;
   name: string;
   note: string;
+  entries?: TripEntry[];
   places: MyTripPlace[];
   updatedAt: string;
 };
@@ -59,3 +60,4 @@ export type TripMigrationJournal = {
   userId: string;
   version: 1;
 };
+import type { TripEntry } from '@/personal-place-cards/types';

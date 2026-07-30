@@ -147,8 +147,10 @@ export function AddToTripModal({
                       }}>
                       {alreadyAdded
                         ? 'Already in this trip'
-                        : `${trip.places.length} ${
-                            trip.places.length === 1 ? 'place' : 'places'
+                        : `${trip.entries?.length ?? trip.places.length} ${
+                            (trip.entries?.length ?? trip.places.length) === 1
+                              ? 'place'
+                              : 'places'
                           }`}
                     </Text>
                   </CardSurface>

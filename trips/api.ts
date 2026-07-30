@@ -5,6 +5,8 @@ import type {
   MyTrip,
   MyTripPlace,
 } from '@/trips/types';
+import { parsePersonalPlaceCard, object } from '@/personal-place-cards/api';
+import type { TripEntry } from '@/personal-place-cards/types';
 
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === 'string');
@@ -31,23 +33,55 @@ function parseSummary(value: unknown): ApiTripSummary {
   };
 }
 
-function parseEditorialEntry(value: unknown): ApiEditorialTripEntry {
+export function parseTripEntry(value: unknown): TripEntry {
   if (!value || typeof value !== 'object') {
     throw new ApiError(500, 'malformed_response');
   }
-  const entry = value as Partial<ApiEditorialTripEntry>;
+  const entry = value as Record<string, unknown>;
+  const common =
+    typeof entry.id === 'string' &&
+    typeof entry.itineraryId === 'string' &&
+    Number.isInteger(entry.order) &&
+    (entry.note === null || typeof entry.note === 'string');
+  if (!common) throw new ApiError(500, 'malformed_response');
+  if (entry.type === 'personalPlaceCard') {
+    if ('personalPlaceCard' in entry) {
+      return {
+        id: entry.id as string,
+        itineraryId: entry.itineraryId as string,
+        note: entry.note as string | null,
+        order: entry.order as number,
+        personalPlaceCard: parsePersonalPlaceCard(entry.personalPlaceCard),
+        type: 'personalPlaceCard',
+      };
+    }
+    const unavailable = object(entry.unavailable);
+    if (unavailable.reason !== 'personal_place_card_unavailable') {
+      throw new ApiError(500, 'malformed_response');
+    }
+    return {
+      id: entry.id as string,
+      itineraryId: entry.itineraryId as string,
+      note: entry.note as string | null,
+      order: entry.order as number,
+      type: 'personalPlaceCard',
+      unavailable: { reason: 'personal_place_card_unavailable' },
+    };
+  }
   if (
     entry.type !== 'editorialPlace' ||
-    typeof entry.id !== 'string' ||
-    typeof entry.itineraryId !== 'string' ||
-    typeof entry.order !== 'number' ||
-    !(entry.note === null || typeof entry.note === 'string') ||
-    !entry.editorialPlace ||
-    typeof entry.editorialPlace.id !== 'string'
+    typeof object(entry.editorialPlace).id !== 'string'
   ) {
     throw new ApiError(500, 'unsupported_trip_entry');
   }
-  return entry as ApiEditorialTripEntry;
+  return {
+    id: entry.id as string,
+    itineraryId: entry.itineraryId as string,
+    note: entry.note as string | null,
+    order: entry.order as number,
+    type: 'editorialPlace',
+    editorialPlace: { id: object(entry.editorialPlace).id as string },
+  };
 }
 
 export async function listTripSummaries(): Promise<ApiTripSummary[]> {
@@ -63,14 +97,27 @@ export async function listEditorialTripEntries(
     `/itinerary/${encodeURIComponent(itineraryId)}/entries`
   );
   if (!Array.isArray(response)) throw new ApiError(500, 'malformed_response');
-  return response.map(parseEditorialEntry).sort((a, b) => a.order - b.order);
+  return response
+    .map(parseTripEntry)
+    .filter((entry): entry is ApiEditorialTripEntry =>
+      entry.type === 'editorialPlace'
+    )
+    .sort((a, b) => a.order - b.order);
+}
+
+export async function listTripEntries(itineraryId: string): Promise<TripEntry[]> {
+  const response = await authenticatedApiFetch<unknown>(
+    `/itinerary/${encodeURIComponent(itineraryId)}/entries`
+  );
+  if (!Array.isArray(response)) throw new ApiError(500, 'malformed_response');
+  return response.map(parseTripEntry).sort((a, b) => a.order - b.order);
 }
 
 export async function loadTrip(
   summary: ApiTripSummary,
   cached?: MyTrip
 ): Promise<MyTrip> {
-  const entries = await listEditorialTripEntries(summary.id);
+  const entries = await listTripEntries(summary.id);
   const timestamp = new Date().toISOString();
   const cachedByEntry = new Map(
     (cached?.places ?? []).map((place) => [place.entryId, place])
@@ -80,12 +127,17 @@ export async function loadTrip(
     id: summary.id,
     name: summary.name,
     note: summary.description ?? '',
-    places: entries.map<MyTripPlace>((entry) => ({
+    entries,
+    places: entries
+      .filter((entry): entry is ApiEditorialTripEntry =>
+        entry.type === 'editorialPlace'
+      )
+      .map<MyTripPlace>((entry) => ({
       addedAt: cachedByEntry.get(entry.id)?.addedAt || timestamp,
       entryId: entry.id,
       note: entry.note ?? '',
       placeId: entry.editorialPlace.id,
-    })),
+      })),
     updatedAt: timestamp,
   };
 }
@@ -147,6 +199,28 @@ export async function addEditorialEntryRequest(
         note: input.note,
         placeId: input.placeId,
         type: 'editorialPlace',
+      }),
+      method: 'POST',
+    }
+  );
+  if (typeof response?.id !== 'string') {
+    throw new ApiError(500, 'malformed_response');
+  }
+  return response.id;
+}
+
+export async function addPersonalCardEntryRequest(
+  itineraryId: string,
+  input: { id?: string; note?: string; personalPlaceCardId: string }
+): Promise<string> {
+  const response = await authenticatedApiFetch<{ id?: unknown }>(
+    `/itinerary/${encodeURIComponent(itineraryId)}/entry`,
+    {
+      body: JSON.stringify({
+        id: input.id,
+        note: input.note,
+        personalPlaceCardId: input.personalPlaceCardId,
+        type: 'personalPlaceCard',
       }),
       method: 'POST',
     }

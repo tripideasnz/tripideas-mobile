@@ -27,22 +27,34 @@ export class ApiError extends Error {
   constructor(
     public readonly status: number,
     public readonly code: string,
-    message = 'The request could not be completed.'
+    message = 'The request could not be completed.',
+    public readonly details?: Record<string, unknown>
   ) {
     super(message);
     this.name = 'ApiError';
   }
 }
 
-function parseError(responseText: string): { code?: string; message?: string } {
+function parseError(responseText: string): {
+  code?: string;
+  details?: Record<string, unknown>;
+  message?: string;
+} {
   if (!responseText) return {};
 
   try {
     const parsed = JSON.parse(responseText) as {
-      error?: { code?: unknown; message?: unknown };
+      error?: Record<string, unknown>;
     };
     return {
       code: typeof parsed.error?.code === 'string' ? parsed.error.code : undefined,
+      details: parsed.error
+        ? Object.fromEntries(
+            Object.entries(parsed.error).filter(
+              ([key]) => key !== 'code' && key !== 'message'
+            )
+          )
+        : undefined,
       message:
         typeof parsed.error?.message === 'string'
           ? parsed.error.message
@@ -88,7 +100,8 @@ function parseResponse<T>({ response, responseText }: ApiResponse): T {
     throw new ApiError(
       response.status,
       error.code ?? 'request_failed',
-      error.message
+      error.message,
+      error.details
     );
   }
 

@@ -5,6 +5,7 @@ import type {
   MyTripPlace,
   TripMigrationJournal,
 } from '@/trips/types';
+import { parseTripEntry } from '@/trips/api';
 
 const MY_TRIPS_KEY = 'tripideas.myTrips.v1';
 const VERSION = 'v1';
@@ -59,6 +60,15 @@ function normalizeTrip(value: unknown, deduplicatePlaces = true): MyTrip | null 
     id,
     name,
     note: typeof trip.note === 'string' ? trip.note : '',
+    entries: Array.isArray(trip.entries)
+      ? trip.entries.flatMap((entry) => {
+          try {
+            return [parseTripEntry(entry)];
+          } catch {
+            return [];
+          }
+        })
+      : undefined,
     places,
     updatedAt: typeof trip.updatedAt === 'string' ? trip.updatedAt : '',
   };

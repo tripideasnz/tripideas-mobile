@@ -41,6 +41,44 @@ async function run() {
   assert.equal(snapshot.places[0].placeId, 'place-one');
   assert.equal(snapshot.places[0].note, 'Entry note');
   assert.equal(buildPublicTripUrl('existing-share'), 'https://tripideas.nz/trip/existing-share');
+  const mixed = {
+    ...trip,
+    entries: [
+      {
+        id: 'ite-personal',
+        itineraryId: trip.id,
+        note: '',
+        order: 0,
+        type: 'personalPlaceCard',
+        personalPlaceCard: {
+          id: 'ppc-one',
+          title: 'Private beach',
+          body: 'Quiet.',
+          location: null,
+          version: 1,
+          media: [],
+          readiness: { isTripIdeaReady: true, readinessIssues: [] },
+          createdAt: trip.createdAt,
+          updatedAt: trip.updatedAt,
+        },
+      },
+      {
+        id: 'ite-editorial',
+        itineraryId: trip.id,
+        note: '',
+        order: 1,
+        type: 'editorialPlace',
+        editorialPlace: { id: 'place-one' },
+      },
+    ],
+  };
+  assert.deepEqual(
+    getTripImages(mixed, cards, { 'ppc-one': 'https://signed.example/photo' }),
+    [
+      { alt: 'Private beach', url: 'https://signed.example/photo' },
+      { alt: 'Lake Taupō', url: 'https://images.example.test/taupo.jpg' },
+    ]
+  );
   console.log('✓ API Trip map/cover and independent public snapshot compatibility');
 }
 

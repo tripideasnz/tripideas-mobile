@@ -13,6 +13,7 @@ import { useSession } from '@/auth/provider';
 import { ApiError } from '@/lib/api-client';
 import {
   addEditorialEntryRequest,
+  addPersonalCardEntryRequest,
   createTripRequest,
   deleteEntryRequest,
   deleteTripRequest,
@@ -39,6 +40,7 @@ type ImportDecision = {
 } | null;
 
 type MyTripsContextValue = {
+  addPersonalCardToTrip: (tripId: string, cardId: string) => Promise<void>;
   addPlaceToTrip: (tripId: string, placeId: string) => Promise<void>;
   confirmImport: () => Promise<void>;
   createTrip: (name: string) => Promise<MyTrip | null>;
@@ -53,10 +55,16 @@ type MyTripsContextValue = {
   loadError: string | null;
   refresh: () => Promise<void>;
   removePlaceFromTrip: (tripId: string, placeId: string) => Promise<void>;
+  removeTripEntry: (tripId: string, entryId: string) => Promise<void>;
   renameTrip: (tripId: string, name: string) => Promise<void>;
   retryImport: () => Promise<void>;
   trips: MyTrip[];
   updatePlaceNote: (tripId: string, placeId: string, note: string) => Promise<void>;
+  updateTripEntryNote: (
+    tripId: string,
+    entryId: string,
+    note: string
+  ) => Promise<void>;
   updateTripNote: (tripId: string, note: string) => Promise<void>;
 };
 
@@ -332,6 +340,27 @@ export function MyTripsProvider({ children }: PropsWithChildren) {
     });
   }, [mutateAndRefresh, persistLocal]);
 
+  const addPersonalCardToTrip = useCallback(
+    async (tripId: string, cardId: string) => {
+      await mutateAndRefresh(tripId, async (trip) => {
+        if (
+          trip.entries?.some(
+            (entry) =>
+              entry.type === 'personalPlaceCard' &&
+              'personalPlaceCard' in entry &&
+              entry.personalPlaceCard.id === cardId
+          )
+        ) return;
+        await addPersonalCardEntryRequest(tripId, {
+          id: createEntryId(),
+          note: '',
+          personalPlaceCardId: cardId,
+        });
+      });
+    },
+    [mutateAndRefresh]
+  );
+
   const createTripWithPlace = useCallback(async (name: string, placeId: string) => {
     const trimmedName = name.trim();
     const trimmedPlaceId = placeId.trim();
@@ -380,7 +409,9 @@ export function MyTripsProvider({ children }: PropsWithChildren) {
     }
     await mutateAndRefresh(tripId, (trip) =>
       updateTripRequest(tripId, {
-        entryOrder: trip.places.flatMap((place) => place.entryId ?? []),
+        entryOrder:
+          trip.entries?.map((entry) => entry.id) ??
+          trip.places.flatMap((place) => place.entryId ?? []),
         name: trimmed,
       })
     );
@@ -397,7 +428,9 @@ export function MyTripsProvider({ children }: PropsWithChildren) {
     await mutateAndRefresh(tripId, (trip) =>
       updateTripRequest(tripId, {
         description: note,
-        entryOrder: trip.places.flatMap((place) => place.entryId ?? []),
+        entryOrder:
+          trip.entries?.map((entry) => entry.id) ??
+          trip.places.flatMap((place) => place.entryId ?? []),
       })
     );
   }, [mutateAndRefresh, persistLocal]);
@@ -444,6 +477,20 @@ export function MyTripsProvider({ children }: PropsWithChildren) {
     });
   }, [mutateAndRefresh, persistLocal]);
 
+  const removeTripEntry = useCallback(async (tripId: string, entryId: string) => {
+    await mutateAndRefresh(tripId, () => deleteEntryRequest(tripId, entryId));
+  }, [mutateAndRefresh]);
+
+  const updateTripEntryNote = useCallback(
+    async (tripId: string, entryId: string, note: string) => {
+      await mutateAndRefresh(
+        tripId,
+        () => updateEntryNoteRequest(tripId, entryId, note)
+      );
+    },
+    [mutateAndRefresh]
+  );
+
   const deleteTrip = useCallback(async (tripId: string) => {
     if (!activeUserRef.current) {
       if (!localMutationsAllowedRef.current) return;
@@ -464,6 +511,7 @@ export function MyTripsProvider({ children }: PropsWithChildren) {
   );
 
   const value = useMemo<MyTripsContextValue>(() => ({
+    addPersonalCardToTrip,
     addPlaceToTrip,
     confirmImport: runImport,
     createTrip,
@@ -478,16 +526,18 @@ export function MyTripsProvider({ children }: PropsWithChildren) {
     loadError,
     refresh,
     removePlaceFromTrip,
+    removeTripEntry,
     renameTrip,
     retryImport: runImport,
     trips,
     updatePlaceNote,
+    updateTripEntryNote,
     updateTripNote,
   }), [
-    addPlaceToTrip, createTrip, createTripWithPlace, deferImport, deleteTrip,
+    addPersonalCardToTrip, addPlaceToTrip, createTrip, createTripWithPlace, deferImport, deleteTrip,
     getTrip, importDecision, isImporting, isLoading, journal, loadError,
-    refresh, removePlaceFromTrip, renameTrip, runImport, trips,
-    updatePlaceNote, updateTripNote,
+    refresh, removePlaceFromTrip, removeTripEntry, renameTrip, runImport, trips,
+    updatePlaceNote, updateTripEntryNote, updateTripNote,
   ]);
 
   return <MyTripsContext.Provider value={value}>{children}</MyTripsContext.Provider>;

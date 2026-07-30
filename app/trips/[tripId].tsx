@@ -12,11 +12,10 @@ import {
 
 import { HeaderBackButton } from '@/components/ui/header-back-button';
 
-import { PlaceCard } from '@/components/place-card';
+import { TripEntryCard } from '@/components/trip-entry-card';
 import { LoadingView } from '@/components/ui/loading-view';
 import { TripImageCollage } from '@/components/trip-image-collage';
 import { AppTextInput } from '@/components/ui/app-text-input';
-import { CardSurface } from '@/components/ui/card-surface';
 import { Palette, Radius, Screen, Space, Type } from '@/constants/design';
 import { fetchPlaceCardsByIds } from '@/sanity/place-cards';
 import { getTripImages } from '@/trips/images';
@@ -25,6 +24,7 @@ import {
   buildPublicTripSnapshot,
   createPublicTripShare,
 } from '@/trips/public-sharing';
+import { authorizePhotoRead } from '@/notebooks/api';
 import {
   buildTripShareCardData,
   buildTripShareMessage,
@@ -41,19 +41,19 @@ export default function TripDetailScreen() {
     deleteTrip,
     getTrip,
     isLoading: isLoadingTrips,
-    removePlaceFromTrip,
+    removeTripEntry,
     renameTrip,
-    updatePlaceNote,
+    updateTripEntryNote,
     updateTripNote,
   } = useMyTrips();
   const trip = getTrip(selectedTripId);
   const [name, setName] = useState('');
   const [isEditingName, setIsEditingName] = useState(false);
   const [tripNote, setTripNote] = useState('');
-  const [placeNotes, setPlaceNotes] = useState<Record<string, string>>({});
   const [places, setPlaces] = useState<PlaceCardData[]>([]);
   const [isLoadingPlaces, setIsLoadingPlaces] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [personalPhotoUrls, setPersonalPhotoUrls] = useState<Record<string, string>>({});
 
   const placeIds = useMemo(
     () => trip?.places.map((place) => place.placeId) ?? [],
@@ -65,17 +65,55 @@ export default function TripDetailScreen() {
     trip && trimmedName && trimmedName !== trip.name
   );
   const isTripNoteDirty = Boolean(trip && tripNote !== trip.note);
-  const tripImages = trip ? getTripImages(trip, places).slice(0, 4) : [];
+  const tripImages = trip
+    ? getTripImages(trip, places, personalPhotoUrls).slice(0, 4)
+    : [];
+  const orderedEntries = useMemo(
+    () =>
+      trip?.entries ??
+      (trip?.places ?? []).map((place, order) => ({
+        editorialPlace: { id: place.placeId },
+        id: place.entryId ?? place.placeId,
+        itineraryId: trip?.id ?? '',
+        note: place.note,
+        order,
+        type: 'editorialPlace' as const,
+      })),
+    [trip?.entries, trip?.id, trip?.places]
+  );
+  const placesById = useMemo(
+    () => new Map(places.map((place) => [place._id, place])),
+    [places]
+  );
+
+  useEffect(() => {
+    let mounted = true;
+    const cards = orderedEntries.flatMap((entry) =>
+      entry.type === 'personalPlaceCard' && 'personalPlaceCard' in entry
+        ? [entry.personalPlaceCard]
+        : []
+    );
+    void Promise.all(cards.map(async (card) => {
+      const main = card.media.find((item) => item.role === 'main');
+      if (!main) return null;
+      try {
+        const result = await authorizePhotoRead(main.photoAssetId);
+        return [card.id, result.url] as const;
+      } catch {
+        return null;
+      }
+    })).then((results) => {
+      if (mounted) {
+        setPersonalPhotoUrls(Object.fromEntries(results.filter(Boolean) as [string, string][]));
+      }
+    });
+    return () => { mounted = false; };
+  }, [orderedEntries]);
 
   useEffect(() => {
     setName(trip?.name ?? '');
     setIsEditingName(false);
     setTripNote(trip?.note ?? '');
-    setPlaceNotes(
-      Object.fromEntries(
-        (trip?.places ?? []).map((place) => [place.placeId, place.note])
-      )
-    );
   }, [trip?.id]);
 
   useEffect(() => {
@@ -158,6 +196,13 @@ export default function TripDetailScreen() {
 
   const createPublicShare = async () => {
     if (!trip) {
+      return;
+    }
+    if (trip.entries?.some((entry) => entry.type === 'personalPlaceCard')) {
+      Alert.alert(
+        'Public sharing unavailable',
+        'Public Trip snapshots do not yet have a safe Personal Place Card contract. Remove Personal Places or share an editorial-only Trip.'
+      );
       return;
     }
 
@@ -376,9 +421,9 @@ export default function TripDetailScreen() {
             <Pressable
               accessibilityRole="button"
               onPress={() =>
-                router.navigate({
-                  pathname: '/map',
-                  params: { tripId: trip.id, tripLabel: trip.name },
+                router.push({
+                  pathname: '/trips/[tripId]/map',
+                  params: { tripId: trip.id },
                 })
               }
               style={({ pressed }) => ({
@@ -432,143 +477,28 @@ export default function TripDetailScreen() {
 
           {isLoadingPlaces ? (
             <LoadingView />
-          ) : errorMessage ? (
+          ) : errorMessage && orderedEntries.every(
+            (entry) => entry.type === 'editorialPlace'
+          ) ? (
             <Text style={{ color: '#717171', fontSize: 16 }}>
               {errorMessage}
             </Text>
-          ) : places.length > 0 ? (
-            places.map((place, index) => {
-              const placeId = place._id;
-              const savedPlaceNote =
-                trip.places.find((tripPlace) => tripPlace.placeId === placeId)
-                  ?.note ?? '';
-              const draftPlaceNote = placeId
-                ? placeNotes[placeId] ?? ''
-                : '';
-              const isPlaceNoteDirty =
-                Boolean(placeId) && draftPlaceNote !== savedPlaceNote;
-
-              return (
-                <CardSurface
-                  key={placeId ?? place.slug?.current ?? index}
-                  style={{ marginBottom: Space.xxl }}>
-                  <PlaceCard embedded place={place} />
-                  {placeId ? (
-                    <View
-                      style={{
-                        borderTopColor: Palette.border,
-                        borderTopWidth: 1,
-                        padding: Space.lg,
-                      }}>
-                      <Text style={{ ...Type.label, marginBottom: Space.sm }}>
-                        Note for {place.title ?? 'this place'}
-                      </Text>
-                      <AppTextInput
-                        accessibilityLabel={`Note for ${
-                          place.title ?? 'place'
-                        }`}
-                        multiline
-                        onChangeText={(note) =>
-                          setPlaceNotes((currentNotes) => ({
-                            ...currentNotes,
-                            [placeId]: note,
-                          }))
-                        }
-                        placeholder="Add a note about this place"
-                        style={{
-                          borderColor: '#d8d8d8',
-                          borderRadius: 10,
-                          borderWidth: 1,
-                          fontSize: 16,
-                          lineHeight: undefined,
-                          minHeight: 90,
-                          padding: 14,
-                          textAlignVertical: 'top',
-                        }}
-                        value={draftPlaceNote}
-                      />
-                      <View
-                        style={{
-                          flexDirection: 'row',
-                          gap: 10,
-                          marginTop: 10,
-                        }}>
-                        <Pressable
-                          accessibilityRole="button"
-                          disabled={!isPlaceNoteDirty}
-                          onPress={async () => {
-                            if (!isPlaceNoteDirty) {
-                              return;
-                            }
-
-                            await updatePlaceNote(
-                              trip.id,
-                              placeId,
-                              draftPlaceNote
-                            );
-                          }}
-                          style={({ pressed }) => ({
-                            alignItems: 'center',
-                            backgroundColor: isPlaceNoteDirty
-                              ? '#111'
-                              : '#d8d8d8',
-                            borderRadius: 10,
-                            flex: 1,
-                            opacity: pressed ? 0.7 : 1,
-                            paddingVertical: 11,
-                          })}>
-                          <Text
-                            style={{
-                              color: isPlaceNoteDirty ? '#fff' : '#717171',
-                              fontSize: 15,
-                              fontWeight: '700',
-                            }}>
-                            Save Note
-                          </Text>
-                        </Pressable>
-                        <Pressable
-                          accessibilityRole="button"
-                          onPress={() =>
-                            Alert.alert(
-                              'Remove place?',
-                              `Remove "${
-                                place.title ?? 'this place'
-                              }" from this trip?`,
-                              [
-                                { style: 'cancel', text: 'Cancel' },
-                                {
-                                  onPress: () =>
-                                    void removePlaceFromTrip(trip.id, placeId),
-                                  style: 'destructive',
-                                  text: 'Remove',
-                                },
-                              ]
-                            )
-                          }
-                          style={({ pressed }) => ({
-                            alignItems: 'center',
-                            borderColor: '#c62828',
-                            borderRadius: 10,
-                            borderWidth: 1,
-                            flex: 1,
-                            opacity: pressed ? 0.55 : 1,
-                            paddingVertical: 11,
-                          })}>
-                          <Text
-                            style={{
-                              color: '#c62828',
-                              fontSize: 15,
-                              fontWeight: '700',
-                            }}>
-                            Remove Place
-                          </Text>
-                        </Pressable>
-                      </View>
-                    </View>
-                  ) : null}
-                </CardSurface>
-              );
-            })
+          ) : orderedEntries.length > 0 ? (
+            orderedEntries.map((entry) => (
+              <TripEntryCard
+                key={entry.id}
+                entry={entry}
+                editorialPlace={
+                  entry.type === 'editorialPlace'
+                    ? placesById.get(entry.editorialPlace.id)
+                    : undefined
+                }
+                onRemove={() => removeTripEntry(trip.id, entry.id)}
+                onSaveNote={(note) =>
+                  updateTripEntryNote(trip.id, entry.id, note)
+                }
+              />
+            ))
           ) : (
             <Text style={{ color: '#717171', fontSize: 16 }}>
               No places in this trip yet. Add one from Favourites.

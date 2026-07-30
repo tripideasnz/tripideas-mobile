@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict';
 
-import { setActiveToken } from '../lib/api-client.ts';
+import { ApiError, setActiveToken } from '../lib/api-client.ts';
 import {
   addEditorialEntryRequest,
+  addPersonalCardEntryRequest,
   createTripRequest,
   deleteEntryRequest,
   deleteTripRequest,
   listTrips,
+  parseTripEntry,
   updateEntryNoteRequest,
   updateTripRequest,
 } from './api.ts';
@@ -62,6 +64,11 @@ async function run() {
     note: 'Keep',
     placeId: 'sanity-two',
   });
+  await addPersonalCardEntryRequest('itn_1', {
+    id: 'ite_personal',
+    note: 'Private stop',
+    personalPlaceCardId: 'ppc_1',
+  });
   await updateTripRequest('itn_1', {
     description: 'Updated',
     entryOrder: ['ite_1', 'ite_2'],
@@ -80,10 +87,36 @@ async function run() {
     placeId: 'sanity-two',
     type: 'editorialPlace',
   });
-  assert.deepEqual(JSON.parse(String(calls[4][1].body)).entryOrder, [
+  assert.deepEqual(JSON.parse(String(calls[5][1].body)).entryOrder, [
     'ite_1',
     'ite_2',
   ]);
+  const personal = parseTripEntry({
+    id: 'ite_personal',
+    itineraryId: 'itn_1',
+    note: 'Private stop',
+    order: 1,
+    type: 'personalPlaceCard',
+    personalPlaceCard: {
+      id: 'ppc_1', title: null, body: null, location: null, version: 1, media: [],
+      readiness: { isTripIdeaReady: false, readinessIssues: ['missing_title'] },
+      createdAt: '2026-07-30T00:00:00.000Z',
+      updatedAt: '2026-07-30T00:00:00.000Z',
+    },
+  });
+  assert.equal(personal.type, 'personalPlaceCard');
+  const unavailable = parseTripEntry({
+    id: 'ite_missing',
+    itineraryId: 'itn_1',
+    note: 'Retained',
+    order: 2,
+    type: 'personalPlaceCard',
+    unavailable: { reason: 'personal_place_card_unavailable' },
+  });
+  assert.equal(unavailable.unavailable.reason, 'personal_place_card_unavailable');
+  assert.throws(() => parseTripEntry({
+    id: 'bad', itineraryId: 'itn_1', note: null, order: 0, type: 'unknown',
+  }), ApiError);
   console.log('✓ authenticated Trip API contract and editorial DTO parsing');
 }
 

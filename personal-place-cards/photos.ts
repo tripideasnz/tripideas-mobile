@@ -1,0 +1,97 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  prepareNativePhotoUpload,
+  startNativePhotoUpload,
+} from '@/photo-uploads/service';
+import type { SelectedPhoto } from '@/photo-uploads/types';
+import type { PersonalPlaceCard } from './types';
+import { hasAttachedPhoto } from './model';
+
+type Pending = {
+  cardId: string;
+  createdAt: string;
+  role: 'main' | 'body';
+  uploadId: string;
+  userId: string;
+};
+const key = (userId: string) =>
+  `tripideas.personalPlaceCardPhotos.user.${userId}.v1`;
+
+async function list(userId: string): Promise<Pending[]> {
+  const raw = await AsyncStorage.getItem(key(userId));
+  if (!raw) return [];
+  try {
+    const value = JSON.parse(raw);
+    return Array.isArray(value) ? value : [];
+  } catch {
+    return [];
+  }
+}
+async function set(userId: string, values: Pending[]) {
+  await AsyncStorage.setItem(key(userId), JSON.stringify(values));
+}
+
+type Attach = (
+  id: string,
+  photoAssetId: string,
+  role: 'main' | 'body'
+) => Promise<PersonalPlaceCard>;
+type Read = (id: string) => Promise<PersonalPlaceCard>;
+
+async function finish(pending: Pending, attach: Attach, read: Read) {
+  const uploaded = await startNativePhotoUpload(pending.userId, pending.uploadId);
+  if (uploaded.state !== 'UPLOADED' || !uploaded.assetId) return null;
+  let card: PersonalPlaceCard;
+  try {
+    card = await attach(pending.cardId, uploaded.assetId, pending.role);
+  } catch (error) {
+    const authoritative = await read(pending.cardId);
+    if (!hasAttachedPhoto(authoritative, uploaded.assetId)) {
+      throw error;
+    }
+    card = authoritative;
+  }
+  await set(
+    pending.userId,
+    (await list(pending.userId)).filter((item) => item.uploadId !== pending.uploadId)
+  );
+  return card;
+}
+
+export async function addPersonalPlaceCardPhoto(
+  userId: string,
+  cardId: string,
+  role: 'main' | 'body',
+  selected: SelectedPhoto,
+  attach: Attach,
+  read: Read
+) {
+  const upload = await prepareNativePhotoUpload(userId, selected);
+  const pending: Pending = {
+    cardId,
+    createdAt: new Date().toISOString(),
+    role,
+    uploadId: upload.id,
+    userId,
+  };
+  await set(userId, [...await list(userId), pending]);
+  return finish(pending, attach, read);
+}
+
+export async function resumePersonalPlaceCardPhotos(
+  userId: string,
+  cardId: string,
+  attach: Attach,
+  read: Read
+) {
+  const pending = (await list(userId)).filter((item) => item.cardId === cardId);
+  let completed = 0;
+  for (const item of pending) {
+    try {
+      if (await finish(item, attach, read)) completed += 1;
+    } catch {
+      // Keep the isolated pending context for explicit retry or restart recovery.
+    }
+  }
+  return { completed, pendingCount: pending.length - completed };
+}

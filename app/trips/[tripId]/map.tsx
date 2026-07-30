@@ -9,6 +9,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 
 import { PlaceCard } from '@/components/place-card';
+import { PersonalPlaceCardView } from '@/components/personal-place-card-view';
 import { HeaderBackButton } from '@/components/ui/header-back-button';
 import { MAP_STYLE_URL } from '@/constants/map';
 import { fetchPlaceCardsByIds } from '@/sanity/place-cards';
@@ -52,9 +53,46 @@ export default function TripMapScreen() {
     () => places.filter(hasValidCoordinates),
     [places]
   );
-  const placesWithoutCoordinates = placeIds.length - mappablePlaces.length;
+  const personalEntries = useMemo(
+    () => (trip?.entries ?? []).filter(
+      (entry) =>
+        entry.type === 'personalPlaceCard' &&
+        'personalPlaceCard' in entry
+    ),
+    [trip?.entries]
+  );
+  const personalMarkers = useMemo(
+    () => personalEntries.flatMap((entry) => {
+      const location = entry.personalPlaceCard.location;
+      return location?.confirmed
+        ? [{
+            entryId: entry.id,
+            latitude: location.latitude,
+            longitude: location.longitude,
+            card: entry.personalPlaceCard,
+          }]
+        : [];
+    }),
+    [personalEntries]
+  );
+  const allCoordinates = useMemo(
+    () => [
+      ...mappablePlaces.map((place) => ({
+        latitude: place.coordinates.lat,
+        longitude: place.coordinates.lng,
+      })),
+      ...personalMarkers,
+    ],
+    [mappablePlaces, personalMarkers]
+  );
+  const placesWithoutCoordinates =
+    placeIds.length - mappablePlaces.length +
+    personalEntries.length - personalMarkers.length;
   const selectedPlace =
     places.find((place) => place._id === selectedPlaceId) ?? null;
+  const selectedPersonal = personalMarkers.find(
+    (item) => `personal:${item.entryId}` === selectedPlaceId
+  ) ?? null;
 
   useEffect(() => {
     if (!trip || placeIds.length === 0) {
@@ -99,26 +137,26 @@ export default function TripMapScreen() {
   }, [placeIdsKey, selectedTripId]);
 
   useEffect(() => {
-    if (!isMapReady || mappablePlaces.length === 0) {
+    if (!isMapReady || allCoordinates.length === 0) {
       return;
     }
 
-    if (mappablePlaces.length === 1) {
+    if (allCoordinates.length === 1) {
       cameraRef.current?.easeTo({
-        center: [mappablePlaces[0].coordinates.lng, mappablePlaces[0].coordinates.lat],
+        center: [allCoordinates[0].longitude, allCoordinates[0].latitude],
         zoom: 13,
         duration: 350,
       });
       return;
     }
 
-    const lngs = mappablePlaces.map((p) => p.coordinates.lng);
-    const lats = mappablePlaces.map((p) => p.coordinates.lat);
+    const lngs = allCoordinates.map((p) => p.longitude);
+    const lats = allCoordinates.map((p) => p.latitude);
     cameraRef.current?.fitBounds(
       [Math.min(...lngs), Math.min(...lats), Math.max(...lngs), Math.max(...lats)],
       { padding: { top: 48, right: 48, bottom: 48, left: 48 }, duration: 350 }
     );
-  }, [isMapReady, mappablePlaces]);
+  }, [allCoordinates, isMapReady]);
 
   const title = trip?.name ? `${trip.name} Map` : 'Trip Map';
 
@@ -143,7 +181,7 @@ export default function TripMapScreen() {
         <Text style={{ color: '#717171', fontSize: 16, padding: 24 }}>
           {errorMessage}
         </Text>
-      ) : places.length === 0 ? (
+      ) : places.length === 0 && personalEntries.length === 0 ? (
         <Text style={{ color: '#717171', fontSize: 16, padding: 24 }}>
           This trip has no places to show yet.
         </Text>
@@ -161,7 +199,7 @@ export default function TripMapScreen() {
             </Text>
           ) : null}
 
-          {mappablePlaces.length > 0 ? (
+          {allCoordinates.length > 0 ? (
             <View style={{ flex: 1 }}>
               <MapLibreMap
                 mapStyle={MAP_STYLE_URL}
@@ -194,6 +232,24 @@ export default function TripMapScreen() {
                     />
                   </Marker>
                 ))}
+                {personalMarkers.map((item) => (
+                  <Marker
+                    key={item.entryId}
+                    id={`personal:${item.entryId}`}
+                    lngLat={[item.longitude, item.latitude]}
+                    onPress={() => setSelectedPlaceId(`personal:${item.entryId}`)}>
+                    <View
+                      style={{
+                        borderColor: '#fff',
+                        borderRadius: 6,
+                        borderWidth: 2,
+                        backgroundColor: '#E74C3C',
+                        height: 12,
+                        width: 12,
+                      }}
+                    />
+                  </Marker>
+                ))}
               </MapLibreMap>
             </View>
           ) : (
@@ -215,11 +271,13 @@ export default function TripMapScreen() {
             </View>
           )}
 
-          {mappablePlaces.length > 0 ? (
+          {allCoordinates.length > 0 ? (
             <ScrollView
               contentContainerStyle={{ padding: 16, paddingBottom: 24 }}
               style={{ maxHeight: '42%' }}>
-              {selectedPlace ? (
+              {selectedPersonal ? (
+                <PersonalPlaceCardView card={selectedPersonal.card} />
+              ) : selectedPlace ? (
                 <PlaceCard place={selectedPlace} />
               ) : (
                 <Text

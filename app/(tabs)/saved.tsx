@@ -182,6 +182,30 @@ export default function SavedScreen() {
 
         <View style={{ marginBottom: Space.xxxl }}>
           <AppText style={{ marginBottom: Space.md }} variant="section">
+            Personal Places
+          </AppText>
+          <Pressable
+            accessibilityLabel="Open your Personal Places"
+            accessibilityRole="button"
+            onPress={() => router.push('/personal-place-cards')}
+            style={({ pressed }) => ({
+              backgroundColor: Palette.surfaceMuted,
+              borderColor: Palette.border,
+              borderRadius: Radius.card,
+              borderWidth: 1,
+              minHeight: 64,
+              opacity: pressed ? 0.65 : 1,
+              padding: Space.lg,
+            })}>
+            <AppText variant="bodyStrong">Your Personal Place Cards</AppText>
+            <AppText color={Palette.textMuted}>
+              Create private places and add them to Trips.
+            </AppText>
+          </Pressable>
+        </View>
+
+        <View style={{ marginBottom: Space.xxxl }}>
+          <AppText style={{ marginBottom: Space.md }} variant="section">
             My Trips
           </AppText>
 
@@ -334,8 +358,10 @@ export default function SavedScreen() {
                         ...Type.label,
                         marginTop: Space.xs,
                       }}>
-                      {trip.places.length}{' '}
-                      {trip.places.length === 1 ? 'place' : 'places'}
+                      {trip.entries?.length ?? trip.places.length}{' '}
+                      {(trip.entries?.length ?? trip.places.length) === 1
+                        ? 'place'
+                        : 'places'}
                     </Text>
                   </View>
                 </Pressable>

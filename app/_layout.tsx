@@ -5,13 +5,15 @@ import { AuthProvider } from '@/auth/provider';
 import { SavedPlacesProvider } from '@/saved/provider';
 import { NotebookProvider } from '@/notebooks/provider';
 import { MyTripsProvider } from '@/trips/provider';
+import { PersonalPlaceCardProvider } from '@/personal-place-cards/provider';
 
 export default function RootLayout() {
   return (
     <AuthProvider>
       <SavedPlacesProvider>
         <NotebookProvider>
-          <MyTripsProvider>
+          <PersonalPlaceCardProvider>
+            <MyTripsProvider>
             <Stack
                 screenOptions={{
                   headerBackButtonDisplayMode: 'minimal',
@@ -21,6 +23,14 @@ export default function RootLayout() {
                 <Stack.Screen
                   name="(tabs)"
                   options={{ headerShown: false, title: '' }}
+                />
+                <Stack.Screen
+                  name="personal-place-cards/index"
+                  options={{ title: 'Personal Places' }}
+                />
+                <Stack.Screen
+                  name="personal-place-cards/[cardId]"
+                  options={{ title: 'Personal Place' }}
                 />
                 <Stack.Screen name="trips/[tripId]" options={{ title: 'My Trip' }} />
                 <Stack.Screen name="notebooks/index" options={{ title: 'Notebooks' }} />
@@ -54,7 +64,8 @@ export default function RootLayout() {
                 <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
                 <Stack.Screen name="auth" options={{ headerShown: false }} />
             </Stack>
-          </MyTripsProvider>
+            </MyTripsProvider>
+          </PersonalPlaceCardProvider>
         </NotebookProvider>
       </SavedPlacesProvider>
     </AuthProvider>
