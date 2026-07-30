@@ -32,8 +32,15 @@ export default function SavedScreen() {
   const router = useRouter();
   const { isLoading: isLoadingSavedIds, savedPlaceIds } = useSavedPlaces();
   const {
+    confirmImport,
     createTrip,
+    deferImport,
+    importDecision,
+    importProgress,
+    isImporting,
     isLoading: isLoadingTrips,
+    loadError: tripLoadError,
+    retryImport,
     trips,
   } = useMyTrips();
   const [places, setPlaces] = useState<PlaceCardData[]>([]);
@@ -177,6 +184,71 @@ export default function SavedScreen() {
           <AppText style={{ marginBottom: Space.md }} variant="section">
             My Trips
           </AppText>
+
+          {importDecision ? (
+            <View
+              accessibilityLabel="Import Trips confirmation"
+              style={{
+                backgroundColor: Palette.surfaceMuted,
+                borderColor: Palette.border,
+                borderRadius: Radius.card,
+                borderWidth: 1,
+                marginBottom: Space.lg,
+                padding: Space.lg,
+              }}>
+              <AppText variant="bodyStrong">
+                Add {importDecision.count}{' '}
+                {importDecision.count === 1 ? 'Trip' : 'Trips'} to your account?
+              </AppText>
+              <AppText color={Palette.textMuted} style={{ marginTop: Space.sm }}>
+                These Trips are currently saved only on this device. Import them
+                into {importDecision.accountLabel}. Nothing will be removed until
+                every Trip is verified.
+              </AppText>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  gap: Space.sm,
+                  marginTop: Space.lg,
+                }}>
+                <AppButton
+                  label="Import Trips"
+                  onPress={() => void confirmImport()}
+                />
+                <AppButton
+                  label="Not now"
+                  onPress={deferImport}
+                  variant="secondary"
+                />
+              </View>
+            </View>
+          ) : null}
+
+          {isImporting ? (
+            <StatusText>
+              Importing Trips… {importProgress.completed} of {importProgress.total}{' '}
+              verified.
+            </StatusText>
+          ) : importProgress.retryableErrors > 0 ? (
+            <View style={{ marginBottom: Space.lg }}>
+              <StatusText>
+                {importProgress.retryableErrors}{' '}
+                {importProgress.retryableErrors === 1 ? 'Trip needs' : 'Trips need'}{' '}
+                another attempt. Verified Trips will not be recreated.
+              </StatusText>
+              <AppButton label="Retry import" onPress={() => void retryImport()} />
+            </View>
+          ) : null}
+
+          {importProgress.permanentErrors > 0 ? (
+            <StatusText>
+              {importProgress.permanentErrors}{' '}
+              {importProgress.permanentErrors === 1 ? 'Trip has' : 'Trips have'}{' '}
+              data that could not be imported. Its device copy remains unchanged.
+            </StatusText>
+          ) : null}
+
+          {tripLoadError ? <StatusText>{tripLoadError}</StatusText> : null}
 
           <View
             style={{
