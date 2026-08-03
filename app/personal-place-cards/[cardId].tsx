@@ -17,6 +17,7 @@ import {
   addPersonalPlaceCardPhoto,
   resumePersonalPlaceCardPhotos,
 } from '@/personal-place-cards/photos';
+import { parsePersonalPlaceCardCoordinates } from '@/personal-place-cards/location';
 import { usePersonalPlaceCards } from '@/personal-place-cards/provider';
 import { pickPhotoForUpload } from '@/photo-uploads/picker';
 import { useMyTrips } from '@/trips/provider';
@@ -59,11 +60,7 @@ export default function PersonalPlaceCardEditor() {
   if (!card || !cardId) {
     return <StatusText>Loading Personal Place…</StatusText>;
   }
-  const lat = Number(latitude);
-  const lng = Number(longitude);
-  const validCoordinates =
-    Number.isFinite(lat) && lat >= -90 && lat <= 90 &&
-    Number.isFinite(lng) && lng >= -180 && lng <= 180;
+  const coordinates = parsePersonalPlaceCardCoordinates(latitude, longitude);
   const attachedTripIds = trips
     .filter((trip) => trip.entries?.some(
       (entry) =>
@@ -134,15 +131,18 @@ export default function PersonalPlaceCardEditor() {
           value={longitude}
         />
       </View>
-      {validCoordinates ? (
-        <PlaceMapPreview latitude={lat} longitude={lng} />
+      {coordinates ? (
+        <PlaceMapPreview
+          latitude={coordinates.latitude}
+          longitude={coordinates.longitude}
+        />
       ) : null}
       <AppButton
-        disabled={!validCoordinates || busy}
+        disabled={!coordinates || busy}
         label={card.location?.confirmed ? 'Update and confirm location' : 'Confirm location'}
         onPress={() => void act(() => mutate.update(card.id, {
-          latitude: lat,
-          longitude: lng,
+          latitude: coordinates!.latitude,
+          longitude: coordinates!.longitude,
           locationConfirmed: true,
           locationSource: 'USER_SELECTED',
         }))}
@@ -261,25 +261,32 @@ export default function PersonalPlaceCardEditor() {
         );
       }) : null}
       {message ? <StatusText>{message}</StatusText> : null}
-      <AppButton
-        label="Delete Personal Place"
-        variant="danger"
-        onPress={() => Alert.alert(
-          'Delete Personal Place?',
-          'This cannot be deleted while it belongs to an active Trip.',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Delete',
-              style: 'destructive',
-              onPress: () => void act(async () => {
-                await deleteCard(card.id);
-                router.replace('/personal-place-cards');
-              }),
-            },
-          ]
-        )}
-      />
+      {attachedTripIds.length > 0 ? (
+        <StatusText>
+          Remove this Place Card from {attachedTripIds.length} active{' '}
+          {attachedTripIds.length === 1 ? 'Trip' : 'Trips'} before deleting it.
+        </StatusText>
+      ) : (
+        <AppButton
+          label="Delete Personal Place"
+          variant="danger"
+          onPress={() => Alert.alert(
+            'Delete Personal Place?',
+            'This action cannot be undone.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Delete',
+                style: 'destructive',
+                onPress: () => void act(async () => {
+                  await deleteCard(card.id);
+                  router.replace('/personal-place-cards');
+                }),
+              },
+            ]
+          )}
+        />
+      )}
     </ScrollView>
   );
 }

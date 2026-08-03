@@ -92,8 +92,11 @@ async function run() {
     409,
     'personal_place_card_attached_invalid',
     'safe',
-    { readinessIssues: ['missing_eligible_main_photo'] }
-  )), /main photo/);
+    {
+      activeAttachmentCount: 1,
+      readinessIssues: ['missing_eligible_main_photo'],
+    }
+  )), /Remove it from its active Trip before removing required details or photos/);
   console.log('✓ Personal Place Card DTO, contracts, readiness, and guards');
 }
 void run().catch((error) => {

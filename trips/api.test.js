@@ -17,6 +17,7 @@ const originalFetch = globalThis.fetch;
 
 async function run() {
   const calls = [];
+  let projectedPersonalTitle = 'Original title';
   setActiveToken('test-token');
   globalThis.fetch = async (input, init) => {
     calls.push([String(input), init]);
@@ -30,14 +31,34 @@ async function run() {
       }]);
     }
     if (path.endsWith('/itinerary/itn_1/entries')) {
-      return Response.json([{
-        id: 'ite_1',
-        itineraryId: 'itn_1',
-        type: 'editorialPlace',
-        order: 0,
-        note: 'Entry note',
-        editorialPlace: { id: 'sanity-place' },
-      }]);
+      return Response.json([
+        {
+          id: 'ite_1',
+          itineraryId: 'itn_1',
+          type: 'editorialPlace',
+          order: 0,
+          note: 'Entry note',
+          editorialPlace: { id: 'sanity-place' },
+        },
+        {
+          id: 'ite_personal',
+          itineraryId: 'itn_1',
+          type: 'personalPlaceCard',
+          order: 1,
+          note: null,
+          personalPlaceCard: {
+            id: 'ppc_1',
+            title: projectedPersonalTitle,
+            body: 'Canonical body',
+            location: null,
+            version: projectedPersonalTitle === 'Original title' ? 1 : 2,
+            media: [],
+            readiness: { isTripIdeaReady: true, readinessIssues: [] },
+            createdAt: '2026-07-30T00:00:00.000Z',
+            updatedAt: '2026-07-30T00:00:00.000Z',
+          },
+        },
+      ]);
     }
     if (path.endsWith('/entry') && init?.method === 'POST') {
       return Response.json({ id: 'ite_2' });
@@ -91,6 +112,12 @@ async function run() {
     'ite_1',
     'ite_2',
   ]);
+  projectedPersonalTitle = 'Updated title';
+  const refreshedTrips = await listTrips(trips);
+  const refreshedPersonalEntry = refreshedTrips[0].entries.find(
+    (entry) => entry.type === 'personalPlaceCard' && 'personalPlaceCard' in entry
+  );
+  assert.equal(refreshedPersonalEntry.personalPlaceCard.title, 'Updated title');
   const personal = parseTripEntry({
     id: 'ite_personal',
     itineraryId: 'itn_1',

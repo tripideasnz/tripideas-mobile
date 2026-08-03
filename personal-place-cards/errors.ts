@@ -25,10 +25,9 @@ export function personalPlaceCardError(error: unknown) {
     } before deleting it.`;
   }
   if (error.code === 'personal_place_card_attached_invalid') {
-    const issues = Array.isArray(error.details?.readinessIssues)
-      ? error.details.readinessIssues.filter((item): item is string => typeof item === 'string')
-      : [];
-    return `This attached Place Card must remain ready for its Trips. ${readinessMessage(issues)}`;
+    const count = Number(error.details?.activeAttachmentCount ?? 0);
+    const destination = count === 1 ? 'its active Trip' : 'its active Trips';
+    return `This attached Place Card must remain ready. Remove it from ${destination} before removing required details or photos.`;
   }
   if (error.code === 'personal_place_card_conflict') {
     return 'This Place Card changed elsewhere. Reload it and try again.';

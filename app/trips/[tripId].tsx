@@ -1,6 +1,6 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Pressable,
@@ -41,6 +41,7 @@ export default function TripDetailScreen() {
     deleteTrip,
     getTrip,
     isLoading: isLoadingTrips,
+    refresh,
     removeTripEntry,
     renameTrip,
     updateTripEntryNote,
@@ -54,6 +55,12 @@ export default function TripDetailScreen() {
   const [isLoadingPlaces, setIsLoadingPlaces] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [personalPhotoUrls, setPersonalPhotoUrls] = useState<Record<string, string>>({});
+
+  useFocusEffect(
+    useCallback(() => {
+      void refresh();
+    }, [refresh])
+  );
 
   const placeIds = useMemo(
     () => trip?.places.map((place) => place.placeId) ?? [],
