@@ -4,38 +4,38 @@ import { readFile } from 'node:fs/promises';
 const read = (relativePath) =>
   readFile(new URL(`../${relativePath}`, import.meta.url), 'utf8');
 
-const [saved, list, detail, sharing, layout] = await Promise.all([
+const [saved, list, detail, sharing, layout, expandable, status] = await Promise.all([
   read('app/(tabs)/saved.tsx'),
   read('app/notebooks/index.tsx'),
   read('app/notebooks/[notebookId].tsx'),
   read('app/notebooks/[notebookId]/sharing.tsx'),
   read('app/_layout.tsx'),
+  read('components/ui/expandable-text.tsx'),
+  read('components/ui/autosave-status.tsx'),
 ]);
 
 assert.doesNotMatch(saved, /Photo transport test|photo-upload-dev/);
 console.log('✓ Saved no longer exposes the Photo transport test');
 
 assert.match(list, /headerRight/);
+assert.match(list, /MaterialIcons color=\{Palette\.trip\} name="add" size=\{30\}/);
 assert.match(list, /Updated \$\{displayDate\(notebook\.updatedAt\)\}/);
+assert.match(list, /borderRadius: Radius\.card/);
 assert.doesNotMatch(list, /testID="notebook-(open|delete)-action"/);
-console.log('✓ Notebook Home uses a compact add action and left-aligned metadata rows');
+console.log('✓ Notebook list matches the Trips header and tappable card grammar');
 
 assert.match(detail, /accessibilityLabel="Share this Notebook"/);
-assert.match(detail, /name="share-outline"/);
-assert.match(detail, /label="Delete"/);
-assert.doesNotMatch(detail, /Manage Sharing|Delete Notebook"/);
-assert.match(detail, /justifyContent: 'space-between'/);
-console.log('✓ Notebook header presents Share and destructive Delete on one row');
+assert.match(detail, /icon="share"/);
+assert.match(detail, /accessibilityLabel="More Notebook actions"/);
+assert.match(detail, /'Delete Notebook'/);
+assert.doesNotMatch(detail, /label="Delete"/);
+assert.match(detail, /flex: 1,[\s\S]*fontSize: 28/);
+console.log('✓ Notebook actions use the canonical Share and overflow icon row');
 
 assert.match(layout, /presentation: 'formSheet'/);
 assert.match(layout, /sheetAllowedDetents/);
 assert.match(layout, /sheetInitialDetentIndex: 1/);
-const sharingActions = [
-  'label="Copy Link"',
-  'label="Share…"',
-  "'Generate New Link'",
-  "'Stop Sharing'",
-];
+const sharingActions = ['label="Copy Link"', 'label="Share…"', "'Generate New Link'", "'Stop Sharing'"];
 let previousAction = -1;
 for (const action of sharingActions) {
   const position = sharing.indexOf(action);
@@ -43,36 +43,43 @@ for (const action of sharingActions) {
   previousAction = position;
 }
 assert.match(sharing, /Shared Notebook preview/);
-console.log('✓ sharing opens as a preview-backed action sheet in the approved order');
+console.log('✓ sharing keeps its preview-backed secure action sheet');
 
-assert.match(detail, /borderColor: Palette\.border/);
-assert.match(detail, /\.\.\. show more/);
+assert.match(detail, /<ExpandableText/);
 assert.match(detail, /onPress=\{\(\) => setDescriptionEditing\(true\)\}/);
-assert.match(detail, /setDescriptionExpanded\(\(current\) => !current\)/);
-console.log('✓ description is bordered, collapsible, and remains editable');
+assert.match(expandable, /numberOfLines=\{expanded \? undefined : 3\}/);
+assert.match(expandable, /\.\.\. show more/);
+assert.match(expandable, /\.\.\. show less/);
+console.log('✓ Notebook description reuses canonical three-line expansion');
 
-assert.doesNotMatch(detail, /<AppText variant="cardTitle">Pages<\/AppText>/);
-assert.match(detail, /label="Add Page"/);
-assert.match(detail, /fontWeight: '700'/);
-console.log('✓ Add Page stands alone above bold page titles');
+assert.match(detail, /AUTOSAVE_DELAY_MS = 700/);
+assert.match(detail, /<AutosaveStatus/);
+assert.match(detail, /onRetry=/);
+assert.match(status, /minHeight: 17/);
+assert.match(status, /Saving…/);
+assert.match(status, /Could not save\. Tap to retry\./);
+console.log('✓ Notebook autosave matches Trips timing, stable status, and retry treatment');
 
-assert.doesNotMatch(detail, /label="‹  Previous"|label="Next  ›"/);
-assert.match(detail, /icon="arrow-up"/);
-assert.match(detail, /icon="arrow-down"/);
+assert.match(detail, /accessibilityLabel="Add Page"/);
+assert.match(detail, /icon="add"/);
+assert.match(detail, /'arrow-upward'/);
+assert.match(detail, /'arrow-downward'/);
+assert.match(detail, /size="compact"/);
 assert.match(detail, /adjacentContentPageId/);
 assert.match(detail, /blockOffsets\.current\[page\.id\] = y/);
 assert.match(detail, /setHighlightedPageId/);
-console.log('✓ compact arrows navigate and briefly highlight ordered pages');
+console.log('✓ Add and page navigation actions reuse the canonical icon treatment');
 
 assert.doesNotMatch(detail, /ReanimatedSwipeable|renderRightActions/);
-assert.match(detail, /name="trash-outline"/);
+assert.match(detail, /name="ellipsis-horizontal"/);
+assert.match(detail, /More actions for page/);
 assert.match(detail, /'Delete this page\?'/);
 assert.match(detail, /'Delete Page'/);
 assert.doesNotMatch(layout, /GestureHandlerRootView/);
-console.log('✓ subtle Page trash control replaces swipe-to-delete');
+console.log('✓ Page deletion remains confirmed behind contextual overflow');
 
 assert.match(detail, /accessibilityLabel="Remove photo from page"/);
 assert.match(detail, /position: 'absolute'/);
 assert.match(detail, />\s*×\s*<\/AppText>/);
 assert.doesNotMatch(detail, /label="Remove Photo"/);
-console.log('✓ Photo removal uses the compact overlapping × control');
+console.log('✓ Photo removal keeps the compact contextual control');

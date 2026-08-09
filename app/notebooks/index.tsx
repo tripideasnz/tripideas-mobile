@@ -1,4 +1,5 @@
 import { HeaderBackButton } from '@react-navigation/elements';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Stack, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -15,6 +16,7 @@ import { useSession } from '@/auth/provider';
 import { AppButton } from '@/components/ui/app-button';
 import { AppText } from '@/components/ui/app-text';
 import { AppTextInput } from '@/components/ui/app-text-input';
+import { IconAction } from '@/components/ui/icon-action';
 import { LoadingView } from '@/components/ui/loading-view';
 import { Palette, Radius, Screen, Space } from '@/constants/design';
 import { classifyNotebookError } from '@/notebooks/errors';
@@ -136,13 +138,8 @@ export default function NotebookListScreen() {
               }}
               style={({ pressed }) => ({
                 opacity: showCreate ? 0.35 : pressed ? 0.55 : 1,
-                paddingHorizontal: Space.sm,
               })}>
-              <AppText
-                color={Palette.trip}
-                style={{ fontSize: 34, fontWeight: '500', lineHeight: 34 }}>
-                +
-              </AppText>
+              <MaterialIcons color={Palette.trip} name="add" size={30} />
             </Pressable>
           ),
         }}
@@ -198,22 +195,21 @@ export default function NotebookListScreen() {
                 value={description}
               />
               {formError ? <AppText color={Palette.danger}>{formError}</AppText> : null}
-              <View style={{ flexDirection: 'row', gap: Space.sm }}>
-                <AppButton
+              <View style={{ flexDirection: 'row', gap: Space.sm, justifyContent: 'flex-end' }}>
+                <IconAction
+                  accessibilityLabel="Create Notebook"
                   disabled={isCreating}
-                  label={isCreating ? 'Creating…' : 'Create'}
+                  icon="check"
                   onPress={submitCreate}
-                  size="compact"
                 />
-                <AppButton
+                <IconAction
+                  accessibilityLabel="Cancel Notebook creation"
                   disabled={isCreating}
-                  label="Cancel"
+                  icon="close"
                   onPress={() => {
                     resetCreateForm();
                     setShowCreate(false);
                   }}
-                  size="compact"
-                  variant="secondary"
                 />
               </View>
             </View>
@@ -264,13 +260,13 @@ function NotebookRow({
       accessibilityRole="button"
       onPress={onOpen}
       style={({ pressed }) => ({
-        borderBottomColor: Palette.border,
-        borderBottomWidth: 1,
+        borderColor: Palette.border,
+        borderRadius: Radius.card,
+        borderWidth: 1,
         flexDirection: 'row',
         gap: Space.md,
         opacity: pressed ? 0.6 : 1,
-        paddingHorizontal: Space.xs,
-        paddingVertical: Space.lg,
+        padding: Space.lg,
       })}>
       <View style={{ flex: 1, gap: Space.xs }}>
         <AppText
@@ -285,13 +281,14 @@ function NotebookRow({
           {displayDate(notebook.updatedAt) ? ` · Updated ${displayDate(notebook.updatedAt)}` : ''}
         </AppText>
       </View>
-      <AppText
+      <MaterialIcons
         accessibilityElementsHidden
         color={Palette.textMuted}
         importantForAccessibility="no-hide-descendants"
-        style={{ alignSelf: 'center', fontSize: 24 }}>
-        ›
-      </AppText>
+        name="chevron-right"
+        size={26}
+        style={{ alignSelf: 'center' }}
+      />
     </Pressable>
   );
 }

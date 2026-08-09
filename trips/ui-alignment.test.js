@@ -4,11 +4,13 @@ import { readFile } from 'node:fs/promises';
 const read = (relativePath) =>
   readFile(new URL(`../${relativePath}`, import.meta.url), 'utf8');
 
-const [list, detail, entry, autosave, api] = await Promise.all([
+const [list, detail, entry, autosave, autosaveStatus, expandable, api] = await Promise.all([
   read('app/trips/index.tsx'),
   read('app/trips/[tripId].tsx'),
   read('components/trip-entry-card.tsx'),
   read('components/ui/autosave-note.tsx'),
+  read('components/ui/autosave-status.tsx'),
+  read('components/ui/expandable-text.tsx'),
   read('trips/api.ts'),
 ]);
 
@@ -36,14 +38,14 @@ assert.match(entry, /<AutosaveNote/);
 assert.doesNotMatch(entry, /Save Note/);
 assert.match(autosave, /setTimeout\(\(\) =>/);
 assert.match(autosave, /}, 700\)/);
-assert.match(autosave, /Saving…/);
-assert.match(autosave, /Could not save\. Tap to retry\./);
-assert.match(autosave, /minHeight: 17/);
-assert.match(autosave, /opacity: saveState === 'idle' \? 0 : 1/);
+assert.match(autosaveStatus, /Saving…/);
+assert.match(autosaveStatus, /Could not save\. Tap to retry\./);
+assert.match(autosaveStatus, /minHeight: 17/);
+assert.match(autosaveStatus, /opacity: state === 'idle' \? 0 : 1/);
 assert.match(autosave, /awaitingAuthoritativeRef/);
 assert.match(autosave, /revisionRef\.current > 0/);
-assert.match(autosave, /show more/);
-assert.match(autosave, /show less/);
+assert.match(expandable, /show more/);
+assert.match(expandable, /show less/);
 assert.match(detail, /updateTripNote\(trip\.id, note\)/);
 assert.match(detail, /updateTripEntryNote\(trip\.id, entry\.id, note\)/);
 console.log('✓ Trip and entry notes share debounced autosave, feedback, and expansion');

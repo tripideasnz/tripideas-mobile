@@ -22,8 +22,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useSession } from '@/auth/provider';
 import { AppButton } from '@/components/ui/app-button';
+import { AutosaveStatus, type AutosaveState } from '@/components/ui/autosave-status';
 import { AppText } from '@/components/ui/app-text';
 import { AppTextInput } from '@/components/ui/app-text-input';
+import { ExpandableText } from '@/components/ui/expandable-text';
+import { IconAction } from '@/components/ui/icon-action';
 import { LoadingView } from '@/components/ui/loading-view';
 import {
   adjacentContentPageId,
@@ -54,9 +57,9 @@ import {
   resumeNotebookPhotos,
 } from '@/notebook-photo-blocks/service';
 
-type SaveState = 'failed' | 'idle' | 'saving';
+type SaveState = AutosaveState;
 type RetryConflict = () => Promise<void>;
-const AUTOSAVE_DELAY_MS = 650;
+const AUTOSAVE_DELAY_MS = 700;
 
 export default function NotebookDetailScreen() {
   const router = useRouter();
@@ -83,8 +86,6 @@ export default function NotebookDetailScreen() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [descriptionEditing, setDescriptionEditing] = useState(false);
-  const [descriptionExpanded, setDescriptionExpanded] = useState(false);
-  const [descriptionOverflows, setDescriptionOverflows] = useState(false);
   const [highlightedPageId, setHighlightedPageId] = useState<string | null>(null);
   const [titleDrafts, setTitleDrafts] = useState<Record<string, string>>({});
   const [textDrafts, setTextDrafts] = useState<Record<string, string>>({});
@@ -736,68 +737,55 @@ export default function NotebookDetailScreen() {
             ) : null}
 
             <View style={{ gap: Space.md }}>
-            <AppTextInput
-              accessibilityLabel="Notebook title"
-              editable={!mutationDisabled}
-              maxLength={200}
-              onChangeText={(value) => {
-                titleRef.current = value;
-                setTitle(value);
-                metadataRevisionRef.current += 1;
-                setMetadataState('idle');
-                scheduleMetadataSave();
-              }}
-              style={{
-                backgroundColor: 'transparent',
-                borderWidth: 0,
-                fontSize: 28,
-                fontWeight: '700',
-                lineHeight: 34,
-                minHeight: 44,
-                paddingHorizontal: 0,
-                paddingVertical: 0,
-              }}
-              value={title}
-            />
             <View
               style={{
                 alignItems: 'center',
                 flexDirection: 'row',
-                justifyContent: 'space-between',
+                gap: Space.sm,
               }}>
-              <Pressable
+              <AppTextInput
+                accessibilityLabel="Notebook title"
+                editable={!mutationDisabled}
+                maxLength={200}
+                onChangeText={(value) => {
+                  titleRef.current = value;
+                  setTitle(value);
+                  metadataRevisionRef.current += 1;
+                  setMetadataState('idle');
+                  scheduleMetadataSave();
+                }}
+                style={{
+                  backgroundColor: 'transparent',
+                  borderWidth: 0,
+                  flex: 1,
+                  fontSize: 28,
+                  fontWeight: '700',
+                  lineHeight: 34,
+                  minHeight: 44,
+                  paddingHorizontal: 0,
+                  paddingVertical: 0,
+                }}
+                value={title}
+              />
+              <IconAction
                 accessibilityLabel="Share this Notebook"
-                accessibilityRole="button"
                 disabled={!session}
+                icon="share"
                 onPress={() =>
                   router.push({
                     pathname: '/notebooks/[notebookId]/sharing',
                     params: { notebookId: detail.id },
                   })
                 }
-                style={({ pressed }) => ({
-                  alignItems: 'center',
-                  borderColor: Palette.trip,
-                  borderRadius: Radius.control,
-                  borderWidth: 1,
-                  height: 44,
-                  justifyContent: 'center',
-                  opacity: !session ? 0.4 : pressed ? 0.65 : 1,
-                  width: 52,
-                })}>
-                <Ionicons
-                  color={Palette.trip}
-                  name="share-outline"
-                  size={22}
-                />
-              </Pressable>
-              <AppButton
-                accessibilityLabel="Delete this Notebook"
+              />
+              <IconAction
+                accessibilityLabel="More Notebook actions"
                 disabled={mutationDisabled}
-                label="Delete"
-                onPress={confirmDeleteNotebook}
-                size="compact"
-                variant="danger"
+                icon="more-horiz"
+                onPress={() => Alert.alert('Notebook actions', undefined, [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Delete Notebook', style: 'destructive', onPress: confirmDeleteNotebook },
+                ])}
               />
             </View>
             {descriptionEditing ? (
@@ -820,79 +808,19 @@ export default function NotebookDetailScreen() {
                 value={description}
               />
             ) : (
-              <View
-                style={{
-                  borderColor: Palette.border,
-                  borderRadius: Radius.control,
-                  borderWidth: 1,
-                  gap: Space.sm,
-                  padding: Space.md,
-                }}>
-                <Pressable
-                  accessibilityHint="Enters description editing mode."
-                  accessibilityLabel={
-                    description
-                      ? 'Edit Notebook description'
-                      : 'Add Notebook description'
-                  }
-                  accessibilityRole="button"
-                  disabled={mutationDisabled}
-                  onPress={() => setDescriptionEditing(true)}
-                  style={({ pressed }) => ({
-                    opacity: pressed ? 0.7 : 1,
-                  })}>
-                <View>
-                    <AppText
-                      color={description ? Palette.textBody : Palette.textMuted}
-                      numberOfLines={descriptionExpanded ? undefined : 3}>
-                      {description || 'Add a description'}
-                    </AppText>
-                </View>
-                </Pressable>
-                {description ? (
-                  <View
-                    pointerEvents="none"
-                    style={{
-                      left: 0,
-                      opacity: 0,
-                      position: 'absolute',
-                      right: 0,
-                    }}>
-                    <AppText
-                      accessibilityElementsHidden
-                      importantForAccessibility="no-hide-descendants"
-                      onTextLayout={(event) => {
-                        setDescriptionOverflows(
-                          event.nativeEvent.lines.length > 3
-                        );
-                      }}>
-                      {description}
-                    </AppText>
-                  </View>
-                ) : null}
-                {descriptionOverflows || descriptionExpanded ? (
-                  <Pressable
-                    accessibilityLabel={
-                      descriptionExpanded
-                        ? 'Show less of Notebook description'
-                        : 'Show more of Notebook description'
-                    }
-                    accessibilityRole="button"
-                    onPress={() =>
-                      setDescriptionExpanded((current) => !current)
-                    }
-                    style={{ alignSelf: 'flex-end' }}>
-                    <AppText
-                      color={Palette.textMuted}
-                      style={{ fontStyle: 'italic' }}
-                      variant="caption">
-                      {descriptionExpanded ? '... show less' : '... show more'}
-                    </AppText>
-                  </Pressable>
-                ) : null}
-              </View>
+              <ExpandableText
+                accessibilityLabel="Notebook description"
+                disabled={mutationDisabled}
+                onPress={() => setDescriptionEditing(true)}
+                placeholder="Add a description"
+                value={description}
+              />
             )}
-              <SaveLabel state={metadataState} />
+              <SaveLabel
+                accessibilityLabel="Notebook title and description"
+                onRetry={() => void saveMetadata(metadataRevisionRef.current)}
+                state={metadataState}
+              />
             </View>
           </View>
 
@@ -907,13 +835,11 @@ export default function NotebookDetailScreen() {
               justifyContent: 'space-between',
               paddingVertical: Space.sm,
             }}>
-            <AppButton
+            <IconAction
               accessibilityLabel="Add Page"
               disabled={mutationDisabled}
-              label="Add Page"
+              icon="add"
               onPress={() => void addPage()}
-              size="compact"
-              style={{ marginLeft: 'auto', width: 112 }}
             />
           </View>
 
@@ -1004,11 +930,14 @@ export default function NotebookDetailScreen() {
                       }}
                     />
                     <Pressable
-                      accessibilityLabel={`Delete page ${index + 1}`}
+                      accessibilityLabel={`More actions for page ${index + 1}`}
                       accessibilityRole="button"
                       disabled={mutationDisabled}
                       hitSlop={8}
-                      onPress={() => confirmDeletePage(item.id)}
+                      onPress={() => Alert.alert(`Page ${index + 1} actions`, undefined, [
+                        { text: 'Cancel', style: 'cancel' },
+                        { text: 'Delete Page', style: 'destructive', onPress: () => confirmDeletePage(item.id) },
+                      ])}
                       style={({ pressed }) => ({
                         alignItems: 'center',
                         height: 36,
@@ -1016,11 +945,7 @@ export default function NotebookDetailScreen() {
                         opacity: mutationDisabled ? 0.35 : pressed ? 0.55 : 1,
                         width: 36,
                       })}>
-                      <Ionicons
-                        color={Palette.textMuted}
-                        name="trash-outline"
-                        size={20}
-                      />
+                      <Ionicons color={Palette.textMuted} name="ellipsis-horizontal" size={20} />
                     </Pressable>
                   </View>
                   <AppTextInput
@@ -1149,7 +1074,14 @@ export default function NotebookDetailScreen() {
                     style={{ alignSelf: 'flex-end', width: 112 }}
                     variant="secondary"
                   />
-                  <SaveLabel state={itemStates[item.id] ?? 'idle'} />
+                  <SaveLabel
+                    accessibilityLabel={`Page ${index + 1} text`}
+                    onRetry={() => void saveText(
+                      item.id,
+                      itemRevisionsRef.current[item.id] ?? 0
+                    )}
+                    state={itemStates[item.id] ?? 'idle'}
+                  />
                 </View>
                   ),
                   photo: () => <View />,
@@ -1189,42 +1121,27 @@ function PageNavigationButton({
   icon: 'arrow-down' | 'arrow-up';
   onPress: () => void;
 }) {
-  return (
-    <Pressable
-      accessibilityLabel={accessibilityLabel}
-      accessibilityRole="button"
-      accessibilityState={{ disabled }}
-      disabled={disabled}
-      hitSlop={8}
-      onPress={onPress}
-      style={({ pressed }) => ({
-        alignItems: 'center',
-        borderColor: Palette.border,
-        borderRadius: Radius.control,
-        borderWidth: 1,
-        height: 36,
-        justifyContent: 'center',
-        opacity: disabled ? 0.3 : pressed ? 0.55 : 1,
-        width: 36,
-      })}>
-      <Ionicons color={Palette.textBody} name={icon} size={18} />
-    </Pressable>
-  );
+  return <IconAction
+    accessibilityLabel={accessibilityLabel}
+    disabled={disabled}
+    icon={icon === 'arrow-up' ? 'arrow-upward' : 'arrow-downward'}
+    onPress={onPress}
+    size="compact"
+  />;
 }
 
-function SaveLabel({ state }: { state: SaveState }) {
-  const label =
-    state === 'saving'
-      ? 'Saving…'
-      : state === 'failed'
-        ? 'Could not save'
-        : '';
-  return label ? (
-    <AppText
-      accessibilityLiveRegion="polite"
-      color={state === 'failed' ? Palette.danger : Palette.textMuted}
-      variant="caption">
-      {label}
-    </AppText>
-  ) : null;
+function SaveLabel({
+  accessibilityLabel,
+  onRetry,
+  state,
+}: {
+  accessibilityLabel: string;
+  onRetry: () => void;
+  state: SaveState;
+}) {
+  return <AutosaveStatus
+    accessibilityLabel={accessibilityLabel}
+    onRetry={onRetry}
+    state={state}
+  />;
 }

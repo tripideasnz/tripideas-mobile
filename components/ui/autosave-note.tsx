@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 
-import { AppText } from '@/components/ui/app-text';
+import { AutosaveStatus, type AutosaveState } from '@/components/ui/autosave-status';
 import { AppTextInput } from '@/components/ui/app-text-input';
-import { Palette, Radius, Space } from '@/constants/design';
-
-export type AutosaveState = 'idle' | 'saving' | 'failed';
+import { ExpandableText } from '@/components/ui/expandable-text';
+import { Space } from '@/constants/design';
 
 export function AutosaveNote({
   accessibilityLabel,
@@ -20,8 +19,6 @@ export function AutosaveNote({
 }) {
   const [draft, setDraft] = useState(value);
   const [editing, setEditing] = useState(false);
-  const [expanded, setExpanded] = useState(false);
-  const [overflows, setOverflows] = useState(false);
   const [saveState, setSaveState] = useState<AutosaveState>('idle');
   const [retryRevision, setRetryRevision] = useState(0);
   const onSaveRef = useRef(onSave);
@@ -91,71 +88,21 @@ export function AutosaveNote({
           value={draft}
         />
       ) : (
-        <View
-          style={{
-            borderColor: Palette.border,
-            borderRadius: Radius.control,
-            borderWidth: 1,
-            gap: Space.sm,
-            padding: Space.md,
-          }}>
-          <Pressable
-            accessibilityHint="Enters note editing mode."
-            accessibilityLabel={draft ? `Edit ${accessibilityLabel}` : `Add ${accessibilityLabel}`}
-            accessibilityRole="button"
-            onPress={() => setEditing(true)}>
-            <AppText
-              color={draft ? Palette.textBody : Palette.textMuted}
-              numberOfLines={expanded ? undefined : 3}>
-              {draft || placeholder}
-            </AppText>
-          </Pressable>
-          {draft ? (
-            <View pointerEvents="none" style={{ left: 0, opacity: 0, position: 'absolute', right: 0 }}>
-              <AppText
-                accessibilityElementsHidden
-                importantForAccessibility="no-hide-descendants"
-                onTextLayout={(event) => setOverflows(event.nativeEvent.lines.length > 3)}>
-                {draft}
-              </AppText>
-            </View>
-          ) : null}
-          {overflows || expanded ? (
-            <Pressable
-              accessibilityLabel={expanded ? `Show less of ${accessibilityLabel}` : `Show more of ${accessibilityLabel}`}
-              accessibilityRole="button"
-              onPress={() => setExpanded((current) => !current)}
-              style={{ alignSelf: 'flex-end' }}>
-              <AppText color={Palette.textMuted} style={{ fontStyle: 'italic' }} variant="caption">
-                {expanded ? '... show less' : '... show more'}
-              </AppText>
-            </Pressable>
-          ) : null}
-        </View>
+        <ExpandableText
+          accessibilityLabel={accessibilityLabel}
+          onPress={() => setEditing(true)}
+          placeholder={placeholder}
+          value={draft}
+        />
       )}
-      <View style={{ minHeight: 17 }}>
-        <Pressable
-          accessibilityElementsHidden={saveState === 'idle'}
-          accessibilityLabel={saveState === 'failed' ? `Retry saving ${accessibilityLabel}` : undefined}
-          accessibilityRole={saveState === 'failed' ? 'button' : undefined}
-          disabled={saveState !== 'failed'}
-          onPress={() => {
+      <AutosaveStatus
+        accessibilityLabel={accessibilityLabel}
+        onRetry={() => {
             setSaveState('idle');
             setRetryRevision((current) => current + 1);
-          }}
-          style={{ opacity: saveState === 'idle' ? 0 : 1 }}>
-          <AppText
-            accessibilityLiveRegion="polite"
-            color={saveState === 'failed' ? Palette.danger : Palette.textMuted}
-            variant="caption">
-            {saveState === 'saving'
-              ? 'Saving…'
-              : saveState === 'failed'
-                ? 'Could not save. Tap to retry.'
-                : 'Saved'}
-          </AppText>
-        </Pressable>
-      </View>
+        }}
+        state={saveState}
+      />
     </View>
   );
 }
