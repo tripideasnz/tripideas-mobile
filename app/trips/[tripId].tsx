@@ -59,6 +59,13 @@ export default function TripDetailScreen() {
   const scrollRef = useRef<ScrollView>(null);
   const entryOffsetsRef = useRef<Record<string, number>>({});
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleBack = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+    router.replace('/trips');
+  }, [router]);
 
   useFocusEffect(
     useCallback(() => {
@@ -283,7 +290,7 @@ export default function TripDetailScreen() {
         options={{
           headerBackVisible: false,
           headerLeft: () => (
-            <HeaderBackButton onPress={() => router.replace('/trips')} />
+            <HeaderBackButton onPress={handleBack} />
           ),
           title: '',
         }}

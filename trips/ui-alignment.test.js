@@ -27,6 +27,9 @@ console.log('✓ Trips list separates card navigation from confirmed trash actio
 
 assert.doesNotMatch(detail, /Save Note|Show on Map|Delete trip/);
 assert.match(detail, /accessibilityLabel="Show Trip on map"/);
+assert.match(detail, /if \(router\.canGoBack\(\)\)/);
+assert.match(detail, /router\.back\(\)/);
+assert.doesNotMatch(detail, /HeaderBackButton onPress=\{\(\) => router\.replace\('\/trips'\)\}/);
 assert.match(detail, /accessibilityLabel="Share Trip"/);
 assert.match(detail, /<Text style=\{\{ flex: 1, \.\.\.Type\.cardTitle \}\}>Trip note<\/Text>/);
 assert.match(entry, /<Text style=\{\{ \.\.\.Type\.cardTitle, marginBottom: Space\.sm \}\}>Note for \{title\}<\/Text>/);
