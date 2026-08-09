@@ -133,23 +133,29 @@ export function AutosaveNote({
           ) : null}
         </View>
       )}
-      {saveState !== 'idle' ? (
+      <View style={{ minHeight: 17 }}>
         <Pressable
+          accessibilityElementsHidden={saveState === 'idle'}
           accessibilityLabel={saveState === 'failed' ? `Retry saving ${accessibilityLabel}` : undefined}
           accessibilityRole={saveState === 'failed' ? 'button' : undefined}
           disabled={saveState !== 'failed'}
           onPress={() => {
             setSaveState('idle');
             setRetryRevision((current) => current + 1);
-          }}>
+          }}
+          style={{ opacity: saveState === 'idle' ? 0 : 1 }}>
           <AppText
             accessibilityLiveRegion="polite"
             color={saveState === 'failed' ? Palette.danger : Palette.textMuted}
             variant="caption">
-            {saveState === 'saving' ? 'Saving…' : 'Could not save. Tap to retry.'}
+            {saveState === 'saving'
+              ? 'Saving…'
+              : saveState === 'failed'
+                ? 'Could not save. Tap to retry.'
+                : 'Saved'}
           </AppText>
         </Pressable>
-      ) : null}
+      </View>
     </View>
   );
 }

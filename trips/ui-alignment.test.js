@@ -35,6 +35,8 @@ assert.match(autosave, /setTimeout\(\(\) =>/);
 assert.match(autosave, /}, 700\)/);
 assert.match(autosave, /Saving…/);
 assert.match(autosave, /Could not save\. Tap to retry\./);
+assert.match(autosave, /minHeight: 17/);
+assert.match(autosave, /opacity: saveState === 'idle' \? 0 : 1/);
 assert.match(autosave, /awaitingAuthoritativeRef/);
 assert.match(autosave, /revisionRef\.current > 0/);
 assert.match(autosave, /show more/);
