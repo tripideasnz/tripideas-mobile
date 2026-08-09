@@ -58,6 +58,7 @@ export default function PersonalPlaceCardScreen() {
   const card = get(cardId);
   const cardMedia = card?.media;
   const [isEditing, setIsEditing] = useState(initialMode === 'edit');
+  const [isEditingBody, setIsEditingBody] = useState(false);
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [latitude, setLatitude] = useState('');
@@ -363,16 +364,39 @@ export default function PersonalPlaceCardScreen() {
         maxLength={200}
         onChangeText={(value) => updateDraft('title', value)}
         placeholder="Title"
+        style={{ fontSize: 18, fontWeight: '700', lineHeight: 23 }}
         value={title}
       />
-      <AppTextInput
-        accessibilityLabel="Personal Place description"
-        maxLength={10_000}
-        multiline
-        onChangeText={(value) => updateDraft('body', value)}
-        placeholder="Description"
-        value={body}
-      />
+      {isEditingBody ? (
+        <AppTextInput
+          accessibilityLabel="Personal Place description"
+          autoFocus
+          maxLength={10_000}
+          multiline
+          onBlur={() => setIsEditingBody(false)}
+          onChangeText={(value) => updateDraft('body', value)}
+          placeholder="Description"
+          style={{ minHeight: 120, textAlignVertical: 'top' }}
+          value={body}
+        />
+      ) : body ? (
+        <Pressable
+          accessibilityHint="Enters text editing mode."
+          accessibilityLabel="Edit Personal Place description"
+          accessibilityRole="button"
+          onPress={() => setIsEditingBody(true)}
+          style={{ borderColor: Palette.border, borderRadius: Radius.control, borderWidth: 1, padding: Space.md }}>
+          <FinishedBodyText value={body} />
+        </Pressable>
+      ) : (
+        <Pressable
+          accessibilityLabel="Add Personal Place description"
+          accessibilityRole="button"
+          onPress={() => setIsEditingBody(true)}
+          style={{ borderColor: Palette.border, borderRadius: Radius.control, borderWidth: 1, padding: Space.md }}>
+          <AppText color={Palette.textMuted}>Description</AppText>
+        </Pressable>
+      )}
       <AutosaveStatus
         accessibilityLabel="Personal Place text"
         onRetry={() => void queueMetadataSave(revisionRef.current)}
@@ -517,12 +541,11 @@ export default function PersonalPlaceCardScreen() {
         {bodyMedia.length} of 10 body photos
       </AppText>
 
-      <AppText variant="section">Trip readiness</AppText>
-      <StatusText>
+      <AppText style={{ fontSize: 18, fontWeight: '700', lineHeight: 23 }}>
         {card.readiness.isTripIdeaReady
           ? 'Ready to add to Trips.'
           : readinessMessage(card.readiness.readinessIssues)}
-      </StatusText>
+      </AppText>
       {card.readiness.isTripIdeaReady ? trips.map((trip) => {
         const attached = attachedTripIds.includes(trip.id);
         return (
@@ -625,7 +648,10 @@ function FinishedBodyText({ value }: { value: string }) {
         <Pressable
           accessibilityLabel={expanded ? 'Show less of Personal Place description' : 'Show more of Personal Place description'}
           accessibilityRole="button"
-          onPress={() => setExpanded((current) => !current)}
+          onPress={(event) => {
+            event.stopPropagation();
+            setExpanded((current) => !current);
+          }}
           style={{ alignSelf: 'flex-end' }}>
           <AppText color={Palette.textMuted} style={{ fontStyle: 'italic' }} variant="caption">
             {expanded ? '... show less' : '... show more'}

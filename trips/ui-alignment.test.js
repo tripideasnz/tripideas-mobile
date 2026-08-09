@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 const read = (relativePath) =>
   readFile(new URL(`../${relativePath}`, import.meta.url), 'utf8');
 
-const [list, detail, entry, autosave, autosaveStatus, expandable, api] = await Promise.all([
+const [list, detail, entry, autosave, autosaveStatus, expandable, api, provider] = await Promise.all([
   read('app/trips/index.tsx'),
   read('app/trips/[tripId].tsx'),
   read('components/trip-entry-card.tsx'),
@@ -12,6 +12,7 @@ const [list, detail, entry, autosave, autosaveStatus, expandable, api] = await P
   read('components/ui/autosave-status.tsx'),
   read('components/ui/expandable-text.tsx'),
   read('trips/api.ts'),
+  read('trips/provider.tsx'),
 ]);
 
 assert.match(list, /accessibilityLabel="Add Trip"/);
@@ -67,3 +68,7 @@ assert.doesNotMatch(detail, /reorderTripEntries/);
 assert.match(api, /updateEntryNoteRequest/);
 assert.doesNotMatch(api, /updatePersonalPlaceCard.*updateEntryNoteRequest|updateEntryNoteRequest.*updatePersonalPlaceCard/s);
 console.log('✓ arrows navigate measured adjacent cards and entry-note mutation remains entry-scoped');
+
+assert.doesNotMatch(provider, /void next\.finally/);
+assert.match(provider, /void next\.then\([\s\S]*pending\.delete\(key\)/);
+console.log('✓ failed Trip mutations clean up without creating an unhandled rejection');

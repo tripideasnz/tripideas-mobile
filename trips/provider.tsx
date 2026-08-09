@@ -84,9 +84,14 @@ function createQueue() {
     const previous = pending.get(key) ?? Promise.resolve();
     const next = previous.catch(() => undefined).then(task);
     pending.set(key, next);
-    void next.finally(() => {
-      if (pending.get(key) === next) pending.delete(key);
-    });
+    void next.then(
+      () => {
+        if (pending.get(key) === next) pending.delete(key);
+      },
+      () => {
+        if (pending.get(key) === next) pending.delete(key);
+      }
+    );
     return next;
   };
 }

@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useRouter } from 'expo-router';
 import { authorizePhotoRead } from '@/notebooks/api';
+import { TripImageCollage } from '@/components/trip-image-collage';
 import { CardSurface } from '@/components/ui/card-surface';
 import { MediaFrame } from '@/components/ui/media-frame';
 import { Palette, Space, Type } from '@/constants/design';
@@ -20,18 +20,35 @@ export function PersonalPlaceCardView({
   onPress?: () => void;
 }) {
   const router = useRouter();
-  const main = card.media.find((item) => item.role === 'main');
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const coverMedia = [
+    ...card.media.filter((item) => item.role === 'main'),
+    ...card.media.filter((item) => item.role === 'body'),
+  ].slice(0, 4);
+  const coverKey = coverMedia.map((item) => item.photoAssetId).join('|');
+  const [coverImages, setCoverImages] = useState<
+    { alt: string; cacheKey: string; url: string }[]
+  >([]);
   useEffect(() => {
     let mounted = true;
-    setImageUrl(null);
-    if (main) {
-      void authorizePhotoRead(main.photoAssetId)
-        .then((result) => { if (mounted) setImageUrl(result.url); })
-        .catch(() => { if (mounted) setImageUrl(null); });
-    }
+    setCoverImages([]);
+    void Promise.all(coverMedia.map(async (media) => {
+      try {
+        const result = await authorizePhotoRead(media.photoAssetId);
+        return {
+          alt: card.title ?? 'Personal Place photo',
+          cacheKey: media.photoAssetId,
+          url: result.url,
+        };
+      } catch {
+        return null;
+      }
+    })).then((images) => {
+      if (mounted) setCoverImages(images.filter((image): image is NonNullable<typeof image> => image !== null));
+    });
     return () => { mounted = false; };
-  }, [main]);
+    // Photo IDs are the stable cover identity; title changes only affect fallback alt text.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coverKey]);
 
   return (
     <Pressable
@@ -45,25 +62,19 @@ export function PersonalPlaceCardView({
         opacity: pressed ? 0.7 : 1,
       })}>
       <CardSurface style={compact ? { flexDirection: 'row', minHeight: 92 } : undefined}>
-        {imageUrl ? (
+        {compact ? (
+          <TripImageCollage
+            emptyLabel="Personal Place"
+            images={coverImages}
+            style={{ height: 92, width: 112 }}
+          />
+        ) : coverImages[0] ? (
           <MediaFrame
             accessibilityLabel={card.title ?? 'Personal Place photo'}
-            aspectRatio={compact ? undefined : 16 / 9}
+            aspectRatio={16 / 9}
             radius={0}
-            source={{ uri: imageUrl }}
-            style={compact ? { height: 92, width: 112 } : undefined}
+            source={{ uri: coverImages[0].url }}
           />
-        ) : compact ? (
-          <View
-            style={{
-              alignItems: 'center',
-              backgroundColor: Palette.surfaceMuted,
-              height: 92,
-              justifyContent: 'center',
-              width: 112,
-            }}>
-            <MaterialIcons color={Palette.trip} name="place" size={30} />
-          </View>
         ) : null}
         <View style={{ flex: 1, justifyContent: 'center', padding: Space.lg, paddingRight: compact ? 60 : Space.lg }}>
           <Text numberOfLines={2} style={Type.cardTitle}>{card.title || 'Untitled Personal Place'}</Text>
