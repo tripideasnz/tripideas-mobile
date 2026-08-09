@@ -13,8 +13,7 @@ const [list, detail, entry, autosave, api] = await Promise.all([
 ]);
 
 assert.match(list, /accessibilityLabel="Add Trip"/);
-assert.match(list, /alignItems: 'flex-end', width: 52/);
-assert.match(list, /accessibilityLabel="Add Trip"[\s\S]*color=\{Palette\.trip\}[\s\S]*icon="add"/);
+assert.match(list, /accessibilityLabel="Add Trip"[\s\S]*MaterialIcons color=\{Palette\.trip\} name="add" size=\{30\}/);
 assert.match(list, /accessibilityLabel=\{`Open \$\{trip\.name\}`\}/);
 assert.match(list, /accessibilityLabel=\{`Delete \$\{trip\.name\}`\}/);
 assert.match(list, /size="compact"/);

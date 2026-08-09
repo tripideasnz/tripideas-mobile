@@ -1,3 +1,4 @@
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Stack, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
@@ -85,15 +86,15 @@ export default function TripsScreen() {
       <Stack.Screen
         options={{
           headerRight: () => (
-            <View style={{ alignItems: 'flex-end', width: 52 }}>
-              <IconAction
-                accessibilityLabel="Add Trip"
-                color={Palette.trip}
-                disabled={showCreate}
-                icon="add"
-                onPress={() => setShowCreate(true)}
-              />
-            </View>
+            <Pressable
+              accessibilityLabel="Add Trip"
+              accessibilityRole="button"
+              disabled={showCreate}
+              hitSlop={12}
+              onPress={() => setShowCreate(true)}
+              style={({ pressed }) => ({ opacity: showCreate ? 0.35 : pressed ? 0.55 : 1 })}>
+              <MaterialIcons color={Palette.trip} name="add" size={30} />
+            </Pressable>
           ),
         }}
       />

@@ -6,7 +6,6 @@ import { Palette, Radius } from '@/constants/design';
 
 export function IconAction({
   accessibilityLabel,
-  color,
   destructive = false,
   disabled = false,
   icon,
@@ -14,14 +13,13 @@ export function IconAction({
   size = 'default',
 }: {
   accessibilityLabel: string;
-  color?: string;
   destructive?: boolean;
   disabled?: boolean;
   icon: ComponentProps<typeof MaterialIcons>['name'];
   onPress: () => void;
   size?: 'compact' | 'default';
 }) {
-  const actionColor = destructive ? Palette.danger : color ?? Palette.textBody;
+  const color = destructive ? Palette.danger : Palette.textBody;
   const dimension = size === 'compact' ? 36 : 44;
   return (
     <Pressable
@@ -33,7 +31,7 @@ export function IconAction({
       onPress={onPress}
       style={({ pressed }) => ({
         alignItems: 'center',
-        borderColor: destructive ? Palette.danger : color ?? Palette.border,
+        borderColor: destructive ? Palette.danger : Palette.border,
         borderRadius: Radius.pill,
         borderWidth: 1,
         height: dimension,
@@ -41,7 +39,7 @@ export function IconAction({
         opacity: disabled ? 0.35 : pressed ? 0.55 : 1,
         width: dimension,
       })}>
-      <MaterialIcons color={actionColor} name={icon} size={size === 'compact' ? 18 : 22} />
+      <MaterialIcons color={color} name={icon} size={size === 'compact' ? 18 : 22} />
     </Pressable>
   );
 }
