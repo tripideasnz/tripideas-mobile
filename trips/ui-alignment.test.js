@@ -13,13 +13,13 @@ const [list, detail, entry, autosave, api] = await Promise.all([
 ]);
 
 assert.match(list, /accessibilityLabel="Add Trip"/);
-assert.match(list, /name="add"/);
+assert.match(list, /accessibilityLabel="Add Trip"[\s\S]*icon="add"[\s\S]*size="compact"/);
 assert.match(list, /accessibilityLabel=\{`Open \$\{trip\.name\}`\}/);
 assert.match(list, /accessibilityLabel=\{`Delete \$\{trip\.name\}`\}/);
 assert.match(list, /size="compact"/);
 assert.match(list, /'Delete trip\?'/);
 assert.match(list, /void deleteTrip\(trip\.id\)/);
-assert.ok(list.indexOf('<IconAction') > list.indexOf('</Pressable>'));
+assert.ok(list.indexOf('accessibilityLabel={`Delete ${trip.name}`}') > list.indexOf('</Pressable>'));
 console.log('✓ Trips list separates card navigation from confirmed trash actions');
 
 assert.doesNotMatch(detail, /Save Note|Show on Map|Delete trip/);
