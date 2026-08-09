@@ -19,9 +19,10 @@ assert.doesNotMatch(saved, /Photo transport test|photo-upload-dev/);
 console.log('✓ Saved no longer exposes the Photo transport test');
 
 assert.match(list, /headerRight/);
-assert.match(list, /if \(isLoadingSession\)[\s\S]*HeaderBackButton color=\{Palette\.trip\} onPress=\{handleBack\}/);
-assert.match(list, /if \(!session\)[\s\S]*HeaderBackButton color=\{Palette\.trip\} onPress=\{handleBack\}/);
-assert.match(list, /headerRight: \(\) => null/);
+assert.equal(list.match(/<Stack\.Screen/g)?.length, 1);
+assert.match(list, /HeaderBackButton color=\{Palette\.trip\} onPress=\{handleBack\}/);
+assert.match(list, /headerRight: \(\) => session \? \(/);
+assert.match(list, /isLoadingSession \? \([\s\S]*!session \? \(/);
 assert.match(list, /MaterialIcons color=\{Palette\.trip\} name="add" size=\{30\}/);
 assert.match(list, /Updated \$\{displayDate\(notebook\.updatedAt\)\}/);
 assert.match(list, /borderRadius: Radius\.card/);

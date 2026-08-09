@@ -163,47 +163,12 @@ export default function NotebookListScreen() {
     }
   };
 
-  if (isLoadingSession) {
-    return (
-      <>
-        <Stack.Screen
-          options={{
-            headerLeft: () => <HeaderBackButton color={Palette.trip} onPress={handleBack} />,
-            headerRight: () => null,
-          }}
-        />
-        <LoadingView />
-      </>
-    );
-  }
-
-  if (!session) {
-    return (
-      <>
-        <Stack.Screen
-          options={{
-            headerLeft: () => <HeaderBackButton color={Palette.trip} onPress={handleBack} />,
-            headerRight: () => null,
-          }}
-        />
-        <SafeAreaView style={{ flex: 1, backgroundColor: Palette.background }}>
-          <View style={{ gap: Space.lg, padding: Screen.gutter }}>
-            <AppText color={Palette.textBody}>
-              Sign in to view and edit your private travel Notebooks.
-            </AppText>
-            <AppButton label="Sign in" onPress={signIn} />
-          </View>
-        </SafeAreaView>
-      </>
-    );
-  }
-
   return (
     <SafeAreaView edges={['bottom']} style={{ flex: 1, backgroundColor: Palette.background }}>
       <Stack.Screen
         options={{
           headerLeft: () => <HeaderBackButton color={Palette.trip} onPress={handleBack} />,
-          headerRight: () => (
+          headerRight: () => session ? (
             <Pressable
               accessibilityLabel="Add Notebook"
               accessibilityRole="button"
@@ -218,9 +183,19 @@ export default function NotebookListScreen() {
               })}>
               <MaterialIcons color={Palette.trip} name="add" size={30} />
             </Pressable>
-          ),
+          ) : null,
         }}
       />
+      {isLoadingSession ? (
+        <LoadingView />
+      ) : !session ? (
+        <View style={{ gap: Space.lg, padding: Screen.gutter }}>
+          <AppText color={Palette.textBody}>
+            Sign in to view and edit your private travel Notebooks.
+          </AppText>
+          <AppButton label="Sign in" onPress={signIn} />
+        </View>
+      ) : (
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={{ flex: 1 }}>
@@ -344,6 +319,7 @@ export default function NotebookListScreen() {
           )}
         </ScrollView>
       </KeyboardAvoidingView>
+      )}
     </SafeAreaView>
   );
 }
