@@ -85,13 +85,15 @@ export default function TripsScreen() {
       <Stack.Screen
         options={{
           headerRight: () => (
-            <IconAction
-              accessibilityLabel="Add Trip"
-              disabled={showCreate}
-              icon="add"
-              onPress={() => setShowCreate(true)}
-              size="compact"
-            />
+            <View style={{ alignItems: 'flex-end', width: 52 }}>
+              <IconAction
+                accessibilityLabel="Add Trip"
+                color={Palette.trip}
+                disabled={showCreate}
+                icon="add"
+                onPress={() => setShowCreate(true)}
+              />
+            </View>
           ),
         }}
       />
