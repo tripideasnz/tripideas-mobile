@@ -32,6 +32,8 @@ export default function RootLayout() {
                   name="personal-place-cards/[cardId]"
                   options={{ title: 'Personal Place' }}
                 />
+                <Stack.Screen name="favourites/index" options={{ title: 'Favourites' }} />
+                <Stack.Screen name="trips/index" options={{ title: 'Trips' }} />
                 <Stack.Screen name="trips/[tripId]" options={{ title: 'My Trip' }} />
                 <Stack.Screen name="notebooks/index" options={{ title: 'Notebooks' }} />
                 <Stack.Screen
