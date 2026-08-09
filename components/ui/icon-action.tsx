@@ -10,14 +10,17 @@ export function IconAction({
   disabled = false,
   icon,
   onPress,
+  size = 'default',
 }: {
   accessibilityLabel: string;
   destructive?: boolean;
   disabled?: boolean;
   icon: ComponentProps<typeof MaterialIcons>['name'];
   onPress: () => void;
+  size?: 'compact' | 'default';
 }) {
   const color = destructive ? Palette.danger : Palette.textBody;
+  const dimension = size === 'compact' ? 36 : 44;
   return (
     <Pressable
       accessibilityLabel={accessibilityLabel}
@@ -31,12 +34,12 @@ export function IconAction({
         borderColor: destructive ? Palette.danger : Palette.border,
         borderRadius: Radius.pill,
         borderWidth: 1,
-        height: 44,
+        height: dimension,
         justifyContent: 'center',
         opacity: disabled ? 0.35 : pressed ? 0.55 : 1,
-        width: 44,
+        width: dimension,
       })}>
-      <MaterialIcons color={color} name={icon} size={22} />
+      <MaterialIcons color={color} name={icon} size={size === 'compact' ? 18 : 22} />
     </Pressable>
   );
 }

@@ -190,18 +190,19 @@ export default function TripsScreen() {
                   overflow: 'hidden',
                 })}>
                 <TripImageCollage images={images} style={{ height: 92, width: 112 }} />
-                <View style={{ flex: 1, justifyContent: 'center', padding: Space.lg, paddingRight: 68 }}>
+                <View style={{ flex: 1, justifyContent: 'center', padding: Space.lg, paddingRight: 60 }}>
                   <Text numberOfLines={2} style={Type.cardTitle}>{trip.name}</Text>
                   <Text style={{ color: Palette.textMuted, ...Type.label, marginTop: Space.xs }}>
                     {placeCount} {placeCount === 1 ? 'place' : 'places'}
                   </Text>
                 </View>
               </Pressable>
-              <View style={{ position: 'absolute', right: Space.md, top: 24 }}>
+              <View style={{ position: 'absolute', right: Space.md, top: 28 }}>
                 <IconAction
                   accessibilityLabel={`Delete ${trip.name}`}
                   destructive
                   icon="delete-outline"
+                  size="compact"
                   onPress={() => Alert.alert(
                     'Delete trip?',
                     `This will delete "${trip.name}" and its notes.`,

@@ -116,7 +116,7 @@ export function TripEntryCard({
             <MaterialIcons color={Palette.textBody} name="more-horiz" size={24} />
           </Pressable>
         </View>
-        <Text style={{ ...Type.label, marginBottom: Space.sm }}>Note for {title}</Text>
+        <Text style={{ ...Type.cardTitle, marginBottom: Space.sm }}>Note for {title}</Text>
         <AutosaveNote
           accessibilityLabel={`note for ${title}`}
           onSave={onSaveNote}

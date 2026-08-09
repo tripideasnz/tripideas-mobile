@@ -397,47 +397,48 @@ export default function TripDetailScreen() {
             />
           ) : null}
 
-          <Text style={{ ...Type.label, marginBottom: Space.sm }}>
-            Trip note
-          </Text>
-          <AutosaveNote
-            accessibilityLabel="Trip note"
-            onSave={(note) => updateTripNote(trip.id, note)}
-            placeholder="Add plans, reminders, or ideas for this trip"
-            value={trip.note}
-          />
-
-          <View style={{ flexDirection: 'row', gap: Space.sm, justifyContent: 'flex-end', marginBottom: Space.xxl, marginTop: Space.md }}>
-            <IconAction
-              accessibilityLabel="Show Trip on map"
-              icon="map"
-              onPress={() =>
-                router.push({
-                  pathname: '/trips/[tripId]/map',
-                  params: { tripId: trip.id },
-                })
-              }
-            />
-            <IconAction
-              accessibilityLabel="Share Trip"
-              icon="share"
-              onPress={() => {
-                Alert.alert('Share trip', undefined, [
-                  { style: 'cancel', text: 'Cancel' },
-                  {
-                    onPress: () =>
-                      router.push({
-                        pathname: '/trips/[tripId]/shared',
-                        params: { tripId: trip.id },
-                      }),
-                    text: 'Preview',
-                  },
-                  {
-                    onPress: () => void createPublicShare(),
-                    text: 'Share',
-                  },
-                ]);
-              }}
+          <View style={{ marginBottom: Space.xxl }}>
+            <View style={{ alignItems: 'center', flexDirection: 'row', marginBottom: Space.sm }}>
+              <Text style={{ flex: 1, ...Type.cardTitle }}>Trip note</Text>
+              <View style={{ flexDirection: 'row', gap: Space.sm }}>
+                <IconAction
+                  accessibilityLabel="Show Trip on map"
+                  icon="map"
+                  onPress={() =>
+                    router.push({
+                      pathname: '/trips/[tripId]/map',
+                      params: { tripId: trip.id },
+                    })
+                  }
+                />
+                <IconAction
+                  accessibilityLabel="Share Trip"
+                  icon="share"
+                  onPress={() => {
+                    Alert.alert('Share trip', undefined, [
+                      { style: 'cancel', text: 'Cancel' },
+                      {
+                        onPress: () =>
+                          router.push({
+                            pathname: '/trips/[tripId]/shared',
+                            params: { tripId: trip.id },
+                          }),
+                        text: 'Preview',
+                      },
+                      {
+                        onPress: () => void createPublicShare(),
+                        text: 'Share',
+                      },
+                    ]);
+                  }}
+                />
+              </View>
+            </View>
+            <AutosaveNote
+              accessibilityLabel="Trip note"
+              onSave={(note) => updateTripNote(trip.id, note)}
+              placeholder="Add plans, reminders, or ideas for this trip"
+              value={trip.note}
             />
           </View>
 

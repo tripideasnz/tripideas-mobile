@@ -16,6 +16,7 @@ assert.match(list, /accessibilityLabel="Add Trip"/);
 assert.match(list, /name="add"/);
 assert.match(list, /accessibilityLabel=\{`Open \$\{trip\.name\}`\}/);
 assert.match(list, /accessibilityLabel=\{`Delete \$\{trip\.name\}`\}/);
+assert.match(list, /size="compact"/);
 assert.match(list, /'Delete trip\?'/);
 assert.match(list, /void deleteTrip\(trip\.id\)/);
 assert.ok(list.indexOf('<IconAction') > list.indexOf('</Pressable>'));
@@ -24,6 +25,8 @@ console.log('✓ Trips list separates card navigation from confirmed trash actio
 assert.doesNotMatch(detail, /Save Note|Show on Map|Delete trip/);
 assert.match(detail, /accessibilityLabel="Show Trip on map"/);
 assert.match(detail, /accessibilityLabel="Share Trip"/);
+assert.match(detail, /<Text style=\{\{ flex: 1, \.\.\.Type\.cardTitle \}\}>Trip note<\/Text>/);
+assert.match(entry, /<Text style=\{\{ \.\.\.Type\.cardTitle, marginBottom: Space\.sm \}\}>Note for \{title\}<\/Text>/);
 assert.ok(detail.indexOf('accessibilityLabel="Share Trip"') > detail.indexOf('accessibilityLabel="Show Trip on map"'));
 assert.match(detail, /Public sharing unavailable/);
 console.log('✓ Trip detail uses one guarded Map and Share icon cluster without deletion');
