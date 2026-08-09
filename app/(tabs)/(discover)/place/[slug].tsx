@@ -1,4 +1,3 @@
-import { Image } from 'expo-image';
 import * as Linking from 'expo-linking';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -10,16 +9,10 @@ import {
   getPlainText,
 } from '@/components/content-blocks';
 import { PlaceCardActions } from '@/components/place-card-actions';
-import { PlacePhotoGrid } from '@/components/place-photo-grid';
-import { PlaceMapPreview } from '@/components/place-map-preview';
 import { PlaceCard } from '@/components/place-card';
+import { PlaceDetailContent } from '@/components/place-detail-content';
 import { AppButton } from '@/components/ui/app-button';
-import {
-  Palette,
-  Screen,
-  Space,
-  Type,
-} from '@/constants/design';
+import { Palette, Space, Type } from '@/constants/design';
 import { sanityClient } from '@/sanity/client';
 import { PLACE_QUERY } from '@/sanity/queries';
 import type { PlacePage } from '@/sanity/types';
@@ -155,57 +148,9 @@ export default function PlaceScreen() {
       ) : !place ? (
         <Text style={{ padding: 24 }}>Place not found.</Text>
       ) : (
-        <>
-          {place.imageUrl ? (
-            <Image
-              source={{ uri: place.imageUrl }}
-              accessibilityLabel={place.imageAlt ?? place.title ?? 'Place image'}
-              style={{ aspectRatio: 16 / 9, width: '100%' }}
-              contentFit="cover"
-            />
-          ) : null}
-
-          <View
-            style={{
-              paddingBottom: Space.huge,
-              paddingHorizontal: Screen.gutter,
-              paddingTop: Screen.top,
-            }}>
-            <View
-              style={{
-                alignItems: 'flex-start',
-                flexDirection: 'row',
-                gap: 12,
-                justifyContent: 'space-between',
-                marginBottom: Space.xl,
-              }}>
-              <Text
-                style={{
-                  flex: 1,
-                  ...Type.title,
-                }}>
-                {place.title}
-              </Text>
-
-              {placeId ? (
-                <PlaceCardActions
-                  buttonStyle={{
-                    borderColor: Palette.text,
-                    borderWidth: 1,
-                  }}
-                  inline
-                  placeId={placeId}
-                />
-              ) : null}
-            </View>
-
-            <PlacePhotoGrid
-              images={galleryImages}
-              placeTitle={place.title}
-            />
-
-            {(displayText || hasBodyBlocks) ? (
-              <View style={{ marginBottom: Space.xl }}>
+        <PlaceDetailContent
+          body={(displayText || hasBodyBlocks) ? (
+            <>
                 {isExpanded ? (
                   <>
                     {hasBodyBlocks ? (
@@ -235,23 +180,16 @@ export default function PlaceScreen() {
                     ) : null}
                   </Text>
                 )}
-              </View>
-            ) : null}
-
-            {coordinates ? (
-              <View style={{ marginBottom: 24 }}>
-                <Text
-                  style={{
-                    ...Type.section,
-                    marginBottom: Space.md,
-                  }}>
-                  Location
-                </Text>
-                <PlaceMapPreview
-                  latitude={coordinates.latitude}
-                  longitude={coordinates.longitude}
-                  title={place.title}
-                />
+            </>
+          ) : undefined}
+          galleryImages={galleryImages}
+          hero={place.imageUrl ? {
+            alt: place.imageAlt ?? place.title ?? 'Place image',
+            url: place.imageUrl,
+          } : null}
+          location={coordinates}
+          mapActions={coordinates ? (
+            <>
                 <AppButton
                   label="Show on Google Maps"
                   onPress={async () => {
@@ -289,9 +227,19 @@ export default function PlaceScreen() {
                     {mapMessage}
                   </Text>
                 ) : null}
-              </View>
-            ) : null}
-
+            </>
+          ) : undefined}
+          title={title}
+          titleActions={placeId ? (
+            <PlaceCardActions
+              buttonStyle={{
+                borderColor: Palette.text,
+                borderWidth: 1,
+              }}
+              inline
+              placeId={placeId}
+            />
+          ) : undefined}>
             {nearbyPlaces.length > 0 ? (
               <View style={{ marginBottom: 8 }}>
                 <Text
@@ -310,8 +258,7 @@ export default function PlaceScreen() {
                 ))}
               </View>
             ) : null}
-          </View>
-        </>
+        </PlaceDetailContent>
       )}
     </ScrollView>
   );

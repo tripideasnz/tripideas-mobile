@@ -10,6 +10,7 @@ import { hasAttachedPhoto } from './model';
 type Pending = {
   cardId: string;
   createdAt: string;
+  replaceMediaId?: string;
   role: 'main' | 'body';
   uploadId: string;
   userId: string;
@@ -37,10 +38,31 @@ type Attach = (
   role: 'main' | 'body'
 ) => Promise<PersonalPlaceCard>;
 type Read = (id: string) => Promise<PersonalPlaceCard>;
+type Remove = (id: string, mediaId: string) => Promise<PersonalPlaceCard>;
 
-async function finish(pending: Pending, attach: Attach, read: Read) {
+async function finish(
+  pending: Pending,
+  attach: Attach,
+  read: Read,
+  remove?: Remove
+) {
   const uploaded = await startNativePhotoUpload(pending.userId, pending.uploadId);
   if (uploaded.state !== 'UPLOADED' || !uploaded.assetId) return null;
+  const authoritative = await read(pending.cardId);
+  if (hasAttachedPhoto(authoritative, uploaded.assetId)) {
+    await set(
+      pending.userId,
+      (await list(pending.userId)).filter((item) => item.uploadId !== pending.uploadId)
+    );
+    return authoritative;
+  }
+  if (
+    pending.replaceMediaId &&
+    authoritative.media.some((item) => item.id === pending.replaceMediaId)
+  ) {
+    if (!remove) throw new Error('Photo replacement requires media removal.');
+    await remove(pending.cardId, pending.replaceMediaId);
+  }
   let card: PersonalPlaceCard;
   try {
     card = await attach(pending.cardId, uploaded.assetId, pending.role);
@@ -78,17 +100,41 @@ export async function addPersonalPlaceCardPhoto(
   return finish(pending, attach, read);
 }
 
+export async function replacePersonalPlaceCardPhoto(
+  userId: string,
+  cardId: string,
+  mediaId: string,
+  role: 'main' | 'body',
+  selected: SelectedPhoto,
+  attach: Attach,
+  read: Read,
+  remove: Remove
+) {
+  const upload = await prepareNativePhotoUpload(userId, selected);
+  const pending: Pending = {
+    cardId,
+    createdAt: new Date().toISOString(),
+    replaceMediaId: mediaId,
+    role,
+    uploadId: upload.id,
+    userId,
+  };
+  await set(userId, [...await list(userId), pending]);
+  return finish(pending, attach, read, remove);
+}
+
 export async function resumePersonalPlaceCardPhotos(
   userId: string,
   cardId: string,
   attach: Attach,
-  read: Read
+  read: Read,
+  remove?: Remove
 ) {
   const pending = (await list(userId)).filter((item) => item.cardId === cardId);
   let completed = 0;
   for (const item of pending) {
     try {
-      if (await finish(item, attach, read)) completed += 1;
+      if (await finish(item, attach, read, remove)) completed += 1;
     } catch {
       // Keep the isolated pending context for explicit retry or restart recovery.
     }
