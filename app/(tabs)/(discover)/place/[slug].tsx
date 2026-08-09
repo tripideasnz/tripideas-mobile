@@ -12,19 +12,11 @@ import { PlaceCardActions } from '@/components/place-card-actions';
 import { PlaceCard } from '@/components/place-card';
 import { PlaceDetailContent } from '@/components/place-detail-content';
 import { AppButton } from '@/components/ui/app-button';
+import { ShowMoreText } from '@/components/ui/show-more-text';
 import { Palette, Space, Type } from '@/constants/design';
 import { sanityClient } from '@/sanity/client';
 import { PLACE_QUERY } from '@/sanity/queries';
 import type { PlacePage } from '@/sanity/types';
-
-const EXCERPT_LENGTH = 160;
-
-function truncateAtWord(text: string, max: number): string {
-  if (text.length <= max) return text;
-  const cut = text.slice(0, max);
-  const boundary = cut.lastIndexOf(' ');
-  return boundary > 0 ? cut.slice(0, boundary) : cut;
-}
 
 function getPlacePreview(place: PlacePage) {
   const preview = place.excerpt?.trim() || place.preview?.trim();
@@ -56,7 +48,6 @@ export default function PlaceScreen() {
   const selectedSlug = Array.isArray(slug) ? slug[0] : slug;
   const router = useRouter();
   const [place, setPlace] = useState<PlacePage | null>(null);
-  const [isExpanded, setIsExpanded] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [mapMessage, setMapMessage] = useState<string | null>(null);
@@ -74,7 +65,6 @@ export default function PlaceScreen() {
     setIsLoading(true);
     setErrorMessage(null);
     setMapMessage(null);
-    setIsExpanded(false);
 
     sanityClient
       .fetch<PlacePage | null>(PLACE_QUERY, { slug: selectedSlug })
@@ -110,10 +100,6 @@ export default function PlaceScreen() {
   const preview = place ? getPlacePreview(place) : undefined;
   const displayText = preview || fullText;
   const hasBodyBlocks = (place?.textBlocks ?? []).some((block) => getBlockText(block));
-  const excerpt = displayText ? truncateAtWord(displayText, EXCERPT_LENGTH) : undefined;
-  const canExpand = Boolean(
-    displayText && (displayText.length > EXCERPT_LENGTH || hasBodyBlocks)
-  );
   const galleryImages =
     place?.galleryCollections?.flatMap(
       (collection) => collection.images ?? []
@@ -150,37 +136,12 @@ export default function PlaceScreen() {
       ) : (
         <PlaceDetailContent
           body={(displayText || hasBodyBlocks) ? (
-            <>
-                {isExpanded ? (
-                  <>
-                    {hasBodyBlocks ? (
-                      <ContentBlocks blocks={place.textBlocks} />
-                    ) : displayText ? (
-                      <Text style={{ color: Palette.textBody, ...Type.body }}>
-                        {displayText}
-                      </Text>
-                    ) : null}
-                    {canExpand ? (
-                      <Text
-                        onPress={() => setIsExpanded(false)}
-                        style={{ color: Palette.textBody, ...Type.bodyStrong, marginTop: Space.md }}>
-                        Show less
-                      </Text>
-                    ) : null}
-                  </>
-                ) : (
-                  <Text style={{ color: Palette.textBody, ...Type.body }}>
-                    {canExpand ? excerpt : displayText}
-                    {canExpand ? (
-                      <Text
-                        onPress={() => setIsExpanded(true)}
-                        style={{ fontStyle: 'italic' }}>
-                        {'… read more'}
-                      </Text>
-                    ) : null}
-                  </Text>
-                )}
-            </>
+            <ShowMoreText
+              accessibilityLabel={`${title} description`}
+              expandedContent={hasBodyBlocks ? <ContentBlocks blocks={place.textBlocks} /> : undefined}
+              forceExpandable={hasBodyBlocks}
+              value={displayText ?? fullText ?? ''}
+            />
           ) : undefined}
           galleryImages={galleryImages}
           hero={place.imageUrl ? {

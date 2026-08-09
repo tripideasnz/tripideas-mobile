@@ -13,6 +13,7 @@ import { AppText } from '@/components/ui/app-text';
 import { AppTextInput } from '@/components/ui/app-text-input';
 import { AutosaveStatus } from '@/components/ui/autosave-status';
 import { IconAction } from '@/components/ui/icon-action';
+import { ShowMoreText } from '@/components/ui/show-more-text';
 import { StatusText } from '@/components/ui/status-text';
 import { Palette, Radius, Screen, Space, Type } from '@/constants/design';
 import { ApiError } from '@/lib/api-client';
@@ -286,7 +287,9 @@ export default function PersonalPlaceCardScreen() {
       <ScrollView style={{ flex: 1, backgroundColor: Palette.background }}>
         <Stack.Screen options={{ title: card.title || 'Personal Place' }} />
         <PlaceDetailContent
-          body={card.body ? <FinishedBodyText value={card.body} /> : undefined}
+          body={card.body ? (
+            <ShowMoreText accessibilityLabel="Personal Place description" value={card.body} />
+          ) : undefined}
           galleryImages={galleryImages}
           hero={heroUrl ? {
             alt: card.title ?? 'Personal Place main photo',
@@ -386,7 +389,7 @@ export default function PersonalPlaceCardScreen() {
           accessibilityRole="button"
           onPress={() => setIsEditingBody(true)}
           style={{ borderColor: Palette.border, borderRadius: Radius.control, borderWidth: 1, padding: Space.md }}>
-          <FinishedBodyText value={body} />
+          <ShowMoreText accessibilityLabel="Personal Place description" value={body} />
         </Pressable>
       ) : (
         <Pressable
@@ -622,42 +625,5 @@ function PhotoEditorTile({
         <MaterialIcons color={Palette.text} name="close" size={19} />
       </Pressable>
     </Pressable>
-  );
-}
-
-function FinishedBodyText({ value }: { value: string }) {
-  const [expanded, setExpanded] = useState(false);
-  const [overflows, setOverflows] = useState(false);
-  return (
-    <View style={{ gap: Space.sm }}>
-      <Text
-        numberOfLines={expanded ? undefined : 3}
-        style={{ color: Palette.textBody, ...Type.body }}>
-        {value}
-      </Text>
-      <View pointerEvents="none" style={{ left: 0, opacity: 0, position: 'absolute', right: 0 }}>
-        <Text
-          accessibilityElementsHidden
-          importantForAccessibility="no-hide-descendants"
-          onTextLayout={(event) => setOverflows(event.nativeEvent.lines.length > 3)}
-          style={Type.body}>
-          {value}
-        </Text>
-      </View>
-      {overflows || expanded ? (
-        <Pressable
-          accessibilityLabel={expanded ? 'Show less of Personal Place description' : 'Show more of Personal Place description'}
-          accessibilityRole="button"
-          onPress={(event) => {
-            event.stopPropagation();
-            setExpanded((current) => !current);
-          }}
-          style={{ alignSelf: 'flex-end' }}>
-          <AppText color={Palette.textMuted} style={{ fontStyle: 'italic' }} variant="caption">
-            {expanded ? '... show less' : '... show more'}
-          </AppText>
-        </Pressable>
-      ) : null}
-    </View>
   );
 }

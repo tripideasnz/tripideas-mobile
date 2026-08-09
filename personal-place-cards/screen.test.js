@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 const read = (relativePath) =>
   readFile(new URL(`../${relativePath}`, import.meta.url), 'utf8');
 
-const [editor, list, tripDetail, tripEntry, personalCard, placeDetail, editorial, picker, autosaveStatus] = await Promise.all([
+const [editor, list, tripDetail, tripEntry, personalCard, placeDetail, editorial, picker, autosaveStatus, showMore] = await Promise.all([
   read('app/personal-place-cards/[cardId].tsx'),
   read('app/personal-place-cards/index.tsx'),
   read('app/trips/[tripId].tsx'),
@@ -14,6 +14,7 @@ const [editor, list, tripDetail, tripEntry, personalCard, placeDetail, editorial
   read('app/(tabs)/(discover)/place/[slug].tsx'),
   read('photo-uploads/picker.ts'),
   read('components/ui/autosave-status.tsx'),
+  read('components/ui/show-more-text.tsx'),
 ]);
 
 assert.match(editor, /parsePersonalPlaceCardCoordinates\(latitude, longitude\)/);
@@ -82,8 +83,12 @@ assert.match(list, /<PersonalPlaceCardView card=\{card\} compact/);
 assert.match(list, /icon="delete-outline"/);
 assert.match(personalCard, /<TripImageCollage/);
 assert.match(personalCard, /slice\(0, 4\)/);
-assert.match(editor, /\.\.\. show more/);
-assert.match(editor, /\.\.\. show less/);
+assert.match(editor, /<ShowMoreText/);
+assert.match(showMore, /numberOfLines=\{expanded \? undefined : 3\}/);
+assert.match(showMore, /\.\.\. show more/);
+assert.match(showMore, /\.\.\. show less/);
+assert.match(editorial, /<ShowMoreText/);
+assert.doesNotMatch(editorial, /read more|EXCERPT_LENGTH/i);
 assert.match(editor, /fontSize: 18, fontWeight: '700'/);
 assert.doesNotMatch(editor, />Trip readiness</);
 assert.match(editor, /Ready to add to Trips\./);
