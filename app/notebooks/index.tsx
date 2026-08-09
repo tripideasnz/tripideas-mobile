@@ -163,18 +163,38 @@ export default function NotebookListScreen() {
     }
   };
 
-  if (isLoadingSession) return <LoadingView />;
+  if (isLoadingSession) {
+    return (
+      <>
+        <Stack.Screen
+          options={{
+            headerLeft: () => <HeaderBackButton color={Palette.trip} onPress={handleBack} />,
+            headerRight: () => null,
+          }}
+        />
+        <LoadingView />
+      </>
+    );
+  }
 
   if (!session) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: Palette.background }}>
-        <View style={{ gap: Space.lg, padding: Screen.gutter }}>
-          <AppText color={Palette.textBody}>
-            Sign in to view and edit your private travel Notebooks.
-          </AppText>
-          <AppButton label="Sign in" onPress={signIn} />
-        </View>
-      </SafeAreaView>
+      <>
+        <Stack.Screen
+          options={{
+            headerLeft: () => <HeaderBackButton color={Palette.trip} onPress={handleBack} />,
+            headerRight: () => null,
+          }}
+        />
+        <SafeAreaView style={{ flex: 1, backgroundColor: Palette.background }}>
+          <View style={{ gap: Space.lg, padding: Screen.gutter }}>
+            <AppText color={Palette.textBody}>
+              Sign in to view and edit your private travel Notebooks.
+            </AppText>
+            <AppButton label="Sign in" onPress={signIn} />
+          </View>
+        </SafeAreaView>
+      </>
     );
   }
 
