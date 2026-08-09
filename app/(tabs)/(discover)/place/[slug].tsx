@@ -99,6 +99,7 @@ export default function PlaceScreen() {
   const fullText = place ? getBodyText(place) : undefined;
   const preview = place ? getPlacePreview(place) : undefined;
   const displayText = preview || fullText;
+  const collapsedText = fullText || displayText;
   const hasBodyBlocks = (place?.textBlocks ?? []).some((block) => getBlockText(block));
   const galleryImages =
     place?.galleryCollections?.flatMap(
@@ -135,12 +136,12 @@ export default function PlaceScreen() {
         <Text style={{ padding: 24 }}>Place not found.</Text>
       ) : (
         <PlaceDetailContent
-          body={(displayText || hasBodyBlocks) ? (
+          body={(collapsedText || hasBodyBlocks) ? (
             <ShowMoreText
               accessibilityLabel={`${title} description`}
               expandedContent={hasBodyBlocks ? <ContentBlocks blocks={place.textBlocks} /> : undefined}
               forceExpandable={hasBodyBlocks}
-              value={displayText ?? fullText ?? ''}
+              value={collapsedText ?? ''}
             />
           ) : undefined}
           galleryImages={galleryImages}
