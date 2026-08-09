@@ -62,6 +62,7 @@ export default function NotebookListScreen() {
   const [formError, setFormError] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [coverImages, setCoverImages] = useState<Record<string, TripImage[]>>({});
+  const coverUrlCacheRef = useRef(new Map<string, string>());
   const createInFlightRef = useRef(false);
   const handleBack = useCallback(() => {
     backFromNotebookList(router);
@@ -95,13 +96,26 @@ export default function NotebookListScreen() {
           page.blocks.find((block) => block.type === 'photo') ?? []
         ).slice(0, 4);
         const images = (await Promise.all(firstPhotos.map(async (photo) => {
+          const cachedUrl = coverUrlCacheRef.current.get(photo.photoAssetId);
+          if (cachedUrl) {
+            return {
+              alt: `${notebook.title} page photo`,
+              cacheKey: photo.photoAssetId,
+              url: cachedUrl,
+            };
+          }
           try {
             const result = await authorizePhotoRead(photo.photoAssetId);
-            return { alt: `${notebook.title} page photo`, url: result.url };
+            coverUrlCacheRef.current.set(photo.photoAssetId, result.url);
+            return {
+              alt: `${notebook.title} page photo`,
+              cacheKey: photo.photoAssetId,
+              url: result.url,
+            };
           } catch {
             return null;
           }
-        }))).filter((image): image is TripImage => image !== null);
+        }))).filter((image): image is NonNullable<typeof image> => image !== null);
         return [notebook.id, images] as const;
       } catch {
         return [notebook.id, []] as const;
@@ -281,6 +295,21 @@ export default function NotebookListScreen() {
                 coverImages={coverImages[notebook.id] ?? []}
                 key={notebook.id}
                 notebook={notebook}
+                onCoverImageError={(image) => {
+                  if (!image.cacheKey) return;
+                  coverUrlCacheRef.current.delete(image.cacheKey);
+                  void authorizePhotoRead(image.cacheKey).then((result) => {
+                    coverUrlCacheRef.current.set(image.cacheKey as string, result.url);
+                    setCoverImages((current) => ({
+                      ...current,
+                      [notebook.id]: (current[notebook.id] ?? []).map((currentImage) =>
+                        currentImage.cacheKey === image.cacheKey
+                          ? { ...currentImage, url: result.url }
+                          : currentImage
+                      ),
+                    }));
+                  }).catch(() => undefined);
+                }}
                 onDelete={() => Alert.alert(
                   'Delete Notebook?',
                   `This removes "${notebook.title}" and all its pages.`,
@@ -302,11 +331,13 @@ export default function NotebookListScreen() {
 function NotebookRow({
   coverImages,
   notebook,
+  onCoverImageError,
   onDelete,
   onOpen,
 }: {
   coverImages: TripImage[];
   notebook: NotebookSummary;
+  onCoverImageError: (image: TripImage) => void;
   onDelete: () => void;
   onOpen: () => void;
 }) {
@@ -327,6 +358,7 @@ function NotebookRow({
         <TripImageCollage
           emptyLabel="Notebook"
           images={coverImages}
+          onImageError={onCoverImageError}
           style={{ height: 92, width: 112 }}
         />
         <View style={{ flex: 1, gap: Space.xs, justifyContent: 'center', padding: Space.lg, paddingRight: 60 }}>

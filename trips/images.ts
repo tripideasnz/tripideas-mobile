@@ -3,6 +3,7 @@ import type { PlaceCardData } from '@/types/content';
 
 export type TripImage = {
   alt: string;
+  cacheKey?: string;
   url: string;
 };
 
