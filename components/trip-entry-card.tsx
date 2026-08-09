@@ -15,8 +15,9 @@ export function TripEntryCard({
   canMoveUp,
   entry,
   editorialPlace,
-  onMoveDown,
-  onMoveUp,
+  highlighted,
+  onNavigateDown,
+  onNavigateUp,
   onRemove,
   onSaveNote,
 }: {
@@ -24,8 +25,9 @@ export function TripEntryCard({
   canMoveUp: boolean;
   editorialPlace?: PlaceCardData;
   entry: TripEntry;
-  onMoveDown: () => void;
-  onMoveUp: () => void;
+  highlighted: boolean;
+  onNavigateDown: () => void;
+  onNavigateUp: () => void;
   onRemove: () => Promise<void>;
   onSaveNote: (note: string) => Promise<void>;
 }) {
@@ -46,7 +48,12 @@ export function TripEntryCard({
   );
 
   return (
-    <CardSurface style={{ marginBottom: Space.xxl, overflow: 'hidden' }}>
+    <CardSurface style={{
+      borderColor: highlighted ? Palette.trip : Palette.border,
+      borderWidth: highlighted ? 2 : 1,
+      marginBottom: Space.xxl,
+      overflow: 'hidden',
+    }}>
       <View>
         {entry.type === 'editorialPlace' ? (
           editorialPlace ? <PlaceCard embedded place={editorialPlace} /> : (
@@ -87,8 +94,8 @@ export function TripEntryCard({
       <View style={{ borderTopColor: Palette.border, borderTopWidth: 1, padding: Space.lg }}>
         <View style={{ alignItems: 'center', flexDirection: 'row', marginBottom: Space.md }}>
           <View style={{ flexDirection: 'row', gap: Space.sm }}>
-            <IconAction accessibilityLabel={`Move ${title} up`} disabled={!canMoveUp} icon="arrow-upward" onPress={onMoveUp} />
-            <IconAction accessibilityLabel={`Move ${title} down`} disabled={!canMoveDown} icon="arrow-downward" onPress={onMoveDown} />
+            <IconAction accessibilityLabel={`Go to previous place before ${title}`} disabled={!canMoveUp} icon="arrow-upward" onPress={onNavigateUp} />
+            <IconAction accessibilityLabel={`Go to next place after ${title}`} disabled={!canMoveDown} icon="arrow-downward" onPress={onNavigateDown} />
           </View>
           <View style={{ flex: 1 }} />
           <Pressable

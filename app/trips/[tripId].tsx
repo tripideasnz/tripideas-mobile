@@ -1,6 +1,6 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Pressable,
@@ -45,7 +45,6 @@ export default function TripDetailScreen() {
     refresh,
     removeTripEntry,
     renameTrip,
-    reorderTripEntries,
     updateTripEntryNote,
     updateTripNote,
   } = useMyTrips();
@@ -56,6 +55,10 @@ export default function TripDetailScreen() {
   const [isLoadingPlaces, setIsLoadingPlaces] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [personalPhotoUrls, setPersonalPhotoUrls] = useState<Record<string, string>>({});
+  const [highlightedEntryId, setHighlightedEntryId] = useState<string | null>(null);
+  const scrollRef = useRef<ScrollView>(null);
+  const entryOffsetsRef = useRef<Record<string, number>>({});
+  const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -162,6 +165,27 @@ export default function TripDetailScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [placeIdsKey, selectedTripId]);
 
+  useEffect(() => () => {
+    if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+  }, []);
+
+  const navigateToEntry = useCallback((entryId: string) => {
+    const y = entryOffsetsRef.current[entryId];
+    if (typeof y !== 'number') return;
+    if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+    setHighlightedEntryId(entryId);
+    highlightTimerRef.current = setTimeout(() => {
+      setHighlightedEntryId((current) => current === entryId ? null : current);
+      highlightTimerRef.current = null;
+    }, 500);
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({
+        animated: true,
+        y: Math.max(0, y - Space.sm),
+      });
+    });
+  }, []);
+
   const saveName = async () => {
     if (!trip || !isNameDirty) {
       return;
@@ -248,6 +272,7 @@ export default function TripDetailScreen() {
   return (
     <ScrollView
       keyboardShouldPersistTaps="handled"
+      ref={scrollRef}
       style={{ flex: 1, backgroundColor: Palette.background }}
       contentContainerStyle={{
         paddingBottom: Space.huge,
@@ -430,31 +455,35 @@ export default function TripDetailScreen() {
             </Text>
           ) : orderedEntries.length > 0 ? (
             orderedEntries.map((entry, index) => (
-              <TripEntryCard
-                canMoveDown={index < orderedEntries.length - 1}
-                canMoveUp={index > 0}
+              <View
                 key={entry.id}
-                entry={entry}
-                editorialPlace={
-                  entry.type === 'editorialPlace'
-                    ? placesById.get(entry.editorialPlace.id)
-                    : undefined
-                }
-                onRemove={() => removeTripEntry(trip.id, entry.id)}
-                onMoveDown={() => {
-                  const next = orderedEntries.map((item) => item.id);
-                  [next[index], next[index + 1]] = [next[index + 1], next[index]];
-                  void reorderTripEntries(trip.id, next);
-                }}
-                onMoveUp={() => {
-                  const next = orderedEntries.map((item) => item.id);
-                  [next[index - 1], next[index]] = [next[index], next[index - 1]];
-                  void reorderTripEntries(trip.id, next);
-                }}
-                onSaveNote={(note) =>
-                  updateTripEntryNote(trip.id, entry.id, note)
-                }
-              />
+                onLayout={(event) => {
+                  entryOffsetsRef.current[entry.id] = event.nativeEvent.layout.y;
+                }}>
+                <TripEntryCard
+                  canMoveDown={index < orderedEntries.length - 1}
+                  canMoveUp={index > 0}
+                  entry={entry}
+                  editorialPlace={
+                    entry.type === 'editorialPlace'
+                      ? placesById.get(entry.editorialPlace.id)
+                      : undefined
+                  }
+                  highlighted={highlightedEntryId === entry.id}
+                  onNavigateDown={() => {
+                    const target = orderedEntries[index + 1];
+                    if (target) navigateToEntry(target.id);
+                  }}
+                  onNavigateUp={() => {
+                    const target = orderedEntries[index - 1];
+                    if (target) navigateToEntry(target.id);
+                  }}
+                  onRemove={() => removeTripEntry(trip.id, entry.id)}
+                  onSaveNote={(note) =>
+                    updateTripEntryNote(trip.id, entry.id, note)
+                  }
+                />
+              </View>
             ))
           ) : (
             <Text style={{ color: '#717171', fontSize: 16 }}>

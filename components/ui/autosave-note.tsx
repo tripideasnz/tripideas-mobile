@@ -26,6 +26,8 @@ export function AutosaveNote({
   const [retryRevision, setRetryRevision] = useState(0);
   const onSaveRef = useRef(onSave);
   const revisionRef = useRef(0);
+  const awaitingAuthoritativeRef = useRef<string | null>(null);
+  const authoritativeValueRef = useRef(value);
   const savedValueRef = useRef(value);
 
   useEffect(() => {
@@ -33,6 +35,18 @@ export function AutosaveNote({
   }, [onSave]);
 
   useEffect(() => {
+    authoritativeValueRef.current = value;
+    if (value === awaitingAuthoritativeRef.current) {
+      awaitingAuthoritativeRef.current = null;
+      savedValueRef.current = value;
+      revisionRef.current = 0;
+      setDraft(value);
+      setSaveState('idle');
+      return;
+    }
+    if (awaitingAuthoritativeRef.current !== null || revisionRef.current > 0) {
+      return;
+    }
     savedValueRef.current = value;
     setDraft(value);
   }, [value]);
@@ -46,6 +60,9 @@ export function AutosaveNote({
         .then(() => {
           if (revisionRef.current === revision) {
             savedValueRef.current = draft;
+            revisionRef.current = 0;
+            awaitingAuthoritativeRef.current =
+              authoritativeValueRef.current === draft ? null : draft;
             setSaveState('idle');
           }
         })

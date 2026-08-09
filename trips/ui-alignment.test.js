@@ -4,12 +4,11 @@ import { readFile } from 'node:fs/promises';
 const read = (relativePath) =>
   readFile(new URL(`../${relativePath}`, import.meta.url), 'utf8');
 
-const [list, detail, entry, autosave, provider, api] = await Promise.all([
+const [list, detail, entry, autosave, api] = await Promise.all([
   read('app/trips/index.tsx'),
   read('app/trips/[tripId].tsx'),
   read('components/trip-entry-card.tsx'),
   read('components/ui/autosave-note.tsx'),
-  read('trips/provider.tsx'),
   read('trips/api.ts'),
 ]);
 
@@ -36,6 +35,8 @@ assert.match(autosave, /setTimeout\(\(\) =>/);
 assert.match(autosave, /}, 700\)/);
 assert.match(autosave, /Saving…/);
 assert.match(autosave, /Could not save\. Tap to retry\./);
+assert.match(autosave, /awaitingAuthoritativeRef/);
+assert.match(autosave, /revisionRef\.current > 0/);
 assert.match(autosave, /show more/);
 assert.match(autosave, /show less/);
 assert.match(detail, /updateTripNote\(trip\.id, note\)/);
@@ -52,8 +53,10 @@ assert.match(entry, /icon="arrow-upward"/);
 assert.match(entry, /icon="arrow-downward"/);
 assert.match(entry, /name="more-horiz"/);
 assert.match(entry, /Remove from Trip/);
-assert.match(provider, /reorderTripEntries/);
-assert.match(provider, /entryOrder: entryIds/);
+assert.match(detail, /entryOffsetsRef\.current\[entry\.id\]/);
+assert.match(detail, /scrollRef\.current\?\.scrollTo/);
+assert.match(detail, /setHighlightedEntryId/);
+assert.doesNotMatch(detail, /reorderTripEntries/);
 assert.match(api, /updateEntryNoteRequest/);
 assert.doesNotMatch(api, /updatePersonalPlaceCard.*updateEntryNoteRequest|updateEntryNoteRequest.*updatePersonalPlaceCard/s);
-console.log('✓ ordering stays authoritative and entry-note mutation remains entry-scoped');
+console.log('✓ arrows navigate measured adjacent cards and entry-note mutation remains entry-scoped');
