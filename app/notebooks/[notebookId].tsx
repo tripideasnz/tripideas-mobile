@@ -67,7 +67,6 @@ export default function NotebookDetailScreen() {
   const notebookId = Array.isArray(rawNotebookId) ? rawNotebookId[0] : rawNotebookId;
   const { isLoading: isLoadingSession, session, signIn } = useSession();
   const {
-    deleteNotebook,
     details,
     loadNotebook,
     mutate,
@@ -86,6 +85,7 @@ export default function NotebookDetailScreen() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [descriptionEditing, setDescriptionEditing] = useState(false);
+  const [editingPageIds, setEditingPageIds] = useState<Set<string>>(new Set());
   const [highlightedPageId, setHighlightedPageId] = useState<string | null>(null);
   const [titleDrafts, setTitleDrafts] = useState<Record<string, string>>({});
   const [textDrafts, setTextDrafts] = useState<Record<string, string>>({});
@@ -585,25 +585,6 @@ export default function NotebookDetailScreen() {
     );
   };
 
-  const confirmDeleteNotebook = () => {
-    Alert.alert(
-      'Delete Notebook?',
-      'This removes the Notebook and all its pages.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            void deleteNotebook(detail.id)
-              .then(() => router.replace('/notebooks'))
-              .catch(handleMutationError);
-          },
-        },
-      ]
-    );
-  };
-
   const addPhoto = async (pageId: string) => {
     if (!session) return;
     setActionError(null);
@@ -701,7 +682,7 @@ export default function NotebookDetailScreen() {
           }}
           keyboardShouldPersistTaps="handled"
           onContentSizeChange={() => requestAnimationFrame(finishPendingScroll)}
-          stickyHeaderIndices={[1]}>
+          >
           <View style={{ gap: Space.xl }}>
             {isOffline ? (
               <Notice text="Offline: showing saved content. Editing is unavailable." />
@@ -768,6 +749,12 @@ export default function NotebookDetailScreen() {
                 value={title}
               />
               <IconAction
+                accessibilityLabel="Add Page"
+                disabled={mutationDisabled}
+                icon="add"
+                onPress={() => void addPage()}
+              />
+              <IconAction
                 accessibilityLabel="Share this Notebook"
                 disabled={!session}
                 icon="share"
@@ -777,15 +764,6 @@ export default function NotebookDetailScreen() {
                     params: { notebookId: detail.id },
                   })
                 }
-              />
-              <IconAction
-                accessibilityLabel="More Notebook actions"
-                disabled={mutationDisabled}
-                icon="more-horiz"
-                onPress={() => Alert.alert('Notebook actions', undefined, [
-                  { text: 'Cancel', style: 'cancel' },
-                  { text: 'Delete Notebook', style: 'destructive', onPress: confirmDeleteNotebook },
-                ])}
               />
             </View>
             {descriptionEditing ? (
@@ -822,25 +800,6 @@ export default function NotebookDetailScreen() {
                 state={metadataState}
               />
             </View>
-          </View>
-
-          <View
-            onLayout={(event: LayoutChangeEvent) => {
-              stickyToolbarHeight.current = event.nativeEvent.layout.height;
-            }}
-            style={{
-              alignItems: 'center',
-              backgroundColor: Palette.background,
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-              paddingVertical: Space.sm,
-            }}>
-            <IconAction
-              accessibilityLabel="Add Page"
-              disabled={mutationDisabled}
-              icon="add"
-              onPress={() => void addPage()}
-            />
           </View>
 
           <View
@@ -948,29 +907,42 @@ export default function NotebookDetailScreen() {
                       <Ionicons color={Palette.textMuted} name="ellipsis-horizontal" size={20} />
                     </Pressable>
                   </View>
-                  <AppTextInput
-                    accessibilityLabel={`Page ${index + 1} body`}
-                    editable={!mutationDisabled}
-                    maxLength={100_000}
-                    multiline
-                    onChangeText={(value) => {
-                      textDraftsRef.current = {
-                        ...textDraftsRef.current,
-                        [item.id]: value,
-                      };
-                      setTextDrafts((current) => ({ ...current, [item.id]: value }));
-                      itemRevisionsRef.current[item.id] =
-                        (itemRevisionsRef.current[item.id] ?? 0) + 1;
-                      setItemStates((current) => ({ ...current, [item.id]: 'idle' }));
-                      scheduleTextSave(item.id);
-                    }}
-                    placeholder="Write something…"
-                    style={{
-                      minHeight: 64,
-                      textAlignVertical: 'top',
-                    }}
-                    value={textDrafts[item.id] ?? item.text}
-                  />
+                  {editingPageIds.has(item.id) ? (
+                    <AppTextInput
+                      accessibilityLabel={`Page ${index + 1} body`}
+                      autoFocus
+                      editable={!mutationDisabled}
+                      maxLength={100_000}
+                      multiline
+                      onBlur={() => setEditingPageIds((current) => {
+                        const next = new Set(current);
+                        next.delete(item.id);
+                        return next;
+                      })}
+                      onChangeText={(value) => {
+                        textDraftsRef.current = {
+                          ...textDraftsRef.current,
+                          [item.id]: value,
+                        };
+                        setTextDrafts((current) => ({ ...current, [item.id]: value }));
+                        itemRevisionsRef.current[item.id] =
+                          (itemRevisionsRef.current[item.id] ?? 0) + 1;
+                        setItemStates((current) => ({ ...current, [item.id]: 'idle' }));
+                        scheduleTextSave(item.id);
+                      }}
+                      placeholder="Write something…"
+                      style={{ minHeight: 100, textAlignVertical: 'top' }}
+                      value={textDrafts[item.id] ?? item.text}
+                    />
+                  ) : (
+                    <ExpandableText
+                      accessibilityLabel={`Page ${index + 1} body`}
+                      disabled={mutationDisabled}
+                      onPress={() => setEditingPageIds((current) => new Set(current).add(item.id))}
+                      placeholder="Write something…"
+                      value={textDrafts[item.id] ?? item.text}
+                    />
+                  )}
                   {page.blocks.slice(1).map((block) =>
                     block.type === 'photo' ? (
                       <View

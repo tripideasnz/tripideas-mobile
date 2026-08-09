@@ -1,8 +1,9 @@
 import { HeaderBackButton } from '@react-navigation/elements';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { Stack, useRouter } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Stack, useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -18,7 +19,10 @@ import { AppText } from '@/components/ui/app-text';
 import { AppTextInput } from '@/components/ui/app-text-input';
 import { IconAction } from '@/components/ui/icon-action';
 import { LoadingView } from '@/components/ui/loading-view';
+import { TripImageCollage } from '@/components/trip-image-collage';
 import { Palette, Radius, Screen, Space } from '@/constants/design';
+import { pagesFromContentBlocks } from '@/content-blocks/pages';
+import { authorizePhotoRead } from '@/notebooks/api';
 import { classifyNotebookError } from '@/notebooks/errors';
 import { validateNotebookMetadata } from '@/notebooks/model';
 import {
@@ -27,6 +31,7 @@ import {
 } from '@/notebooks/navigation';
 import { useNotebooks } from '@/notebooks/provider';
 import type { NotebookSummary } from '@/notebooks/types';
+import type { TripImage } from '@/trips/images';
 
 function displayDate(value: string): string {
   const date = new Date(value);
@@ -44,6 +49,8 @@ export default function NotebookListScreen() {
   const { isLoading: isLoadingSession, session, signIn } = useSession();
   const {
     createNotebook,
+    deleteNotebook,
+    loadNotebook,
     isLoading,
     listError,
     notebooks,
@@ -54,6 +61,7 @@ export default function NotebookListScreen() {
   const [description, setDescription] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+  const [coverImages, setCoverImages] = useState<Record<string, TripImage[]>>({});
   const createInFlightRef = useRef(false);
   const handleBack = useCallback(() => {
     backFromNotebookList(router);
@@ -70,6 +78,41 @@ export default function NotebookListScreen() {
   useEffect(() => {
     if (session) setFormError(null);
   }, [session]);
+
+  const notebookIdsKey = useMemo(
+    () => notebooks.map((notebook) => notebook.id).join('|'),
+    [notebooks]
+  );
+
+  useFocusEffect(useCallback(() => {
+    let mounted = true;
+    void Promise.all(notebooks.map(async (notebook) => {
+      try {
+        const detail = await loadNotebook(notebook.id, false);
+        if (!detail) return [notebook.id, []] as const;
+        const pages = detail.pages ?? pagesFromContentBlocks(detail.items);
+        const firstPhotos = pages.flatMap((page) =>
+          page.blocks.find((block) => block.type === 'photo') ?? []
+        ).slice(0, 4);
+        const images = (await Promise.all(firstPhotos.map(async (photo) => {
+          try {
+            const result = await authorizePhotoRead(photo.photoAssetId);
+            return { alt: `${notebook.title} page photo`, url: result.url };
+          } catch {
+            return null;
+          }
+        }))).filter((image): image is TripImage => image !== null);
+        return [notebook.id, images] as const;
+      } catch {
+        return [notebook.id, []] as const;
+      }
+    })).then((entries) => {
+      if (mounted) setCoverImages(Object.fromEntries(entries));
+    });
+    return () => { mounted = false; };
+    // IDs change when a Notebook is added or removed; detail refresh happens on open.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadNotebook, notebookIdsKey]));
 
   const submitCreate = async () => {
     if (createInFlightRef.current) return;
@@ -235,8 +278,17 @@ export default function NotebookListScreen() {
           ) : (
             notebooks.map((notebook) => (
               <NotebookRow
+                coverImages={coverImages[notebook.id] ?? []}
                 key={notebook.id}
                 notebook={notebook}
+                onDelete={() => Alert.alert(
+                  'Delete Notebook?',
+                  `This removes "${notebook.title}" and all its pages.`,
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Delete', style: 'destructive', onPress: () => void deleteNotebook(notebook.id) },
+                  ]
+                )}
                 onOpen={() => openNotebook(router, notebook.id)}
               />
             ))
@@ -248,27 +300,36 @@ export default function NotebookListScreen() {
 }
 
 function NotebookRow({
+  coverImages,
   notebook,
+  onDelete,
   onOpen,
 }: {
+  coverImages: TripImage[];
   notebook: NotebookSummary;
+  onDelete: () => void;
   onOpen: () => void;
 }) {
   return (
-    <Pressable
-      accessibilityLabel={`Open ${notebook.title}`}
-      accessibilityRole="button"
-      onPress={onOpen}
-      style={({ pressed }) => ({
-        borderColor: Palette.border,
-        borderRadius: Radius.card,
-        borderWidth: 1,
-        flexDirection: 'row',
-        gap: Space.md,
-        opacity: pressed ? 0.6 : 1,
-        padding: Space.lg,
-      })}>
-      <View style={{ flex: 1, gap: Space.xs }}>
+    <View>
+      <Pressable
+        accessibilityLabel={`Open ${notebook.title}`}
+        accessibilityRole="button"
+        onPress={onOpen}
+        style={({ pressed }) => ({
+          borderColor: Palette.border,
+          borderRadius: Radius.card,
+          borderWidth: 1,
+          flexDirection: 'row',
+          opacity: pressed ? 0.65 : 1,
+          overflow: 'hidden',
+        })}>
+        <TripImageCollage
+          emptyLabel="Notebook"
+          images={coverImages}
+          style={{ height: 92, width: 112 }}
+        />
+        <View style={{ flex: 1, gap: Space.xs, justifyContent: 'center', padding: Space.lg, paddingRight: 60 }}>
         <AppText
           numberOfLines={2}
           style={{ fontSize: 17, fontWeight: '700', lineHeight: 22 }}>
@@ -280,15 +341,17 @@ function NotebookRow({
           {notebook.itemCount} {notebook.itemCount === 1 ? 'page' : 'pages'}
           {displayDate(notebook.updatedAt) ? ` · Updated ${displayDate(notebook.updatedAt)}` : ''}
         </AppText>
+        </View>
+      </Pressable>
+      <View style={{ position: 'absolute', right: Space.md, top: 28 }}>
+        <IconAction
+          accessibilityLabel={`Delete ${notebook.title}`}
+          destructive
+          icon="delete-outline"
+          onPress={onDelete}
+          size="compact"
+        />
       </View>
-      <MaterialIcons
-        accessibilityElementsHidden
-        color={Palette.textMuted}
-        importantForAccessibility="no-hide-descendants"
-        name="chevron-right"
-        size={26}
-        style={{ alignSelf: 'center' }}
-      />
-    </Pressable>
+    </View>
   );
 }

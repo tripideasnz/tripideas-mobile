@@ -20,9 +20,11 @@ function CollageImage({ image }: { image: TripImage }) {
 }
 
 export function TripImageCollage({
+  emptyLabel = 'My Trip',
   images,
   style,
 }: {
+  emptyLabel?: string;
   images: TripImage[];
   style?: ViewStyle;
 }) {
@@ -49,7 +51,7 @@ export function TripImageCollage({
             justifyContent: 'center',
           }}>
           <Text style={{ color: Palette.textMuted, ...Type.label }}>
-            My Trip
+            {emptyLabel}
           </Text>
         </View>
       ) : visibleImages.length <= 2 ? (

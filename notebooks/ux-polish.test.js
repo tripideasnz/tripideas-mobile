@@ -4,12 +4,13 @@ import { readFile } from 'node:fs/promises';
 const read = (relativePath) =>
   readFile(new URL(`../${relativePath}`, import.meta.url), 'utf8');
 
-const [saved, list, detail, sharing, layout, expandable, status] = await Promise.all([
+const [saved, list, detail, sharing, layout, collage, expandable, status] = await Promise.all([
   read('app/(tabs)/saved.tsx'),
   read('app/notebooks/index.tsx'),
   read('app/notebooks/[notebookId].tsx'),
   read('app/notebooks/[notebookId]/sharing.tsx'),
   read('app/_layout.tsx'),
+  read('components/trip-image-collage.tsx'),
   read('components/ui/expandable-text.tsx'),
   read('components/ui/autosave-status.tsx'),
 ]);
@@ -21,16 +22,23 @@ assert.match(list, /headerRight/);
 assert.match(list, /MaterialIcons color=\{Palette\.trip\} name="add" size=\{30\}/);
 assert.match(list, /Updated \$\{displayDate\(notebook\.updatedAt\)\}/);
 assert.match(list, /borderRadius: Radius\.card/);
+assert.match(list, /<TripImageCollage/);
+assert.match(list, /emptyLabel="Notebook"/);
+assert.match(list, /firstPhotos/);
+assert.match(list, /accessibilityLabel=\{`Delete \$\{notebook\.title\}`\}/);
+assert.match(list, /'Delete Notebook\?'/);
+assert.match(collage, /emptyLabel/);
 assert.doesNotMatch(list, /testID="notebook-(open|delete)-action"/);
 console.log('✓ Notebook list matches the Trips header and tappable card grammar');
 
 assert.match(detail, /accessibilityLabel="Share this Notebook"/);
 assert.match(detail, /icon="share"/);
-assert.match(detail, /accessibilityLabel="More Notebook actions"/);
-assert.match(detail, /'Delete Notebook'/);
+assert.match(detail, /accessibilityLabel="Add Page"/);
+assert.ok(detail.indexOf('accessibilityLabel="Share this Notebook"') > detail.indexOf('accessibilityLabel="Add Page"'));
+assert.doesNotMatch(detail, /More Notebook actions|Delete Notebook/);
 assert.doesNotMatch(detail, /label="Delete"/);
 assert.match(detail, /flex: 1,[\s\S]*fontSize: 28/);
-console.log('✓ Notebook actions use the canonical Share and overflow icon row');
+console.log('✓ Notebook title row groups Add Page and Share actions');
 
 assert.match(layout, /presentation: 'formSheet'/);
 assert.match(layout, /sheetAllowedDetents/);
@@ -47,6 +55,8 @@ console.log('✓ sharing keeps its preview-backed secure action sheet');
 
 assert.match(detail, /<ExpandableText/);
 assert.match(detail, /onPress=\{\(\) => setDescriptionEditing\(true\)\}/);
+assert.match(detail, /editingPageIds\.has\(item\.id\)/);
+assert.match(detail, /accessibilityLabel=\{`Page \$\{index \+ 1\} body`\}/);
 assert.match(expandable, /numberOfLines=\{expanded \? undefined : 3\}/);
 assert.match(expandable, /\.\.\. show more/);
 assert.match(expandable, /\.\.\. show less/);
