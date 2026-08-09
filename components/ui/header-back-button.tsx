@@ -14,20 +14,20 @@ export function HeaderBackButton({ onPress }: HeaderBackButtonProps = {}) {
     <Pressable
       accessibilityLabel="Go back"
       accessibilityRole="button"
-      hitSlop={8}
+      hitSlop={10}
       onPress={onPress ?? (() => router.back())}
       style={({ pressed }) => ({
         alignItems: 'center',
         backgroundColor: Palette.surface,
         borderColor: Palette.border,
-        borderRadius: 20,
+        borderRadius: 22,
         borderWidth: 0.5,
-        height: 40,
+        height: 44,
         justifyContent: 'center',
         opacity: pressed ? 0.5 : 1,
-        width: 40,
+        width: 44,
       })}>
-      <Ionicons color={Palette.text} name="chevron-back" size={22} />
+      <Ionicons color={Palette.text} name="chevron-back" size={24} />
     </Pressable>
   );
 }

@@ -1,4 +1,3 @@
-import { HeaderBackButton } from '@react-navigation/elements';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -15,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useSession } from '@/auth/provider';
 import { AppButton } from '@/components/ui/app-button';
+import { HeaderBackButton } from '@/components/ui/header-back-button';
 import { AppText } from '@/components/ui/app-text';
 import { AppTextInput } from '@/components/ui/app-text-input';
 import { IconAction } from '@/components/ui/icon-action';

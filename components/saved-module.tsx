@@ -48,7 +48,7 @@ export function SavedModule({
           {stateText}
         </AppText>
       </View>
-      <MaterialIcons color={Palette.textMuted} name="chevron-right" size={26} />
+      <MaterialIcons color={Palette.trip} name="chevron-right" size={26} />
     </Pressable>
   );
 }

@@ -4,7 +4,6 @@ import {
   useRouter,
 } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { HeaderBackButton } from '@react-navigation/elements';
 import { Image } from 'expo-image';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -22,6 +21,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useSession } from '@/auth/provider';
 import { AppButton } from '@/components/ui/app-button';
+import { HeaderBackButton } from '@/components/ui/header-back-button';
 import { AutosaveStatus, type AutosaveState } from '@/components/ui/autosave-status';
 import { AppText } from '@/components/ui/app-text';
 import { AppTextInput } from '@/components/ui/app-text-input';

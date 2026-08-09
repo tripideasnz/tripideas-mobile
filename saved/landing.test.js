@@ -33,6 +33,7 @@ assert.match(savedModule, /accessibilityRole="button"/);
 assert.match(savedModule, /onPress=\{onPress\}/);
 assert.match(savedModule, /\{stateText\}/);
 assert.match(savedModule, /chevron-right/);
+assert.match(savedModule, /color=\{Palette\.trip\} name="chevron-right"/);
 console.log('✓ SavedModule exposes one accessible row-level navigation contract');
 
 assert.match(saved, /countText\(savedPlaceIds\.length, 'place'\)/);

@@ -6,6 +6,7 @@ import { SavedPlacesProvider } from '@/saved/provider';
 import { NotebookProvider } from '@/notebooks/provider';
 import { MyTripsProvider } from '@/trips/provider';
 import { PersonalPlaceCardProvider } from '@/personal-place-cards/provider';
+import { HeaderBackButton } from '@/components/ui/header-back-button';
 
 export default function RootLayout() {
   return (
@@ -26,14 +27,20 @@ export default function RootLayout() {
                 />
                 <Stack.Screen
                   name="personal-place-cards/index"
-                  options={{ title: 'Personal Places' }}
+                  options={{ headerLeft: () => <HeaderBackButton />, title: 'Personal Places' }}
                 />
                 <Stack.Screen
                   name="personal-place-cards/[cardId]"
-                  options={{ title: 'Personal Place' }}
+                  options={{ headerLeft: () => <HeaderBackButton />, title: 'Personal Place' }}
                 />
-                <Stack.Screen name="favourites/index" options={{ title: 'Favourites' }} />
-                <Stack.Screen name="trips/index" options={{ title: 'Trips' }} />
+                <Stack.Screen
+                  name="favourites/index"
+                  options={{ headerLeft: () => <HeaderBackButton />, title: 'Favourites' }}
+                />
+                <Stack.Screen
+                  name="trips/index"
+                  options={{ headerLeft: () => <HeaderBackButton />, title: 'Trips' }}
+                />
                 <Stack.Screen name="trips/[tripId]" options={{ title: 'My Trip' }} />
                 <Stack.Screen name="notebooks/index" options={{ title: 'Notebooks' }} />
                 <Stack.Screen
@@ -53,7 +60,10 @@ export default function RootLayout() {
                 />
                 <Stack.Screen
                   name="photo-upload-dev"
-                  options={{ title: 'Photo upload verification' }}
+                  options={{
+                    headerLeft: () => <HeaderBackButton />,
+                    title: 'Photo upload verification',
+                  }}
                 />
                 <Stack.Screen
                   name="trips/[tripId]/map"
