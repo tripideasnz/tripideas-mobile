@@ -290,7 +290,7 @@ export default function TripDetailScreen() {
         options={{
           headerBackVisible: false,
           headerLeft: () => (
-            <HeaderBackButton onPress={handleBack} />
+            <HeaderBackButton color={Palette.trip} onPress={handleBack} />
           ),
           title: '',
         }}

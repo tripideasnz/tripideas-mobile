@@ -7,6 +7,7 @@ import { NotebookProvider } from '@/notebooks/provider';
 import { MyTripsProvider } from '@/trips/provider';
 import { PersonalPlaceCardProvider } from '@/personal-place-cards/provider';
 import { HeaderBackButton } from '@/components/ui/header-back-button';
+import { Palette } from '@/constants/design';
 
 export default function RootLayout() {
   return (
@@ -27,19 +28,31 @@ export default function RootLayout() {
                 />
                 <Stack.Screen
                   name="personal-place-cards/index"
-                  options={{ headerLeft: () => <HeaderBackButton />, title: 'Personal Places' }}
+                  options={{
+                    headerLeft: () => <HeaderBackButton color={Palette.trip} />,
+                    title: 'Personal Places',
+                  }}
                 />
                 <Stack.Screen
                   name="personal-place-cards/[cardId]"
-                  options={{ headerLeft: () => <HeaderBackButton />, title: 'Personal Place' }}
+                  options={{
+                    headerLeft: () => <HeaderBackButton color={Palette.trip} />,
+                    title: 'Personal Place',
+                  }}
                 />
                 <Stack.Screen
                   name="favourites/index"
-                  options={{ headerLeft: () => <HeaderBackButton />, title: 'Favourites' }}
+                  options={{
+                    headerLeft: () => <HeaderBackButton color={Palette.trip} />,
+                    title: 'Favourites',
+                  }}
                 />
                 <Stack.Screen
                   name="trips/index"
-                  options={{ headerLeft: () => <HeaderBackButton />, title: 'Trips' }}
+                  options={{
+                    headerLeft: () => <HeaderBackButton color={Palette.trip} />,
+                    title: 'Trips',
+                  }}
                 />
                 <Stack.Screen name="trips/[tripId]" options={{ title: 'My Trip' }} />
                 <Stack.Screen name="notebooks/index" options={{ title: 'Notebooks' }} />

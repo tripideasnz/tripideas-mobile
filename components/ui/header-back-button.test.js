@@ -22,7 +22,9 @@ assert.match(button, /width: 44/);
 assert.match(button, /borderRadius: 22/);
 assert.match(button, /backgroundColor: Palette\.surface/);
 assert.match(button, /borderColor: Palette\.border/);
-assert.match(button, /Ionicons color=\{Palette\.text\} name="chevron-back" size=\{24\}/);
+assert.match(button, /borderWidth: StyleSheet\.hairlineWidth/);
+assert.match(button, /color = Palette\.text/);
+assert.match(button, /Ionicons color=\{color\} name="chevron-back" size=\{24\}/);
 assert.match(button, /opacity: pressed \? 0\.5 : 1/);
 
 for (const source of [root, discover, notebookList, notebookDetail, tripDetail, tripMap, map]) {
@@ -30,4 +32,9 @@ for (const source of [root, discover, notebookList, notebookDetail, tripDetail, 
 }
 assert.doesNotMatch(notebookList, /@react-navigation\/elements/);
 assert.doesNotMatch(notebookDetail, /@react-navigation\/elements/);
+for (const source of [root, notebookList, notebookDetail, tripDetail, tripMap]) {
+  assert.match(source, /HeaderBackButton color=\{Palette\.trip\}/);
+}
+assert.doesNotMatch(discover, /HeaderBackButton color=\{Palette\.trip\}/);
+assert.doesNotMatch(map, /HeaderBackButton color=\{Palette\.trip\}/);
 console.log('✓ top-left back controls share the explicit 44px white-circle treatment');

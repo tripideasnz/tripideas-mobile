@@ -11,6 +11,7 @@ import { ScrollView, Text, View } from 'react-native';
 import { PlaceCard } from '@/components/place-card';
 import { PersonalPlaceCardView } from '@/components/personal-place-card-view';
 import { HeaderBackButton } from '@/components/ui/header-back-button';
+import { Palette } from '@/constants/design';
 import { MAP_STYLE_URL } from '@/constants/map';
 import { fetchPlaceCardsByIds } from '@/sanity/place-cards';
 import { useMyTrips } from '@/trips/provider';
@@ -164,7 +165,7 @@ export default function TripMapScreen() {
     <View style={{ flex: 1, backgroundColor: '#fff' }}>
       <Stack.Screen
         options={{
-          headerLeft: () => <HeaderBackButton />,
+          headerLeft: () => <HeaderBackButton color={Palette.trip} />,
           title,
         }}
       />

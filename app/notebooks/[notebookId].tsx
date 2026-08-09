@@ -665,7 +665,7 @@ export default function NotebookDetailScreen() {
     <SafeAreaView edges={['bottom']} style={{ flex: 1, backgroundColor: Palette.background }}>
       <Stack.Screen
         options={{
-          headerLeft: () => <HeaderBackButton onPress={handleBack} />,
+          headerLeft: () => <HeaderBackButton color={Palette.trip} onPress={handleBack} />,
         }}
       />
       <KeyboardAvoidingView
