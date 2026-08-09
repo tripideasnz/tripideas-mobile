@@ -54,6 +54,7 @@ type MyTripsContextValue = {
   isLoading: boolean;
   loadError: string | null;
   refresh: () => Promise<void>;
+  reorderTripEntries: (tripId: string, entryIds: string[]) => Promise<void>;
   removePlaceFromTrip: (tripId: string, placeId: string) => Promise<void>;
   removeTripEntry: (tripId: string, entryId: string) => Promise<void>;
   renameTrip: (tripId: string, name: string) => Promise<void>;
@@ -481,6 +482,26 @@ export function MyTripsProvider({ children }: PropsWithChildren) {
     await mutateAndRefresh(tripId, () => deleteEntryRequest(tripId, entryId));
   }, [mutateAndRefresh]);
 
+  const reorderTripEntries = useCallback(async (tripId: string, entryIds: string[]) => {
+    if (!activeUserRef.current) {
+      if (!localMutationsAllowedRef.current) return;
+      await persistLocal((current) => current.map((trip) => {
+        if (trip.id !== tripId) return trip;
+        const byId = new Map(
+          trip.places.map((place) => [place.entryId ?? place.placeId, place])
+        );
+        return {
+          ...trip,
+          places: entryIds.flatMap((id) => byId.get(id) ?? []),
+        };
+      }));
+      return;
+    }
+    await mutateAndRefresh(tripId, (trip) =>
+      updateTripRequest(tripId, { entryOrder: entryIds, name: trip.name })
+    );
+  }, [mutateAndRefresh, persistLocal]);
+
   const updateTripEntryNote = useCallback(
     async (tripId: string, entryId: string, note: string) => {
       await mutateAndRefresh(
@@ -525,6 +546,7 @@ export function MyTripsProvider({ children }: PropsWithChildren) {
     isLoading,
     loadError,
     refresh,
+    reorderTripEntries,
     removePlaceFromTrip,
     removeTripEntry,
     renameTrip,
@@ -536,7 +558,7 @@ export function MyTripsProvider({ children }: PropsWithChildren) {
   }), [
     addPersonalCardToTrip, addPlaceToTrip, createTrip, createTripWithPlace, deferImport, deleteTrip,
     getTrip, importDecision, isImporting, isLoading, journal, loadError,
-    refresh, removePlaceFromTrip, removeTripEntry, renameTrip, runImport, trips,
+    refresh, removePlaceFromTrip, removeTripEntry, renameTrip, reorderTripEntries, runImport, trips,
     updatePlaceNote, updateTripEntryNote, updateTripNote,
   ]);
 

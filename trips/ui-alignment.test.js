@@ -1,0 +1,59 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+
+const read = (relativePath) =>
+  readFile(new URL(`../${relativePath}`, import.meta.url), 'utf8');
+
+const [list, detail, entry, autosave, provider, api] = await Promise.all([
+  read('app/trips/index.tsx'),
+  read('app/trips/[tripId].tsx'),
+  read('components/trip-entry-card.tsx'),
+  read('components/ui/autosave-note.tsx'),
+  read('trips/provider.tsx'),
+  read('trips/api.ts'),
+]);
+
+assert.match(list, /accessibilityLabel="Add Trip"/);
+assert.match(list, /name="add"/);
+assert.match(list, /accessibilityLabel=\{`Open \$\{trip\.name\}`\}/);
+assert.match(list, /accessibilityLabel=\{`Delete \$\{trip\.name\}`\}/);
+assert.match(list, /'Delete trip\?'/);
+assert.match(list, /void deleteTrip\(trip\.id\)/);
+assert.ok(list.indexOf('<IconAction') > list.indexOf('</Pressable>'));
+console.log('✓ Trips list separates card navigation from confirmed trash actions');
+
+assert.doesNotMatch(detail, /Save Note|Show on Map|Delete trip/);
+assert.match(detail, /accessibilityLabel="Show Trip on map"/);
+assert.match(detail, /accessibilityLabel="Share Trip"/);
+assert.ok(detail.indexOf('accessibilityLabel="Share Trip"') > detail.indexOf('accessibilityLabel="Show Trip on map"'));
+assert.match(detail, /Public sharing unavailable/);
+console.log('✓ Trip detail uses one guarded Map and Share icon cluster without deletion');
+
+assert.match(detail, /<AutosaveNote/);
+assert.match(entry, /<AutosaveNote/);
+assert.doesNotMatch(entry, /Save Note/);
+assert.match(autosave, /setTimeout\(\(\) =>/);
+assert.match(autosave, /}, 700\)/);
+assert.match(autosave, /Saving…/);
+assert.match(autosave, /Could not save\. Tap to retry\./);
+assert.match(autosave, /show more/);
+assert.match(autosave, /show less/);
+assert.match(detail, /updateTripNote\(trip\.id, note\)/);
+assert.match(detail, /updateTripEntryNote\(trip\.id, entry\.id, note\)/);
+console.log('✓ Trip and entry notes share debounced autosave, feedback, and expansion');
+
+assert.match(entry, /name="location-on"/);
+assert.match(entry, /accessibilityLabel="Personal Place"/);
+assert.match(entry, /<PlaceCard embedded place=\{editorialPlace\}/);
+assert.doesNotMatch(entry, /favorite.*Personal Place|Personal Place.*favorite/s);
+console.log('✓ Personal entries use the shared pin while editorial cards retain favourite semantics');
+
+assert.match(entry, /icon="arrow-upward"/);
+assert.match(entry, /icon="arrow-downward"/);
+assert.match(entry, /name="more-horiz"/);
+assert.match(entry, /Remove from Trip/);
+assert.match(provider, /reorderTripEntries/);
+assert.match(provider, /entryOrder: entryIds/);
+assert.match(api, /updateEntryNoteRequest/);
+assert.doesNotMatch(api, /updatePersonalPlaceCard.*updateEntryNoteRequest|updateEntryNoteRequest.*updatePersonalPlaceCard/s);
+console.log('✓ ordering stays authoritative and entry-note mutation remains entry-scoped');

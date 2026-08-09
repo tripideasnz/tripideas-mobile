@@ -1,9 +1,10 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Stack, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { TripImageCollage } from '@/components/trip-image-collage';
+import { IconAction } from '@/components/ui/icon-action';
 import { AppButton } from '@/components/ui/app-button';
 import { AppText } from '@/components/ui/app-text';
 import { AppTextInput } from '@/components/ui/app-text-input';
@@ -20,6 +21,7 @@ export default function TripsScreen() {
     confirmImport,
     createTrip,
     deferImport,
+    deleteTrip,
     importDecision,
     importProgress,
     isImporting,
@@ -150,7 +152,20 @@ export default function TripsScreen() {
             style={{ flex: 1 }}
             value={newTripName}
           />
-          <AppButton disabled={!newTripName.trim()} label="Create" onPress={submitCreate} />
+          <IconAction
+            accessibilityLabel="Create Trip"
+            disabled={!newTripName.trim()}
+            icon="check"
+            onPress={submitCreate}
+          />
+          <IconAction
+            accessibilityLabel="Cancel Trip creation"
+            icon="close"
+            onPress={() => {
+              setNewTripName('');
+              setShowCreate(false);
+            }}
+          />
         </View>
       ) : null}
 
@@ -161,28 +176,43 @@ export default function TripsScreen() {
           const images = getTripImages(trip, tripPlaces).slice(0, 4);
           const placeCount = trip.entries?.length ?? trip.places.length;
           return (
-            <Pressable
-              accessibilityLabel={`Open ${trip.name}`}
-              accessibilityRole="button"
-              key={trip.id}
-              onPress={() => router.push({ pathname: '/trips/[tripId]', params: { tripId: trip.id } })}
-              style={({ pressed }) => ({
-                borderColor: Palette.border,
-                borderRadius: Radius.card,
-                borderWidth: 1,
-                flexDirection: 'row',
-                marginBottom: Space.md,
-                opacity: pressed ? 0.65 : 1,
-                overflow: 'hidden',
-              })}>
-              <TripImageCollage images={images} style={{ height: 92, width: 112 }} />
-              <View style={{ flex: 1, justifyContent: 'center', padding: Space.lg }}>
-                <Text numberOfLines={2} style={Type.cardTitle}>{trip.name}</Text>
-                <Text style={{ color: Palette.textMuted, ...Type.label, marginTop: Space.xs }}>
-                  {placeCount} {placeCount === 1 ? 'place' : 'places'}
-                </Text>
+            <View key={trip.id} style={{ marginBottom: Space.md }}>
+              <Pressable
+                accessibilityLabel={`Open ${trip.name}`}
+                accessibilityRole="button"
+                onPress={() => router.push({ pathname: '/trips/[tripId]', params: { tripId: trip.id } })}
+                style={({ pressed }) => ({
+                  borderColor: Palette.border,
+                  borderRadius: Radius.card,
+                  borderWidth: 1,
+                  flexDirection: 'row',
+                  opacity: pressed ? 0.65 : 1,
+                  overflow: 'hidden',
+                })}>
+                <TripImageCollage images={images} style={{ height: 92, width: 112 }} />
+                <View style={{ flex: 1, justifyContent: 'center', padding: Space.lg, paddingRight: 68 }}>
+                  <Text numberOfLines={2} style={Type.cardTitle}>{trip.name}</Text>
+                  <Text style={{ color: Palette.textMuted, ...Type.label, marginTop: Space.xs }}>
+                    {placeCount} {placeCount === 1 ? 'place' : 'places'}
+                  </Text>
+                </View>
+              </Pressable>
+              <View style={{ position: 'absolute', right: Space.md, top: 24 }}>
+                <IconAction
+                  accessibilityLabel={`Delete ${trip.name}`}
+                  destructive
+                  icon="delete-outline"
+                  onPress={() => Alert.alert(
+                    'Delete trip?',
+                    `This will delete "${trip.name}" and its notes.`,
+                    [
+                      { style: 'cancel', text: 'Cancel' },
+                      { onPress: () => void deleteTrip(trip.id), style: 'destructive', text: 'Delete' },
+                    ]
+                  )}
+                />
               </View>
-            </Pressable>
+            </View>
           );
         })
       ) : (

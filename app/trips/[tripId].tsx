@@ -13,6 +13,8 @@ import {
 import { HeaderBackButton } from '@/components/ui/header-back-button';
 
 import { TripEntryCard } from '@/components/trip-entry-card';
+import { AutosaveNote } from '@/components/ui/autosave-note';
+import { IconAction } from '@/components/ui/icon-action';
 import { LoadingView } from '@/components/ui/loading-view';
 import { TripImageCollage } from '@/components/trip-image-collage';
 import { AppTextInput } from '@/components/ui/app-text-input';
@@ -38,19 +40,18 @@ export default function TripDetailScreen() {
   const selectedTripId = Array.isArray(tripId) ? tripId[0] : tripId;
   const router = useRouter();
   const {
-    deleteTrip,
     getTrip,
     isLoading: isLoadingTrips,
     refresh,
     removeTripEntry,
     renameTrip,
+    reorderTripEntries,
     updateTripEntryNote,
     updateTripNote,
   } = useMyTrips();
   const trip = getTrip(selectedTripId);
   const [name, setName] = useState('');
   const [isEditingName, setIsEditingName] = useState(false);
-  const [tripNote, setTripNote] = useState('');
   const [places, setPlaces] = useState<PlaceCardData[]>([]);
   const [isLoadingPlaces, setIsLoadingPlaces] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -71,7 +72,6 @@ export default function TripDetailScreen() {
   const isNameDirty = Boolean(
     trip && trimmedName && trimmedName !== trip.name
   );
-  const isTripNoteDirty = Boolean(trip && tripNote !== trip.note);
   const tripImages = trip
     ? getTripImages(trip, places, personalPhotoUrls).slice(0, 4)
     : [];
@@ -120,7 +120,6 @@ export default function TripDetailScreen() {
   useEffect(() => {
     setName(trip?.name ?? '');
     setIsEditingName(false);
-    setTripNote(trip?.note ?? '');
   }, [trip?.id]);
 
   useEffect(() => {
@@ -175,14 +174,6 @@ export default function TripDetailScreen() {
   const cancelNameEdit = () => {
     setName(trip?.name ?? '');
     setIsEditingName(false);
-  };
-
-  const saveTripNote = async () => {
-    if (!trip || !isTripNoteDirty) {
-      return;
-    }
-
-    await updateTripNote(trip.id, tripNote);
   };
 
   const openShareSheet = async () => {
@@ -267,7 +258,7 @@ export default function TripDetailScreen() {
         options={{
           headerBackVisible: false,
           headerLeft: () => (
-            <HeaderBackButton onPress={() => router.replace('/saved')} />
+            <HeaderBackButton onPress={() => router.replace('/trips')} />
           ),
           title: '',
         }}
@@ -384,70 +375,27 @@ export default function TripDetailScreen() {
           <Text style={{ ...Type.label, marginBottom: Space.sm }}>
             Trip note
           </Text>
-          <AppTextInput
+          <AutosaveNote
             accessibilityLabel="Trip note"
-            multiline
-            onChangeText={setTripNote}
+            onSave={(note) => updateTripNote(trip.id, note)}
             placeholder="Add plans, reminders, or ideas for this trip"
-            style={{
-              borderColor: '#d8d8d8',
-              borderRadius: 10,
-              borderWidth: 1,
-              fontSize: 16,
-              lineHeight: undefined,
-              minHeight: 110,
-              padding: 14,
-              textAlignVertical: 'top',
-            }}
-            value={tripNote}
+            value={trip.note}
           />
-          <Pressable
-            accessibilityRole="button"
-            disabled={!isTripNoteDirty}
-            onPress={() => void saveTripNote()}
-            style={({ pressed }) => ({
-              alignItems: 'center',
-              backgroundColor: isTripNoteDirty ? '#111' : '#d8d8d8',
-              borderRadius: 10,
-              marginBottom: 22,
-              marginTop: 10,
-              opacity: pressed ? 0.7 : 1,
-              paddingVertical: 12,
-            })}>
-            <Text
-              style={{
-                color: isTripNoteDirty ? '#fff' : '#717171',
-                fontSize: 16,
-                fontWeight: '700',
-              }}>
-              Save Note
-            </Text>
-          </Pressable>
 
-          <View style={{ flexDirection: 'row', gap: 10, marginBottom: 28 }}>
-            <Pressable
-              accessibilityRole="button"
+          <View style={{ flexDirection: 'row', gap: Space.sm, justifyContent: 'flex-end', marginBottom: Space.xxl, marginTop: Space.md }}>
+            <IconAction
+              accessibilityLabel="Show Trip on map"
+              icon="map"
               onPress={() =>
                 router.push({
                   pathname: '/trips/[tripId]/map',
                   params: { tripId: trip.id },
                 })
               }
-              style={({ pressed }) => ({
-                alignItems: 'center',
-                borderColor: '#d8d8d8',
-                borderRadius: 10,
-                borderWidth: 1,
-                flex: 1,
-                opacity: pressed ? 0.55 : 1,
-                paddingVertical: 12,
-              })}>
-              <Text style={{ fontSize: 16, fontWeight: '700' }}>
-                Show on Map
-              </Text>
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
+            />
+            <IconAction
+              accessibilityLabel="Share Trip"
+              icon="share"
               onPress={() => {
                 Alert.alert('Share trip', undefined, [
                   { style: 'cancel', text: 'Cancel' },
@@ -465,17 +413,7 @@ export default function TripDetailScreen() {
                   },
                 ]);
               }}
-              style={({ pressed }) => ({
-                alignItems: 'center',
-                borderColor: '#d8d8d8',
-                borderRadius: 10,
-                borderWidth: 1,
-                flex: 1,
-                opacity: pressed ? 0.55 : 1,
-                paddingVertical: 12,
-              })}>
-              <Text style={{ fontSize: 16, fontWeight: '700' }}>Share</Text>
-            </Pressable>
+            />
           </View>
 
           <Text style={{ ...Type.section, marginBottom: Space.lg }}>
@@ -491,8 +429,10 @@ export default function TripDetailScreen() {
               {errorMessage}
             </Text>
           ) : orderedEntries.length > 0 ? (
-            orderedEntries.map((entry) => (
+            orderedEntries.map((entry, index) => (
               <TripEntryCard
+                canMoveDown={index < orderedEntries.length - 1}
+                canMoveUp={index > 0}
                 key={entry.id}
                 entry={entry}
                 editorialPlace={
@@ -501,6 +441,16 @@ export default function TripDetailScreen() {
                     : undefined
                 }
                 onRemove={() => removeTripEntry(trip.id, entry.id)}
+                onMoveDown={() => {
+                  const next = orderedEntries.map((item) => item.id);
+                  [next[index], next[index + 1]] = [next[index + 1], next[index]];
+                  void reorderTripEntries(trip.id, next);
+                }}
+                onMoveUp={() => {
+                  const next = orderedEntries.map((item) => item.id);
+                  [next[index - 1], next[index]] = [next[index], next[index - 1]];
+                  void reorderTripEntries(trip.id, next);
+                }}
                 onSaveNote={(note) =>
                   updateTripEntryNote(trip.id, entry.id, note)
                 }
@@ -511,39 +461,6 @@ export default function TripDetailScreen() {
               No places in this trip yet. Add one from Favourites.
             </Text>
           )}
-
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => {
-              Alert.alert(
-                'Delete trip?',
-                `This will delete "${trip.name}" and its notes.`,
-                [
-                  { style: 'cancel', text: 'Cancel' },
-                  {
-                    onPress: async () => {
-                      await deleteTrip(trip.id);
-                      router.replace('/saved');
-                    },
-                    style: 'destructive',
-                    text: 'Delete',
-                  },
-                ]
-              );
-            }}
-            style={({ pressed }) => ({
-              alignItems: 'center',
-              borderColor: '#c62828',
-              borderRadius: 10,
-              borderWidth: 1,
-              marginTop: 32,
-              opacity: pressed ? 0.55 : 1,
-              paddingVertical: 13,
-            })}>
-            <Text style={{ color: '#c62828', fontSize: 16, fontWeight: '700' }}>
-              Delete trip
-            </Text>
-          </Pressable>
         </>
       )}
     </ScrollView>
