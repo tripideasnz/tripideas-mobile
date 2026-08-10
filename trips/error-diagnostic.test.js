@@ -11,5 +11,9 @@ assert.equal(
   ' (422: invalid_place)'
 );
 assert.equal(tripRequestDiagnostic(new Error('offline')), '');
+assert.equal(
+  tripRequestDiagnostic(new ApiError(400, 'BAD_REQUEST', 'Validation error: Required at "placeId"')),
+  ' (400: BAD_REQUEST — Validation error: Required at "placeId")'
+);
 
-console.log('✓ Trip request diagnostics expose only API status and code');
+console.log('✓ Trip request diagnostics expose the safe API validation reason');

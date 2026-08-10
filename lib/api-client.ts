@@ -45,9 +45,16 @@ function parseError(responseText: string): {
   try {
     const parsed = JSON.parse(responseText) as {
       error?: Record<string, unknown>;
+      message?: unknown;
+      name?: unknown;
     };
     return {
-      code: typeof parsed.error?.code === 'string' ? parsed.error.code : undefined,
+      code:
+        typeof parsed.error?.code === 'string'
+          ? parsed.error.code
+          : typeof parsed.name === 'string'
+            ? parsed.name
+            : undefined,
       details: parsed.error
         ? Object.fromEntries(
             Object.entries(parsed.error).filter(
@@ -58,6 +65,8 @@ function parseError(responseText: string): {
       message:
         typeof parsed.error?.message === 'string'
           ? parsed.error.message
+          : typeof parsed.message === 'string'
+            ? parsed.message
           : undefined,
     };
   } catch {
