@@ -106,7 +106,6 @@ async function run() {
     id: 'ite_2',
     note: 'Keep',
     placeId: 'sanity-two',
-    type: 'editorialPlace',
   });
   assert.deepEqual(JSON.parse(String(calls[5][1].body)).entryOrder, [
     'ite_1',

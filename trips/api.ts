@@ -198,7 +198,6 @@ export async function addEditorialEntryRequest(
         id: input.id,
         note: input.note,
         placeId: input.placeId,
-        type: 'editorialPlace',
       }),
       method: 'POST',
     }
