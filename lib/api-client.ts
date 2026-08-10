@@ -1,5 +1,10 @@
-export const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL ?? 'https://api.tripideas.nz';
+export function normalizeApiBaseUrl(value: string): string {
+  return value.replace(/\/+$/, '');
+}
+
+export const API_BASE_URL = normalizeApiBaseUrl(
+  process.env.EXPO_PUBLIC_API_URL ?? 'https://api.tripideas.nz'
+);
 
 // Set by AuthProvider when a token is acquired or cleared.
 let _activeToken: string | null = null;
