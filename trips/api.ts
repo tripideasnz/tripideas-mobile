@@ -196,6 +196,7 @@ export async function addEditorialEntryRequest(
     {
       body: JSON.stringify({
         id: input.id,
+        itineraryId,
         note: input.note,
         placeId: input.placeId,
       }),
@@ -217,6 +218,7 @@ export async function addPersonalCardEntryRequest(
     {
       body: JSON.stringify({
         id: input.id,
+        itineraryId,
         note: input.note,
         personalPlaceCardId: input.personalPlaceCardId,
         type: 'personalPlaceCard',

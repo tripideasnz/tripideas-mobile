@@ -104,9 +104,11 @@ async function run() {
   ), true);
   assert.deepEqual(JSON.parse(String(calls[3][1].body)), {
     id: 'ite_2',
+    itineraryId: 'itn_1',
     note: 'Keep',
     placeId: 'sanity-two',
   });
+  assert.equal(JSON.parse(String(calls[4][1].body)).itineraryId, 'itn_1');
   assert.deepEqual(JSON.parse(String(calls[5][1].body)).entryOrder, [
     'ite_1',
     'ite_2',

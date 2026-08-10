@@ -12,6 +12,7 @@ import { StatusText } from '@/components/ui/status-text';
 import { Palette, Radius, Screen, Space, Type } from '@/constants/design';
 import { fetchPlaceCardsByIds } from '@/sanity/place-cards';
 import { getTripImages } from '@/trips/images';
+import { tripRequestDiagnostic } from '@/trips/error-diagnostic';
 import { useMyTrips } from '@/trips/provider';
 import type { PlaceCardData } from '@/types/content';
 
@@ -32,6 +33,7 @@ export default function TripsScreen() {
   } = useMyTrips();
   const [newTripName, setNewTripName] = useState('');
   const [showCreate, setShowCreate] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
   const [tripPlaces, setTripPlaces] = useState<PlaceCardData[]>([]);
   const [isLoadingPlaces, setIsLoadingPlaces] = useState(false);
   const tripPlaceIds = useMemo(
@@ -68,10 +70,17 @@ export default function TripsScreen() {
 
   const submitCreate = async () => {
     if (!newTripName.trim()) return;
-    const trip = await createTrip(newTripName);
-    if (trip) {
-      setNewTripName('');
-      setShowCreate(false);
+    setCreateError(null);
+    try {
+      const trip = await createTrip(newTripName);
+      if (trip) {
+        setNewTripName('');
+        setShowCreate(false);
+      }
+    } catch (error) {
+      setCreateError(
+        `Could not create the Trip${tripRequestDiagnostic(error)}. Check your connection and try again.`
+      );
     }
   };
 
@@ -145,7 +154,10 @@ export default function TripsScreen() {
           <AppTextInput
             accessibilityLabel="New trip name"
             autoFocus
-            onChangeText={setNewTripName}
+            onChangeText={(value) => {
+              setNewTripName(value);
+              setCreateError(null);
+            }}
             onSubmitEditing={submitCreate}
             placeholder="Add new trip"
             returnKeyType="done"
@@ -163,11 +175,13 @@ export default function TripsScreen() {
             icon="close"
             onPress={() => {
               setNewTripName('');
+              setCreateError(null);
               setShowCreate(false);
             }}
           />
         </View>
       ) : null}
+      {createError ? <AppText color={Palette.danger} style={{ marginBottom: Space.lg }}>{createError}</AppText> : null}
 
       {isLoading || isLoadingPlaces ? (
         <StatusText>Loading trips...</StatusText>
