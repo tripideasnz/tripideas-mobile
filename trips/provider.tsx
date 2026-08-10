@@ -33,6 +33,7 @@ import {
 } from '@/trips/migration';
 import { getMyTrips, setMyTrips, tripStorage } from '@/trips/storage';
 import type { MyTrip, TripMigrationJournal } from '@/trips/types';
+import { CreateTripWithPlaceError } from '@/trips/workflow-errors';
 
 type ImportDecision = {
   accountLabel: string;
@@ -389,12 +390,32 @@ export function MyTripsProvider({ children }: PropsWithChildren) {
       return trip;
     }
     const ownerId = activeUserRef.current;
-    const id = await createTripRequest({ entryOrder: [], name: trimmedName });
-    await addEditorialEntryRequest(id, {
-      id: createEntryId(),
-      note: '',
-      placeId: trimmedPlaceId,
-    });
+    let id: string;
+    try {
+      id = await createTripRequest({ entryOrder: [], name: trimmedName });
+    } catch (error) {
+      throw new CreateTripWithPlaceError('create', null, error);
+    }
+    try {
+      await addEditorialEntryRequest(id, {
+        id: createEntryId(),
+        note: '',
+        placeId: trimmedPlaceId,
+      });
+    } catch (error) {
+      // Creation has already succeeded. Keep the empty Trip visible when the
+      // server can be reached so a retry does not create a duplicate Trip.
+      try {
+        const createdSummary = (await listTripSummaries()).find((item) => item.id === id);
+        if (createdSummary) {
+          const createdTrip = await loadTrip(createdSummary);
+          await storeAuthoritative(ownerId, [createdTrip, ...apiTripsRef.current]);
+        }
+      } catch {
+        // A normal refresh will reconcile the created Trip when connectivity returns.
+      }
+      throw new CreateTripWithPlaceError('attach', id, error);
+    }
     const summary = (await listTripSummaries()).find((item) => item.id === id);
     if (!summary) throw new ApiError(503, 'verification_failed');
     const trip = await loadTrip(summary);

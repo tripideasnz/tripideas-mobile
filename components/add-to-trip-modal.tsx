@@ -7,6 +7,7 @@ import { AppTextInput } from '@/components/ui/app-text-input';
 import { CardSurface } from '@/components/ui/card-surface';
 import { Palette, Space, Type } from '@/constants/design';
 import type { MyTrip } from '@/trips/types';
+import { CreateTripWithPlaceError } from '@/trips/workflow-errors';
 
 type AddToTripModalProps = {
   onClose: () => void;
@@ -55,8 +56,16 @@ export function AddToTripModal({
     try {
       await onCreateTrip(trimmed);
       resetCreate();
-    } catch {
-      setActionError('Could not create the Trip. Check your connection and try again.');
+    } catch (error) {
+      if (error instanceof CreateTripWithPlaceError && error.stage === 'attach') {
+        setIsCreating(false);
+        setNewTripName('');
+        setActionError(
+          'The Trip was created, but the place could not be added. Select the Trip to try adding it again.'
+        );
+      } else {
+        setActionError('Could not create the Trip. Check your connection and try again.');
+      }
     } finally {
       setIsSubmitting(false);
     }
