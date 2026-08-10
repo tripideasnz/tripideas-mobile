@@ -153,7 +153,18 @@ export async function loadTrip(
     entries = await listTripEntries(summary.id);
   } catch (error) {
     if (!(error instanceof ApiError) || error.status !== 404) throw error;
-    entries = await listLegacyTripEntries(summary);
+    try {
+      entries = await listLegacyTripEntries(summary);
+    } catch (legacyError) {
+      if (!(legacyError instanceof ApiError) || legacyError.status !== 400) {
+        throw legacyError;
+      }
+      // The deployed legacy endpoint validates every row as editorial. Once
+      // Personal Place entries exist, their null placeId makes that whole
+      // response unusable. Preserve the last confirmed local projection until
+      // the per-Trip mixed-entry route is deployed.
+      entries = cached?.entries ?? [];
+    }
   }
   const timestamp = new Date().toISOString();
   const cachedByEntry = new Map(

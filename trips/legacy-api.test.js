@@ -55,6 +55,37 @@ async function run() {
       'place-2',
     ]);
     assert.equal(trip.places[0].note, 'First note');
+
+    globalThis.fetch = async (input) => {
+      const path = new URL(String(input)).pathname;
+      if (path === '/itinerary/itn_legacy/entries') {
+        return new Response('', { status: 404 });
+      }
+      if (path === '/itinerary/entries') {
+        return Response.json(
+          {
+            message: 'Validation error: Expected string, received null at "[6].placeId"',
+            name: 'BAD_REQUEST',
+            status: 400,
+          },
+          { status: 400 }
+        );
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    };
+    const preserved = await loadTrip({
+      description: 'Updated note',
+      entryOrder: ['ite_first', 'ite_second'],
+      id: 'itn_legacy',
+      name: 'Updated Trip',
+    }, trip);
+    assert.deepEqual(preserved.entries, trip.entries);
+    assert.deepEqual(preserved.places.map((place) => place.placeId), [
+      'place-1',
+      'place-2',
+    ]);
+    assert.equal(preserved.name, 'Updated Trip');
+    assert.equal(preserved.note, 'Updated note');
   } finally {
     globalThis.fetch = originalFetch;
     setActiveToken(null);
@@ -62,4 +93,4 @@ async function run() {
 }
 
 await run();
-console.log('✓ Trip loading falls back to the deployed legacy entries route');
+console.log('✓ Trip loading handles both usable and invalid legacy entry responses');

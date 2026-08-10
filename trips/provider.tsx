@@ -307,9 +307,16 @@ export function MyTripsProvider({ children }: PropsWithChildren) {
     }
     const ownerId = activeUserRef.current;
     const id = await createTripRequest({ entryOrder: [], name: trimmedName });
-    const summary = (await listTripSummaries()).find((item) => item.id === id);
-    if (!summary) throw new ApiError(503, 'verification_failed');
-    const trip = await loadTrip(summary);
+    const timestamp = new Date().toISOString();
+    const trip: MyTrip = {
+      createdAt: timestamp,
+      entries: [],
+      id,
+      name: trimmedName,
+      note: '',
+      places: [],
+      updatedAt: timestamp,
+    };
     await storeAuthoritative(ownerId, [trip, ...apiTripsRef.current]);
     return trip;
   }, [persistLocal, storeAuthoritative]);
@@ -396,29 +403,48 @@ export function MyTripsProvider({ children }: PropsWithChildren) {
     } catch (error) {
       throw new CreateTripWithPlaceError('create', null, error);
     }
+    let entryId: string;
     try {
-      await addEditorialEntryRequest(id, {
+      entryId = await addEditorialEntryRequest(id, {
         id: createEntryId(),
         note: '',
         placeId: trimmedPlaceId,
       });
     } catch (error) {
-      // Creation has already succeeded. Keep the empty Trip visible when the
-      // server can be reached so a retry does not create a duplicate Trip.
-      try {
-        const createdSummary = (await listTripSummaries()).find((item) => item.id === id);
-        if (createdSummary) {
-          const createdTrip = await loadTrip(createdSummary);
-          await storeAuthoritative(ownerId, [createdTrip, ...apiTripsRef.current]);
-        }
-      } catch {
-        // A normal refresh will reconcile the created Trip when connectivity returns.
-      }
+      const timestamp = new Date().toISOString();
+      await storeAuthoritative(ownerId, [{
+        createdAt: timestamp,
+        entries: [],
+        id,
+        name: trimmedName,
+        note: '',
+        places: [],
+        updatedAt: timestamp,
+      }, ...apiTripsRef.current]);
       throw new CreateTripWithPlaceError('attach', id, error);
     }
-    const summary = (await listTripSummaries()).find((item) => item.id === id);
-    if (!summary) throw new ApiError(503, 'verification_failed');
-    const trip = await loadTrip(summary);
+    const timestamp = new Date().toISOString();
+    const trip: MyTrip = {
+      createdAt: timestamp,
+      entries: [{
+        editorialPlace: { id: trimmedPlaceId },
+        id: entryId,
+        itineraryId: id,
+        note: '',
+        order: 0,
+        type: 'editorialPlace',
+      }],
+      id,
+      name: trimmedName,
+      note: '',
+      places: [{
+        addedAt: timestamp,
+        entryId,
+        note: '',
+        placeId: trimmedPlaceId,
+      }],
+      updatedAt: timestamp,
+    };
     await storeAuthoritative(ownerId, [trip, ...apiTripsRef.current]);
     return trip;
   }, [persistLocal, storeAuthoritative]);
