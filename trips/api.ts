@@ -113,11 +113,48 @@ export async function listTripEntries(itineraryId: string): Promise<TripEntry[]>
   return response.map(parseTripEntry).sort((a, b) => a.order - b.order);
 }
 
+async function listLegacyTripEntries(
+  summary: ApiTripSummary
+): Promise<ApiEditorialTripEntry[]> {
+  const response = await authenticatedApiFetch<unknown>('/itinerary/entries');
+  if (!Array.isArray(response)) throw new ApiError(500, 'malformed_response');
+  const orderById = new Map(summary.entryOrder.map((id, index) => [id, index]));
+  return response
+    .filter((value): value is Record<string, unknown> =>
+      Boolean(value) && typeof value === 'object'
+    )
+    .filter((entry) => entry.itineraryId === summary.id)
+    .map((entry, index) => {
+      if (
+        typeof entry.id !== 'string' ||
+        typeof entry.placeId !== 'string' ||
+        !(entry.note === null || typeof entry.note === 'string')
+      ) {
+        throw new ApiError(500, 'malformed_response');
+      }
+      return {
+        editorialPlace: { id: entry.placeId },
+        id: entry.id,
+        itineraryId: summary.id,
+        note: entry.note,
+        order: orderById.get(entry.id) ?? summary.entryOrder.length + index,
+        type: 'editorialPlace' as const,
+      };
+    })
+    .sort((a, b) => a.order - b.order);
+}
+
 export async function loadTrip(
   summary: ApiTripSummary,
   cached?: MyTrip
 ): Promise<MyTrip> {
-  const entries = await listTripEntries(summary.id);
+  let entries: TripEntry[];
+  try {
+    entries = await listTripEntries(summary.id);
+  } catch (error) {
+    if (!(error instanceof ApiError) || error.status !== 404) throw error;
+    entries = await listLegacyTripEntries(summary);
+  }
   const timestamp = new Date().toISOString();
   const cachedByEntry = new Map(
     (cached?.places ?? []).map((place) => [place.entryId, place])
