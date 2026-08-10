@@ -7,7 +7,7 @@ assert.match(modal, /try \{[\s\S]*await onCreateTrip\(trimmed\);[\s\S]*\} catch 
 assert.match(modal, /const trip = await onCreateTrip\(trimmed\)/);
 assert.match(modal, /setCreatedTrip\(trip\)/);
 assert.match(modal, /createdTrip \? 'Trip created' : 'Add to My Trip'/);
-assert.match(modal, /<TripIndexCard[\s\S]*getTripImages\(createdTrip, createdTripPlaces\)/);
+assert.match(modal, /<TripIndexCard[\s\S]*getTripImages\(createdTrip, tripPlaces\)/);
 assert.match(modal, /Could not create the Trip\$\{tripRequestDiagnostic\(error\)\}/);
 assert.match(modal, /error instanceof CreateTripWithPlaceError && error\.stage === 'attach'/);
 assert.match(modal, /The Trip was created, but the place could not be added\$\{tripRequestDiagnostic\(error\)\}/);

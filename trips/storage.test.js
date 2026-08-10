@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 
 import {
   createTripStorage,
+  deletedTripIdsKey,
   tripCacheKey,
   tripMigrationJournalKey,
 } from './storage.ts';
@@ -37,6 +38,11 @@ async function run() {
   assert.equal((await storage.getCache('user-one'))[0].name, 'One');
   assert.equal((await storage.getCache('user-two'))[0].name, 'Two');
   assert.notEqual(tripCacheKey('user-one'), tripCacheKey('user-two'));
+  await storage.addDeletedTripId('user-one', 'itn_deleted');
+  await storage.addDeletedTripId('user-one', 'itn_deleted');
+  assert.deepEqual(await storage.getDeletedTripIds('user-one'), ['itn_deleted']);
+  assert.equal(await storage.getDeletedTripIds('user-two').then((ids) => ids.length), 0);
+  assert.notEqual(deletedTripIdsKey('user-one'), deletedTripIdsKey('user-two'));
 
   const journal = {
     acceptedAt: 'now',

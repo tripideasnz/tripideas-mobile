@@ -34,14 +34,19 @@ export function AddToTripModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [createdTrip, setCreatedTrip] = useState<MyTrip | null>(null);
-  const [createdTripPlaces, setCreatedTripPlaces] = useState<PlaceCardData[]>([]);
+  const [tripPlaces, setTripPlaces] = useState<PlaceCardData[]>([]);
+  const previewPlaceIds = Array.from(new Set([
+    ...trips.flatMap((trip) => trip.places.map((place) => place.placeId)),
+    ...(createdTrip?.places.map((place) => place.placeId) ?? []),
+  ]));
+  const previewPlaceIdsKey = previewPlaceIds.join('|');
 
   const resetCreate = () => {
     setIsCreating(false);
     setNewTripName('');
     setActionError(null);
     setCreatedTrip(null);
-    setCreatedTripPlaces([]);
+    setTripPlaces([]);
   };
 
   useEffect(() => {
@@ -53,19 +58,24 @@ export function AddToTripModal({
   }, [placeId]);
 
   useEffect(() => {
-    if (!createdTrip || !placeId) return;
+    if (!placeId || previewPlaceIds.length === 0) {
+      setTripPlaces([]);
+      return;
+    }
     let isMounted = true;
-    fetchPlaceCardsByIds([placeId])
+    fetchPlaceCardsByIds(previewPlaceIds)
       .then((places) => {
-        if (isMounted) setCreatedTripPlaces(places);
+        if (isMounted) setTripPlaces(places);
       })
       .catch(() => {
-        if (isMounted) setCreatedTripPlaces([]);
+        if (isMounted) setTripPlaces([]);
       });
     return () => {
       isMounted = false;
     };
-  }, [createdTrip, placeId]);
+    // The joined ID key prevents refetches when only Trip names or notes change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [placeId, previewPlaceIdsKey]);
 
   const handleClose = () => {
     resetCreate();
@@ -154,7 +164,7 @@ export function AddToTripModal({
           <View style={{ gap: Space.lg }}>
             <AppText color={Palette.textMuted}>The place was added successfully.</AppText>
             <TripIndexCard
-              images={getTripImages(createdTrip, createdTripPlaces)}
+              images={getTripImages(createdTrip, tripPlaces)}
               trip={createdTrip}
             />
           </View>
@@ -201,33 +211,19 @@ export function AddToTripModal({
               );
 
               return (
-                <Pressable
-                  accessibilityRole="button"
-                  key={trip.id}
-                  disabled={isSubmitting}
-                  onPress={() => void handleSelectTrip(trip.id)}
-                  style={({ pressed }) => ({
-                    marginBottom: Space.md,
-                    opacity: pressed ? 0.55 : alreadyAdded ? 0.75 : 1,
-                  })}>
-                  <CardSurface style={{ padding: Space.lg }}>
-                    <Text style={Type.cardTitle}>{trip.name}</Text>
-                    <Text
-                      style={{
-                        color: Palette.textMuted,
-                        ...Type.label,
-                        marginTop: Space.xs,
-                      }}>
-                      {alreadyAdded
-                        ? 'Already in this trip'
-                        : `${trip.entries?.length ?? trip.places.length} ${
-                            (trip.entries?.length ?? trip.places.length) === 1
-                              ? 'place'
-                              : 'places'
-                          }`}
-                    </Text>
-                  </CardSurface>
-                </Pressable>
+                <View key={trip.id} style={{ marginBottom: Space.md, opacity: alreadyAdded ? 0.75 : 1 }}>
+                  <TripIndexCard
+                    accessibilityLabel={`Add place to ${trip.name}`}
+                    images={getTripImages(trip, tripPlaces)}
+                    onPress={() => void handleSelectTrip(trip.id)}
+                    trip={trip}
+                  />
+                  {alreadyAdded ? (
+                    <AppText color={Palette.textMuted} style={{ marginTop: Space.xs }}>
+                      Already in this Trip
+                    </AppText>
+                  ) : null}
+                </View>
               );
             })}
 

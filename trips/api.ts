@@ -190,9 +190,13 @@ export async function loadTrip(
   };
 }
 
-export async function listTrips(cached: MyTrip[] = []): Promise<MyTrip[]> {
+export async function listTrips(
+  cached: MyTrip[] = [],
+  excludedIds: string[] = []
+): Promise<MyTrip[]> {
   const cachedById = new Map(cached.map((trip) => [trip.id, trip]));
-  const summaries = await listTripSummaries();
+  const excluded = new Set(excludedIds);
+  const summaries = (await listTripSummaries()).filter((summary) => !excluded.has(summary.id));
   return Promise.all(
     summaries.map((summary) => loadTrip(summary, cachedById.get(summary.id)))
   );

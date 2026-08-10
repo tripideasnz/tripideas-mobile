@@ -102,6 +102,7 @@ export function MyTripsProvider({ children }: PropsWithChildren) {
   const userId = session?.userId ?? null;
   const activeUserRef = useRef<string | null>(null);
   const apiTripsRef = useRef<MyTrip[]>([]);
+  const deletedTripIdsRef = useRef<string[]>([]);
   const legacyTripsRef = useRef<MyTrip[]>([]);
   const journalRef = useRef<TripMigrationJournal | null>(null);
   const showLegacyRef = useRef(false);
@@ -139,7 +140,10 @@ export function MyTripsProvider({ children }: PropsWithChildren) {
     setIsLoading(true);
     setLoadError(null);
     try {
-      const latest = await listTrips(await tripStorage.getCache(ownerId));
+      const latest = await listTrips(
+        await tripStorage.getCache(ownerId),
+        deletedTripIdsRef.current
+      );
       await storeAuthoritative(ownerId, latest);
     } catch {
       if (activeUserRef.current === ownerId) {
@@ -154,6 +158,7 @@ export function MyTripsProvider({ children }: PropsWithChildren) {
     let mounted = true;
     activeUserRef.current = userId;
     apiTripsRef.current = [];
+    deletedTripIdsRef.current = [];
     setTripsState([]);
     setImportDecision(null);
     setJournal(null);
@@ -176,14 +181,16 @@ export function MyTripsProvider({ children }: PropsWithChildren) {
       }
       localMutationsAllowedRef.current = false;
 
-      const [cached, existingJournal, claim] = await Promise.all([
+      const [cached, deletedTripIds, existingJournal, claim] = await Promise.all([
         tripStorage.getCache(userId),
+        tripStorage.getDeletedTripIds(userId),
         tripStorage.getJournal(userId),
         tripStorage.getClaim(),
       ]);
       if (!mounted || activeUserRef.current !== userId) return;
       setTripsState(cached);
       apiTripsRef.current = cached;
+      deletedTripIdsRef.current = deletedTripIds;
       setJournal(existingJournal);
       journalRef.current = existingJournal;
 
@@ -551,6 +558,7 @@ export function MyTripsProvider({ children }: PropsWithChildren) {
     }
     const ownerId = activeUserRef.current;
     await deleteTripRequest(tripId);
+    deletedTripIdsRef.current = await tripStorage.addDeletedTripId(ownerId, tripId);
     await storeAuthoritative(
       ownerId,
       apiTripsRef.current.filter((trip) => trip.id !== tripId)

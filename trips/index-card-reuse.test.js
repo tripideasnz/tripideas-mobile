@@ -7,6 +7,8 @@ const card = await readFile(new URL('../components/trip-index-card.tsx', import.
 
 assert.match(index, /<TripIndexCard/);
 assert.match(modal, /<TripIndexCard/);
+assert.match(modal, /images=\{getTripImages\(trip, tripPlaces\)\}/);
+assert.match(modal, /fetchPlaceCardsByIds\(previewPlaceIds\)/);
 assert.match(card, /<TripImageCollage images=\{images\}/);
 assert.match(card, /height: 92, width: 112/);
 

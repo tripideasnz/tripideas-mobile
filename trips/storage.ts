@@ -113,6 +113,10 @@ export function tripMigrationJournalKey(userId: string) {
   return `tripideas.tripMigration.user.${userId}.${VERSION}`;
 }
 
+export function deletedTripIdsKey(userId: string) {
+  return `tripideas.trips.deleted.${userId}.${VERSION}`;
+}
+
 export const TRIP_MIGRATION_CLAIM_KEY = 'tripideas.tripMigration.claim.v1';
 
 export function createTripStorage(storage: Storage = AsyncStorage) {
@@ -132,6 +136,24 @@ export function createTripStorage(storage: Storage = AsyncStorage) {
       const normalized = normalizeTrips(trips, false);
       await storage.setItem(tripCacheKey(userId), JSON.stringify(normalized));
       return normalized;
+    },
+    async getDeletedTripIds(userId: string): Promise<string[]> {
+      const raw = await storage.getItem(deletedTripIdsKey(userId));
+      if (!raw) return [];
+      try {
+        const value = JSON.parse(raw);
+        return Array.isArray(value)
+          ? Array.from(new Set(value.filter((id): id is string => typeof id === 'string')))
+          : [];
+      } catch {
+        return [];
+      }
+    },
+    async addDeletedTripId(userId: string, tripId: string): Promise<string[]> {
+      const ids = await this.getDeletedTripIds(userId);
+      const next = Array.from(new Set([...ids, tripId]));
+      await storage.setItem(deletedTripIdsKey(userId), JSON.stringify(next));
+      return next;
     },
     async getJournal(userId: string): Promise<TripMigrationJournal | null> {
       const raw = await storage.getItem(tripMigrationJournalKey(userId));
