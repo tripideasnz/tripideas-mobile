@@ -89,6 +89,7 @@ assert.match(showMore, /\.\.\. show more/);
 assert.match(showMore, /\.\.\. show less/);
 assert.match(editorial, /<ShowMoreText/);
 assert.match(editorial, /const collapsedText = fullText \|\| displayText/);
+assert.match(editorial, /place\.textBlocks\?\.filter\(\(block\) => block\.style !== 'h3'\)/);
 assert.match(editorial, /value=\{collapsedText \?\? ''\}/);
 assert.doesNotMatch(editorial, /read more|EXCERPT_LENGTH/i);
 assert.match(editor, /fontSize: 18, fontWeight: '700'/);

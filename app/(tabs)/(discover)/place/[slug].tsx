@@ -29,7 +29,9 @@ function getPlacePreview(place: PlacePage) {
 }
 
 function getBodyText(place: PlacePage) {
-  return getPlainText(place.textBlocks);
+  return getPlainText(
+    place.textBlocks?.filter((block) => block.style !== 'h3')
+  );
 }
 
 function getCoordinates(place: PlacePage | null) {
