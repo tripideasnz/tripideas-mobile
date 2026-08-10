@@ -6,6 +6,7 @@ import { AppText } from '@/components/ui/app-text';
 import { AppTextInput } from '@/components/ui/app-text-input';
 import { CardSurface } from '@/components/ui/card-surface';
 import { Palette, Space, Type } from '@/constants/design';
+import { tripRequestDiagnostic } from '@/trips/error-diagnostic';
 import type { MyTrip } from '@/trips/types';
 import { CreateTripWithPlaceError } from '@/trips/workflow-errors';
 
@@ -61,10 +62,12 @@ export function AddToTripModal({
         setIsCreating(false);
         setNewTripName('');
         setActionError(
-          'The Trip was created, but the place could not be added. Select the Trip to try adding it again.'
+          `The Trip was created, but the place could not be added${tripRequestDiagnostic(error)}. Select the Trip to try adding it again.`
         );
       } else {
-        setActionError('Could not create the Trip. Check your connection and try again.');
+        setActionError(
+          `Could not create the Trip${tripRequestDiagnostic(error)}. Check your connection and try again.`
+        );
       }
     } finally {
       setIsSubmitting(false);
@@ -77,8 +80,10 @@ export function AddToTripModal({
     setActionError(null);
     try {
       await onSelectTrip(tripId);
-    } catch {
-      setActionError('Could not add this place to the Trip. Check your connection and try again.');
+    } catch (error) {
+      setActionError(
+        `Could not add this place to the Trip${tripRequestDiagnostic(error)}. Check your connection and try again.`
+      );
     } finally {
       setIsSubmitting(false);
     }
