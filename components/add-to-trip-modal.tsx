@@ -11,7 +11,7 @@ import type { MyTrip } from '@/trips/types';
 type AddToTripModalProps = {
   onClose: () => void;
   onCreateTrip: (name: string) => Promise<void>;
-  onSelectTrip: (tripId: string) => void;
+  onSelectTrip: (tripId: string) => Promise<void>;
   placeId: string | null;
   trips: MyTrip[];
 };
@@ -26,16 +26,19 @@ export function AddToTripModal({
   const [isCreating, setIsCreating] = useState(false);
   const [newTripName, setNewTripName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const resetCreate = () => {
     setIsCreating(false);
     setNewTripName('');
+    setActionError(null);
   };
 
   useEffect(() => {
     if (!placeId) {
       setIsCreating(false);
       setNewTripName('');
+      setActionError(null);
     }
   }, [placeId]);
 
@@ -48,9 +51,25 @@ export function AddToTripModal({
     const trimmed = newTripName.trim();
     if (!trimmed || isSubmitting) return;
     setIsSubmitting(true);
+    setActionError(null);
     try {
       await onCreateTrip(trimmed);
       resetCreate();
+    } catch {
+      setActionError('Could not create the Trip. Check your connection and try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleSelectTrip = async (tripId: string) => {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    setActionError(null);
+    try {
+      await onSelectTrip(tripId);
+    } catch {
+      setActionError('Could not add this place to the Trip. Check your connection and try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -95,8 +114,11 @@ export function AddToTripModal({
             <AppTextInput
               autoCapitalize="words"
               autoFocus
-              onChangeText={setNewTripName}
-              onSubmitEditing={handleSubmit}
+              onChangeText={(value) => {
+                setNewTripName(value);
+                setActionError(null);
+              }}
+              onSubmitEditing={() => void handleSubmit()}
               placeholder="Trip name"
               returnKeyType="done"
               value={newTripName}
@@ -104,8 +126,9 @@ export function AddToTripModal({
             <AppButton
               disabled={!newTripName.trim() || isSubmitting}
               label={isSubmitting ? 'Creating...' : 'Create & add place'}
-              onPress={handleSubmit}
+              onPress={() => void handleSubmit()}
             />
+            {actionError ? <AppText color={Palette.danger}>{actionError}</AppText> : null}
             {trips.length > 0 ? (
               <Pressable
                 accessibilityRole="button"
@@ -132,7 +155,8 @@ export function AddToTripModal({
                 <Pressable
                   accessibilityRole="button"
                   key={trip.id}
-                  onPress={() => onSelectTrip(trip.id)}
+                  disabled={isSubmitting}
+                  onPress={() => void handleSelectTrip(trip.id)}
                   style={({ pressed }) => ({
                     marginBottom: Space.md,
                     opacity: pressed ? 0.55 : alreadyAdded ? 0.75 : 1,
@@ -180,6 +204,9 @@ export function AddToTripModal({
             </Pressable>
           </ScrollView>
         )}
+        {!showCreateForm && actionError ? (
+          <AppText color={Palette.danger}>{actionError}</AppText>
+        ) : null}
       </View>
     </Modal>
   );
