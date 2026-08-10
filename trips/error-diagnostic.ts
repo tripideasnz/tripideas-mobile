@@ -8,5 +8,16 @@ export function tripRequestDiagnostic(error: unknown): string {
   const reason = cause.message !== genericMessage
     ? ` — ${cause.message.replace(/\s+/g, ' ').slice(0, 180)}`
     : '';
-  return ` (${cause.status}: ${cause.code}${reason})`;
+  const requestPath = typeof cause.details?.requestPath === 'string'
+    ? cause.details.requestPath
+    : '';
+  const responseUrl = typeof cause.details?.responseUrl === 'string'
+    ? cause.details.responseUrl
+    : '';
+  const destination = responseUrl
+    ? `; ${requestPath} → ${responseUrl}`
+    : requestPath
+      ? `; ${requestPath}`
+      : '';
+  return ` (${cause.status}: ${cause.code}${reason}${destination})`;
 }

@@ -80,9 +80,20 @@ function parseError(responseText: string): {
 }
 
 type ApiResponse = {
+  requestPath: string;
   response: Response;
   responseText: string;
 };
+
+function safeResponseUrl(value: string): string | undefined {
+  if (!value) return undefined;
+  try {
+    const url = new URL(value);
+    return `${url.origin}${url.pathname}`;
+  } catch {
+    return undefined;
+  }
+}
 
 async function performRequest(
   path: string,
@@ -105,17 +116,21 @@ async function performRequest(
   // Some endpoints (e.g. POST/DELETE /favourite) return a 200 with an empty
   // body. response.json() throws on empty input, so parse manually.
   const responseText = await response.text();
-  return { response, responseText };
+  return { requestPath: path, response, responseText };
 }
 
-function parseResponse<T>({ response, responseText }: ApiResponse): T {
+function parseResponse<T>({ requestPath, response, responseText }: ApiResponse): T {
   if (!response.ok) {
     const error = parseError(responseText);
     throw new ApiError(
       response.status,
       error.code ?? 'request_failed',
       error.message,
-      error.details
+      {
+        ...error.details,
+        requestPath,
+        responseUrl: safeResponseUrl(response.url),
+      }
     );
   }
 
