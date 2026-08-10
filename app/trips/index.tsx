@@ -1,15 +1,15 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Stack, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, View } from 'react-native';
 
-import { TripImageCollage } from '@/components/trip-image-collage';
+import { TripIndexCard } from '@/components/trip-index-card';
 import { IconAction } from '@/components/ui/icon-action';
 import { AppButton } from '@/components/ui/app-button';
 import { AppText } from '@/components/ui/app-text';
 import { AppTextInput } from '@/components/ui/app-text-input';
 import { StatusText } from '@/components/ui/status-text';
-import { Palette, Radius, Screen, Space, Type } from '@/constants/design';
+import { Palette, Radius, Screen, Space } from '@/constants/design';
 import { fetchPlaceCardsByIds } from '@/sanity/place-cards';
 import { getTripImages } from '@/trips/images';
 import { tripRequestDiagnostic } from '@/trips/error-diagnostic';
@@ -188,29 +188,14 @@ export default function TripsScreen() {
       ) : trips.length ? (
         trips.map((trip) => {
           const images = getTripImages(trip, tripPlaces).slice(0, 4);
-          const placeCount = trip.entries?.length ?? trip.places.length;
           return (
             <View key={trip.id} style={{ marginBottom: Space.md }}>
-              <Pressable
+              <TripIndexCard
                 accessibilityLabel={`Open ${trip.name}`}
-                accessibilityRole="button"
+                images={images}
                 onPress={() => router.push({ pathname: '/trips/[tripId]', params: { tripId: trip.id } })}
-                style={({ pressed }) => ({
-                  borderColor: Palette.border,
-                  borderRadius: Radius.card,
-                  borderWidth: 1,
-                  flexDirection: 'row',
-                  opacity: pressed ? 0.65 : 1,
-                  overflow: 'hidden',
-                })}>
-                <TripImageCollage images={images} style={{ height: 92, width: 112 }} />
-                <View style={{ flex: 1, justifyContent: 'center', padding: Space.lg, paddingRight: 60 }}>
-                  <Text numberOfLines={2} style={Type.cardTitle}>{trip.name}</Text>
-                  <Text style={{ color: Palette.textMuted, ...Type.label, marginTop: Space.xs }}>
-                    {placeCount} {placeCount === 1 ? 'place' : 'places'}
-                  </Text>
-                </View>
-              </Pressable>
+                trip={trip}
+              />
               <View style={{ position: 'absolute', right: Space.md, top: 28 }}>
                 <IconAction
                   accessibilityLabel={`Delete ${trip.name}`}

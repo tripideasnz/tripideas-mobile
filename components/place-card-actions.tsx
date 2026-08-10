@@ -65,8 +65,7 @@ export function PlaceCardActions({
       <AddToTripModal
         onClose={() => setIsTripPickerOpen(false)}
         onCreateTrip={async (name) => {
-          await createTripWithPlace(name, placeId);
-          setIsTripPickerOpen(false);
+          return createTripWithPlace(name, placeId);
         }}
         onSelectTrip={async (tripId) => {
           const selectedTrip = trips.find((trip) => trip.id === tripId);

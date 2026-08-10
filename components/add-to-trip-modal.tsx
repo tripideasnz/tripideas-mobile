@@ -5,14 +5,18 @@ import { AppButton } from '@/components/ui/app-button';
 import { AppText } from '@/components/ui/app-text';
 import { AppTextInput } from '@/components/ui/app-text-input';
 import { CardSurface } from '@/components/ui/card-surface';
+import { TripIndexCard } from '@/components/trip-index-card';
 import { Palette, Space, Type } from '@/constants/design';
+import { fetchPlaceCardsByIds } from '@/sanity/place-cards';
 import { tripRequestDiagnostic } from '@/trips/error-diagnostic';
+import { getTripImages } from '@/trips/images';
 import type { MyTrip } from '@/trips/types';
+import type { PlaceCardData } from '@/types/content';
 import { CreateTripWithPlaceError } from '@/trips/workflow-errors';
 
 type AddToTripModalProps = {
   onClose: () => void;
-  onCreateTrip: (name: string) => Promise<void>;
+  onCreateTrip: (name: string) => Promise<MyTrip | null>;
   onSelectTrip: (tripId: string) => Promise<void>;
   placeId: string | null;
   trips: MyTrip[];
@@ -29,11 +33,15 @@ export function AddToTripModal({
   const [newTripName, setNewTripName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [createdTrip, setCreatedTrip] = useState<MyTrip | null>(null);
+  const [createdTripPlaces, setCreatedTripPlaces] = useState<PlaceCardData[]>([]);
 
   const resetCreate = () => {
     setIsCreating(false);
     setNewTripName('');
     setActionError(null);
+    setCreatedTrip(null);
+    setCreatedTripPlaces([]);
   };
 
   useEffect(() => {
@@ -43,6 +51,21 @@ export function AddToTripModal({
       setActionError(null);
     }
   }, [placeId]);
+
+  useEffect(() => {
+    if (!createdTrip || !placeId) return;
+    let isMounted = true;
+    fetchPlaceCardsByIds([placeId])
+      .then((places) => {
+        if (isMounted) setCreatedTripPlaces(places);
+      })
+      .catch(() => {
+        if (isMounted) setCreatedTripPlaces([]);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [createdTrip, placeId]);
 
   const handleClose = () => {
     resetCreate();
@@ -55,8 +78,12 @@ export function AddToTripModal({
     setIsSubmitting(true);
     setActionError(null);
     try {
-      await onCreateTrip(trimmed);
-      resetCreate();
+      const trip = await onCreateTrip(trimmed);
+      if (trip) {
+        setCreatedTrip(trip);
+        setIsCreating(false);
+        setNewTripName('');
+      }
     } catch (error) {
       if (error instanceof CreateTripWithPlaceError && error.stage === 'attach') {
         setIsCreating(false);
@@ -110,7 +137,7 @@ export function AddToTripModal({
             justifyContent: 'space-between',
             marginBottom: Space.xxl,
           }}>
-          <AppText variant="title">Add to My Trip</AppText>
+          <AppText variant="title">{createdTrip ? 'Trip created' : 'Add to My Trip'}</AppText>
           <Pressable
             accessibilityRole="button"
             onPress={handleClose}
@@ -123,7 +150,15 @@ export function AddToTripModal({
           </Pressable>
         </View>
 
-        {showCreateForm ? (
+        {createdTrip ? (
+          <View style={{ gap: Space.lg }}>
+            <AppText color={Palette.textMuted}>The place was added successfully.</AppText>
+            <TripIndexCard
+              images={getTripImages(createdTrip, createdTripPlaces)}
+              trip={createdTrip}
+            />
+          </View>
+        ) : showCreateForm ? (
           <View style={{ gap: Space.md }}>
             <AppTextInput
               autoCapitalize="words"
