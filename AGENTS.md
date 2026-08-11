@@ -9,3 +9,9 @@ Before introducing or changing user-facing mobile UI, read and follow
 patterns are mandatory defaults. If a task would conflict with the canon and
 the user has not explicitly authorised the deviation, stop and ask before
 implementing it.
+
+# SHARED API AND SCHEMA CONTRACT
+
+Before changing API environment selection, API DTO assumptions, compatibility
+handling, or features backed by the shared database, read and follow
+[`../tripideas-architecture/architecture/shared-database-schema-discipline.md`](../tripideas-architecture/architecture/shared-database-schema-discipline.md).
