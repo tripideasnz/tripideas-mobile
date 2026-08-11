@@ -1,4 +1,5 @@
 import { ApiError } from '@/lib/api-client';
+import { isRouteUnavailableError } from '@/lib/api-compatibility';
 
 const labels: Record<string, string> = {
   missing_title: 'Add a title.',
@@ -17,6 +18,9 @@ export function readinessMessage(issues: string[]) {
 export function personalPlaceCardError(error: unknown) {
   if (!(error instanceof ApiError)) {
     return 'The Place Card could not be saved. Check your connection and try again.';
+  }
+  if (isRouteUnavailableError(error)) {
+    return 'Personal Places are unavailable on the connected API. Cached content remains available.';
   }
   if (error.code === 'personal_place_card_attached') {
     const count = Number(error.details?.activeAttachmentCount ?? 0);
@@ -42,6 +46,8 @@ export function personalPlaceCardError(error: unknown) {
     return readinessMessage(issues);
   }
   if (error.status === 401) return 'Sign in again to continue.';
-  if (error.status === 404) return 'This Place Card is no longer available.';
+  if (error.status === 404 && error.code === 'personal_place_card_not_found') {
+    return 'This Place Card is no longer available.';
+  }
   return 'The Place Card could not be saved. Check your connection and try again.';
 }

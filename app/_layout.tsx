@@ -8,6 +8,7 @@ import { MyTripsProvider } from '@/trips/provider';
 import { PersonalPlaceCardProvider } from '@/personal-place-cards/provider';
 import { HeaderBackButton } from '@/components/ui/header-back-button';
 import { Palette } from '@/constants/design';
+import { ApiCompatibilityNotice } from '@/components/api-compatibility-notice';
 
 export default function RootLayout() {
   return (
@@ -89,6 +90,7 @@ export default function RootLayout() {
                 <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
                 <Stack.Screen name="auth" options={{ headerShown: false }} />
             </Stack>
+            <ApiCompatibilityNotice />
             </MyTripsProvider>
           </PersonalPlaceCardProvider>
         </NotebookProvider>

@@ -264,7 +264,11 @@ export default function NotebookDetailScreen() {
           failure !== 'offline' &&
           failure !== 'not-found'
         ) {
-          setActionError('Could not load this Notebook. Please try again.');
+          setActionError(
+            failure === 'route-unavailable'
+              ? 'Notebooks are unavailable on the connected API. Cached content remains available.'
+              : 'Could not load this Notebook. Please try again.'
+          );
         }
       } finally {
         setIsLoading(false);
@@ -370,6 +374,8 @@ export default function NotebookDetailScreen() {
     } else if (failure === 'offline') {
       setIsOffline(true);
       setActionError('You appear to be offline. Your changes have not been saved.');
+    } else if (failure === 'route-unavailable') {
+      setActionError('Notebooks are unavailable on the connected API. Your changes have not been saved.');
     } else if (failure === 'not-found') {
       setNotFound(true);
     } else if (failure === 'validation') {

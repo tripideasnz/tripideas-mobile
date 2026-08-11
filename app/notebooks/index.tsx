@@ -153,6 +153,8 @@ export default function NotebookListScreen() {
       setFormError(
         failure === 'offline'
           ? 'You appear to be offline. Connect to create a Notebook.'
+          : failure === 'route-unavailable'
+            ? 'Notebooks are unavailable on the connected API. Cached content remains available.'
           : failure === 'validation'
             ? 'Check the title and description, then try again.'
             : 'Could not create the Notebook. Please try again.'
@@ -270,7 +272,9 @@ export default function NotebookListScreen() {
           {listError ? (
             <View style={{ gap: Space.md }}>
               <AppText color={Palette.danger}>
-                {notebooks.length
+                {listError === 'route-unavailable'
+                  ? 'Notebooks are unavailable on the connected API. Showing any cached Notebooks.'
+                  : notebooks.length
                   ? 'Could not refresh. Showing saved Notebooks.'
                   : 'Could not load Notebooks. Check your connection and try again.'}
               </AppText>

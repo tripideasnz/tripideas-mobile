@@ -71,11 +71,18 @@ assert.equal(
   classifyNotebookError(new ApiError(409, 'notebook_conflict')),
   'conflict'
 );
-assert.equal(classifyNotebookError(new ApiError(404, 'not_found')), 'not-found');
+assert.equal(
+  classifyNotebookError(new ApiError(404, 'notebook_not_found')),
+  'not-found'
+);
+assert.equal(
+  classifyNotebookError(new ApiError(404, 'NOT_FOUND')),
+  'route-unavailable'
+);
 assert.equal(classifyNotebookError(new ApiError(422, 'validation_failed')), 'validation');
 assert.equal(classifyNotebookError(new TypeError('Network request failed')), 'offline');
 assert.equal(classifyNotebookError(new ApiError(500, 'internal_error')), 'unknown');
-console.log('✓ conflict, deleted Notebook, validation, offline, and safe 500 states map correctly');
+console.log('✓ route availability, deleted Notebook, validation, offline, and safe 500 states map correctly');
 
 const serverResponse = {
   id: 'notebook-1',

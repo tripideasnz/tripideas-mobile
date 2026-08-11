@@ -49,6 +49,7 @@ function parseError(responseText: string): {
 
   try {
     const parsed = JSON.parse(responseText) as {
+      code?: unknown;
       error?: Record<string, unknown>;
       message?: unknown;
       name?: unknown;
@@ -57,6 +58,8 @@ function parseError(responseText: string): {
       code:
         typeof parsed.error?.code === 'string'
           ? parsed.error.code
+          : typeof parsed.code === 'string'
+            ? parsed.code
           : typeof parsed.name === 'string'
             ? parsed.name
             : undefined,
