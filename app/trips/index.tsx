@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, View } from 'react-native';
 
 import { TripIndexCard } from '@/components/trip-index-card';
+import { SignedOutFeature } from '@/components/signed-out-feature';
+import { useSession } from '@/auth/provider';
 import { IconAction } from '@/components/ui/icon-action';
 import { AppButton } from '@/components/ui/app-button';
 import { AppText } from '@/components/ui/app-text';
@@ -17,6 +19,7 @@ import { useMyTrips } from '@/trips/provider';
 import type { PlaceCardData } from '@/types/content';
 
 export default function TripsScreen() {
+  const { isLoading: isLoadingSession, session, signIn } = useSession();
   const router = useRouter();
   const {
     confirmImport,
@@ -83,6 +86,16 @@ export default function TripsScreen() {
       );
     }
   };
+
+  if (isLoadingSession) return <StatusText>Loading Trips…</StatusText>;
+  if (!session) {
+    return (
+      <SignedOutFeature
+        message="Sign in to view and edit your private Trips"
+        onSignIn={signIn}
+      />
+    );
+  }
 
   return (
     <ScrollView
@@ -201,7 +214,6 @@ export default function TripsScreen() {
                   accessibilityLabel={`Delete ${trip.name}`}
                   destructive
                   icon="delete-outline"
-                  size="compact"
                   onPress={() => Alert.alert(
                     'Delete trip?',
                     `This will delete "${trip.name}" and its notes.`,

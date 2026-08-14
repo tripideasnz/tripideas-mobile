@@ -11,9 +11,7 @@ import {
 
 import { addFavourite, removeFavourite } from '@/saved/api';
 import {
-  getAnonSavedPlaceIds,
   getUserSavedPlaceIds,
-  setAnonSavedPlaceIds,
   setUserSavedPlaceIds,
 } from '@/saved/storage';
 import { reconcileFavouritesForUser } from '@/saved/sync';
@@ -49,14 +47,20 @@ export function SavedPlacesProvider({ children }: PropsWithChildren) {
   // it fires once per sign-in transition rather than on every re-render.
   const reconciledUserIdRef = useRef<string | null>(null);
 
-  // Load whichever store is active (anon, or this user's) whenever the
-  // identified user changes.
+  // Favourites are private. Signed-out users see no account content and cannot
+  // create a second anonymous authority.
   useEffect(() => {
     let isMounted = true;
     activeUserIdRef.current = userId;
     setIsLoading(true);
 
-    const load = userId ? getUserSavedPlaceIds(userId) : getAnonSavedPlaceIds();
+    if (!userId) {
+      setSavedPlaceIdsState([]);
+      setIsLoading(false);
+      return;
+    }
+
+    const load = getUserSavedPlaceIds(userId);
 
     load
       .then((ids) => {
@@ -127,6 +131,7 @@ export function SavedPlacesProvider({ children }: PropsWithChildren) {
       }
 
       const toggledForUserId = userId;
+      if (!toggledForUserId) return;
       let nextIds: string[] = [];
       let wasSaved = false;
 
@@ -139,26 +144,17 @@ export function SavedPlacesProvider({ children }: PropsWithChildren) {
       });
 
       try {
-        const storedIds = toggledForUserId
-          ? await setUserSavedPlaceIds(toggledForUserId, nextIds)
-          : await setAnonSavedPlaceIds(nextIds);
+        const storedIds = await setUserSavedPlaceIds(toggledForUserId, nextIds);
 
         if (activeUserIdRef.current === toggledForUserId) {
           setSavedPlaceIdsState(storedIds);
         }
       } catch (error) {
         console.error('[Saved] failed to persist local toggle:', error);
-        const storedIds = toggledForUserId
-          ? await getUserSavedPlaceIds(toggledForUserId)
-          : await getAnonSavedPlaceIds();
+        const storedIds = await getUserSavedPlaceIds(toggledForUserId);
         if (activeUserIdRef.current === toggledForUserId) {
           setSavedPlaceIdsState(storedIds);
         }
-        return;
-      }
-
-      if (!toggledForUserId) {
-        // Signed out: local only, nothing to push.
         return;
       }
 

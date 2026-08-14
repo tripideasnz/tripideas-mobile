@@ -82,7 +82,7 @@ export default function SearchScreen() {
           paddingTop: Screen.top,
         }}>
         <AppText style={{ marginBottom: Space.sm }} variant="display">
-          Search TripIdeas
+          Search
         </AppText>
 
         <AppText

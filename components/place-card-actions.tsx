@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { View } from 'react-native';
 import type { ViewStyle } from 'react-native';
+import { useRouter } from 'expo-router';
 
 import { AddPlaceToTripButton } from '@/components/add-place-to-trip-button';
 import { AddToTripModal } from '@/components/add-to-trip-modal';
 import { SavePlaceButton } from '@/components/save-place-button';
 import { useSavedPlaces } from '@/saved/provider';
 import { useMyTrips } from '@/trips/provider';
+import { useSession } from '@/auth/provider';
 
 type PlaceCardActionsProps = {
   buttonStyle?: ViewStyle;
@@ -21,7 +23,9 @@ export function PlaceCardActions({
   placeId,
   style,
 }: PlaceCardActionsProps) {
+  const router = useRouter();
   const { isSaved, toggleSavedPlace } = useSavedPlaces();
+  const { session, signIn } = useSession();
   const { addPlaceToTrip, createTripWithPlace, trips } = useMyTrips();
   const [isTripPickerOpen, setIsTripPickerOpen] = useState(false);
   const isInTrip = trips.some((trip) =>
@@ -45,18 +49,26 @@ export function PlaceCardActions({
           style,
         ]}>
         <SavePlaceButton
+          isSignedIn={Boolean(session)}
           isSaved={isSaved(placeId)}
           onPress={(event) => {
             event.stopPropagation();
-            void toggleSavedPlace(placeId);
+            void (async () => {
+              if (!session && !(await signIn())) return;
+              await toggleSavedPlace(placeId);
+            })();
           }}
           style={buttonStyle}
         />
         <AddPlaceToTripButton
           isInTrip={isInTrip}
+          isSignedIn={Boolean(session)}
           onPress={(event) => {
             event.stopPropagation();
-            setIsTripPickerOpen(true);
+            void (async () => {
+              if (!session && !(await signIn())) return;
+              setIsTripPickerOpen(true);
+            })();
           }}
           style={buttonStyle}
         />
@@ -67,6 +79,10 @@ export function PlaceCardActions({
         onCreateTrip={async (name) => {
           return createTripWithPlace(name, placeId);
         }}
+        onOpenTrip={(tripId) => {
+          setIsTripPickerOpen(false);
+          router.push({ pathname: '/trips/[tripId]', params: { tripId } });
+        }}
         onSelectTrip={async (tripId) => {
           const selectedTrip = trips.find((trip) => trip.id === tripId);
           const alreadyAdded = selectedTrip?.places.some(
@@ -74,12 +90,20 @@ export function PlaceCardActions({
           );
 
           if (alreadyAdded) {
-            setIsTripPickerOpen(false);
-            return;
+            return selectedTrip ?? null;
           }
 
           await addPlaceToTrip(tripId, placeId);
-          setIsTripPickerOpen(false);
+          if (!selectedTrip) return null;
+          return {
+            ...selectedTrip,
+            places: [...selectedTrip.places, {
+              addedAt: new Date().toISOString(),
+              note: '',
+              placeId,
+            }],
+            updatedAt: new Date().toISOString(),
+          };
         }}
         placeId={isTripPickerOpen ? placeId : null}
         trips={trips}

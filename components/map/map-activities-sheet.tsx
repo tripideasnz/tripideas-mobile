@@ -61,7 +61,7 @@ export function MapActivitiesSheet({
             accessibilityRole="button"
             onPress={() => onApply(pendingTagIds)}
             style={({ pressed }) => ({ opacity: pressed ? 0.55 : 1 })}>
-            <Text style={{ fontSize: 16, fontWeight: '600' }}>Apply</Text>
+            <Text style={{ color: '#0080C8', fontSize: 17, fontWeight: '700' }}>Apply</Text>
           </Pressable>
           <Text style={{ fontSize: 19, fontWeight: '800' }}>Activities</Text>
           <Pressable
@@ -193,7 +193,7 @@ export function MapActivitiesSheet({
                                 <Text
                                   style={{
                                     fontSize: 16,
-                                    fontWeight: isSelected ? '800' : '600',
+                                    fontWeight: '400',
                                   }}>
                                   {tag.name}
                                 </Text>

@@ -12,11 +12,11 @@ type BrandLogoProps = {
 const brandAssets = {
   dark: {
     icon: require('@/assets/brand/icon-dark.png'),
-    logo: require('@/assets/brand/logo-dark.png'),
+    logo: require('@/assets/brand/tripideasnz-dark.png'),
   },
   light: {
     icon: require('@/assets/brand/icon-light.png'),
-    logo: require('@/assets/brand/logo-light.png'),
+    logo: require('@/assets/brand/tripideasnz-light.png'),
   },
 } as const;
 
@@ -33,7 +33,7 @@ export function BrandLogo({
       style={[
         kind === 'icon'
           ? { aspectRatio: 1, height: 40 }
-          : { aspectRatio: 977 / 305, height: 44 },
+          : { aspectRatio: 2172 / 724, height: 44 },
         style,
       ]}
     />

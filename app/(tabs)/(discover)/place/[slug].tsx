@@ -12,6 +12,7 @@ import { PlaceCardActions } from '@/components/place-card-actions';
 import { PlaceCard } from '@/components/place-card';
 import { PlaceDetailContent } from '@/components/place-detail-content';
 import { AppButton } from '@/components/ui/app-button';
+import { HeaderBackButton } from '@/components/ui/header-back-button';
 import { ShowMoreText } from '@/components/ui/show-more-text';
 import { Palette, Space, Type } from '@/constants/design';
 import { sanityClient } from '@/sanity/client';
@@ -46,8 +47,12 @@ function getCoordinates(place: PlacePage | null) {
 }
 
 export default function PlaceScreen() {
-  const { slug } = useLocalSearchParams<{ slug?: string | string[] }>();
+  const { origin, slug } = useLocalSearchParams<{
+    origin?: string | string[];
+    slug?: string | string[];
+  }>();
   const selectedSlug = Array.isArray(slug) ? slug[0] : slug;
+  const selectedOrigin = Array.isArray(origin) ? origin[0] : origin;
   const router = useRouter();
   const [place, setPlace] = useState<PlacePage | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -128,7 +133,23 @@ export default function PlaceScreen() {
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: Palette.background }}>
-      <Stack.Screen options={{ title }} />
+      <Stack.Screen
+        options={{
+          headerLeft: () => (
+            <HeaderBackButton
+              onPress={() => {
+                if (selectedOrigin === 'map') {
+                  router.navigate('/map');
+                  return;
+                }
+                if (router.canGoBack()) router.back();
+                else router.replace('/discover');
+              }}
+            />
+          ),
+          title,
+        }}
+      />
 
       {isLoading ? (
         <Text style={{ padding: 24 }}>Loading...</Text>

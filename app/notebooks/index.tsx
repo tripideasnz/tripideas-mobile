@@ -381,7 +381,6 @@ function NotebookRow({
           destructive
           icon="delete-outline"
           onPress={onDelete}
-          size="compact"
         />
       </View>
     </View>

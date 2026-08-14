@@ -11,6 +11,8 @@ import {
 } from 'react-native';
 
 import { HeaderBackButton } from '@/components/ui/header-back-button';
+import { SignedOutFeature } from '@/components/signed-out-feature';
+import { useSession } from '@/auth/provider';
 
 import { TripEntryCard } from '@/components/trip-entry-card';
 import { AutosaveNote } from '@/components/ui/autosave-note';
@@ -34,6 +36,7 @@ import {
 import type { PlaceCardData } from '@/types/content';
 
 export default function TripDetailScreen() {
+  const { isLoading: isLoadingSession, session, signIn } = useSession();
   const { tripId } = useLocalSearchParams<{
     tripId?: string | string[];
   }>();
@@ -130,7 +133,7 @@ export default function TripDetailScreen() {
   useEffect(() => {
     setName(trip?.name ?? '');
     setIsEditingName(false);
-  }, [trip?.id]);
+  }, [trip?.id, trip?.name]);
 
   useEffect(() => {
     if (!trip || placeIds.length === 0) {
@@ -275,6 +278,16 @@ export default function TripDetailScreen() {
       ]
     );
   };
+
+  if (isLoadingSession) return <LoadingView />;
+  if (!session) {
+    return (
+      <SignedOutFeature
+        message="Sign in to view and edit your private Trips"
+        onSignIn={signIn}
+      />
+    );
+  }
 
   return (
     <ScrollView

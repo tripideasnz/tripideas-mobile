@@ -8,6 +8,7 @@ import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useSession } from '@/auth/provider';
 import { PlaceDetailContent } from '@/components/place-detail-content';
 import { PlaceMapPreview } from '@/components/place-map-preview';
+import { SignedOutFeature } from '@/components/signed-out-feature';
 import { AppButton } from '@/components/ui/app-button';
 import { AppText } from '@/components/ui/app-text';
 import { AppTextInput } from '@/components/ui/app-text-input';
@@ -15,6 +16,7 @@ import { AutosaveStatus } from '@/components/ui/autosave-status';
 import { IconAction } from '@/components/ui/icon-action';
 import { ShowMoreText } from '@/components/ui/show-more-text';
 import { StatusText } from '@/components/ui/status-text';
+import { LoadingView } from '@/components/ui/loading-view';
 import { Palette, Radius, Screen, Space, Type } from '@/constants/design';
 import { ApiError } from '@/lib/api-client';
 import { authorizePhotoRead } from '@/notebooks/api';
@@ -53,7 +55,7 @@ export default function PersonalPlaceCardScreen() {
   const cardId = Array.isArray(params.cardId) ? params.cardId[0] : params.cardId;
   const initialMode = Array.isArray(params.mode) ? params.mode[0] : params.mode;
   const router = useRouter();
-  const { session } = useSession();
+  const { isLoading: isLoadingSession, session, signIn } = useSession();
   const { get, load, mutate } = usePersonalPlaceCards();
   const { addPersonalCardToTrip, trips } = useMyTrips();
   const card = get(cardId);
@@ -78,10 +80,15 @@ export default function PersonalPlaceCardScreen() {
   const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
 
   useEffect(() => {
-    if (cardId) {
+    setIsEditing(initialMode === 'edit');
+    setIsEditingBody(false);
+  }, [cardId, initialMode]);
+
+  useEffect(() => {
+    if (session && cardId) {
       void load(cardId).catch((error) => setMessage(personalPlaceCardError(error)));
     }
-  }, [cardId, load]);
+  }, [cardId, load, session]);
 
   useEffect(() => {
     if (!card) return;
@@ -137,6 +144,15 @@ export default function PersonalPlaceCardScreen() {
     if (timerRef.current) clearTimeout(timerRef.current);
   }, []);
 
+  if (isLoadingSession) return <LoadingView />;
+  if (!session) {
+    return (
+      <SignedOutFeature
+        message="Sign in to view and edit your private Personal Places"
+        onSignIn={signIn}
+      />
+    );
+  }
   if (!card || !cardId) {
     return <StatusText>Loading Personal Place…</StatusText>;
   }
@@ -561,6 +577,7 @@ export default function PersonalPlaceCardScreen() {
               label={attached ? 'Added' : 'Add to Trip'}
               size="compact"
               onPress={() => void act(() => addPersonalCardToTrip(trip.id, card.id))}
+              variant="secondary"
             />
           </View>
         );

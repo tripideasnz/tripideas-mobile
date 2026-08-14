@@ -22,9 +22,10 @@ for (const moduleTitle of orderedModules) {
 }
 console.log('✓ Saved modules use the approved ordering');
 
-for (const route of ["router.push('/favourites')", "router.push('/trips')", "router.push('/personal-place-cards')", "router.push('/notebooks')"]) {
+for (const route of ["openPrivateFeature('/favourites')", "openPrivateFeature('/trips')", "openPrivateFeature('/personal-place-cards')", "openPrivateFeature('/notebooks')"]) {
   assert.match(saved, new RegExp(route.replace(/[()]/g, '\\$&')));
 }
+assert.match(saved, /if \(!session && !\(await signIn\(\)\)\) return/);
 assert.match(layout, /name="favourites\/index"/);
 assert.match(layout, /name="trips\/index"/);
 console.log('✓ every Saved module retains access to its feature destination');

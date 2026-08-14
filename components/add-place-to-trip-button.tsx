@@ -5,6 +5,7 @@ import type { GestureResponderEvent, ViewStyle } from 'react-native';
 import { Palette, Radius } from '@/constants/design';
 
 type AddPlaceToTripButtonProps = {
+  isSignedIn?: boolean;
   isInTrip: boolean;
   onPress: (event: GestureResponderEvent) => void;
   style?: ViewStyle;
@@ -12,6 +13,7 @@ type AddPlaceToTripButtonProps = {
 
 export function AddPlaceToTripButton({
   isInTrip,
+  isSignedIn = true,
   onPress,
   style,
 }: AddPlaceToTripButtonProps) {
@@ -19,7 +21,11 @@ export function AddPlaceToTripButton({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={
-        isInTrip ? 'Add to another trip' : 'Add to trip'
+        !isSignedIn
+          ? 'Sign in to view and edit your private Trips'
+          : isInTrip
+            ? 'Add to another Trip'
+            : 'Add to Trip'
       }
       hitSlop={8}
       onPress={onPress}

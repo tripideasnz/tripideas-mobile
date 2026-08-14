@@ -1,8 +1,9 @@
 import { Camera, Map as MapLibreMap, Marker } from '@maplibre/maplibre-react-native';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable } from 'react-native';
 
 import { MAP_STYLE_URL } from '@/constants/map';
-import { Radius, Shadow, Space, Type } from '@/constants/design';
+import { Radius, Shadow } from '@/constants/design';
+import { MapPin } from '@/components/map/map-pin';
 
 type PlaceMapPreviewProps = {
   latitude: number;
@@ -44,33 +45,9 @@ export function PlaceMapPreview({
           }}
         />
         <Marker lngLat={[longitude, latitude]}>
-          <View
-            style={{
-              borderColor: '#fff',
-              borderRadius: 7,
-              borderWidth: 2.5,
-              backgroundColor: '#E74C3C',
-              height: 14,
-              width: 14,
-            }}
-          />
+          <MapPin emphasis="focused" />
         </Marker>
       </MapLibreMap>
-      <View
-        pointerEvents="none"
-        style={{
-          backgroundColor: 'rgba(255,255,255,0.94)',
-          borderRadius: Radius.pill,
-          bottom: 12,
-          elevation: 2,
-          left: 12,
-          paddingHorizontal: Space.md,
-          paddingVertical: Space.sm,
-          position: 'absolute',
-          zIndex: 2,
-        }}>
-        <Text style={Type.label}>Map preview</Text>
-      </View>
     </Pressable>
   );
 }

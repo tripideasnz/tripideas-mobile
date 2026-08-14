@@ -2,13 +2,16 @@ import { useEffect, useState } from 'react';
 import { ScrollView } from 'react-native';
 
 import { PlaceCard } from '@/components/place-card';
+import { SignedOutFeature } from '@/components/signed-out-feature';
 import { StatusText } from '@/components/ui/status-text';
 import { Palette, Screen, Space } from '@/constants/design';
 import { useSavedPlaces } from '@/saved/provider';
 import { fetchPlaceCardsByIds } from '@/sanity/place-cards';
 import type { PlaceCardData } from '@/types/content';
+import { useSession } from '@/auth/provider';
 
 export default function FavouritesScreen() {
+  const { isLoading: isLoadingSession, session, signIn } = useSession();
   const { isLoading: isLoadingSavedIds, savedPlaceIds } = useSavedPlaces();
   const [places, setPlaces] = useState<PlaceCardData[]>([]);
   const [isLoadingPlaces, setIsLoadingPlaces] = useState(false);
@@ -46,6 +49,10 @@ export default function FavouritesScreen() {
   }, [isLoadingSavedIds, savedPlaceIds]);
 
   const isLoading = isLoadingSavedIds || isLoadingPlaces;
+  if (isLoadingSession) return <StatusText>Loading favourites...</StatusText>;
+  if (!session) {
+    return <SignedOutFeature message="Sign in to save Favourites" onSignIn={signIn} />;
+  }
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: Palette.background }}

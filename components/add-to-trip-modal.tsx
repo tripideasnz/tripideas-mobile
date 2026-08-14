@@ -17,7 +17,8 @@ import { CreateTripWithPlaceError } from '@/trips/workflow-errors';
 type AddToTripModalProps = {
   onClose: () => void;
   onCreateTrip: (name: string) => Promise<MyTrip | null>;
-  onSelectTrip: (tripId: string) => Promise<void>;
+  onOpenTrip: (tripId: string) => void;
+  onSelectTrip: (tripId: string) => Promise<MyTrip | null>;
   placeId: string | null;
   trips: MyTrip[];
 };
@@ -25,6 +26,7 @@ type AddToTripModalProps = {
 export function AddToTripModal({
   onClose,
   onCreateTrip,
+  onOpenTrip,
   onSelectTrip,
   placeId,
   trips,
@@ -116,7 +118,8 @@ export function AddToTripModal({
     setIsSubmitting(true);
     setActionError(null);
     try {
-      await onSelectTrip(tripId);
+      const trip = await onSelectTrip(tripId);
+      if (trip) setCreatedTrip(trip);
     } catch (error) {
       setActionError(
         `Could not add this place to the Trip${tripRequestDiagnostic(error)}. Check your connection and try again.`
@@ -147,7 +150,7 @@ export function AddToTripModal({
             justifyContent: 'space-between',
             marginBottom: Space.xxl,
           }}>
-          <AppText variant="title">{createdTrip ? 'Trip created' : 'Add to My Trip'}</AppText>
+          <AppText variant="title">{createdTrip ? 'Place added' : 'Add to Trip'}</AppText>
           <Pressable
             accessibilityRole="button"
             onPress={handleClose}
@@ -165,8 +168,11 @@ export function AddToTripModal({
             <AppText color={Palette.textMuted}>The place was added successfully.</AppText>
             <TripIndexCard
               images={getTripImages(createdTrip, tripPlaces)}
+              onPress={() => onOpenTrip(createdTrip.id)}
               trip={createdTrip}
             />
+            <AppButton label="Open Trip" onPress={() => onOpenTrip(createdTrip.id)} />
+            <AppButton label="Cancel" onPress={handleClose} variant="secondary" />
           </View>
         ) : showCreateForm ? (
           <View style={{ gap: Space.md }}>

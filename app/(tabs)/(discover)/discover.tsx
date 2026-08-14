@@ -1,5 +1,5 @@
 import { Image } from 'expo-image';
-import { Link } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
 import { RefObject, useCallback, useEffect, useRef, useState } from 'react';
 import {
   LayoutChangeEvent,
@@ -32,6 +32,7 @@ import type {
 } from '@/sanity/types';
 
 export default function DiscoverScreen() {
+  const router = useRouter();
   const [islands, setIslands] = useState<IslandSummary[] | null>(null);
   // Measures the ScrollView viewport height (not content height) so card sizing is
   // based on the true visible area rather than a magic windowHeight offset.
@@ -62,10 +63,10 @@ export default function DiscoverScreen() {
   const scrollOffsetRef = useRef(0);
 
   // Scroll the outer ScrollView so that a given view is near the top of the viewport.
-  const scrollToView = useCallback((viewRef: RefObject<View>) => {
+  const scrollToView = useCallback((viewRef: RefObject<View | null>) => {
     setTimeout(() => {
       viewRef.current?.measure((_vx, _vy, _vw, _vh, _vpageX, vpageY) => {
-        scrollViewRef.current?.measure((_sx, _sy, _sw, _sh, _spageX, spageY) => {
+        scrollViewRef.current?.getNativeScrollRef()?.measure((_sx, _sy, _sw, _sh, _spageX, spageY) => {
           const contentY = vpageY - spageY + scrollOffsetRef.current;
           scrollViewRef.current?.scrollTo({ y: Math.max(0, contentY - Space.md), animated: true });
         });
@@ -131,6 +132,7 @@ export default function DiscoverScreen() {
       <View style={{ paddingHorizontal: 20, paddingTop: Space.lg }}>
         <AppBrandHeader
           compact
+          onLogoPress={() => router.push('/')}
           subtitle="Choose an island to explore Aotearoa."
         />
       </View>
@@ -197,7 +199,7 @@ function IslandCard({
   maoriFontSize: number;
   maoriLineHeight: number;
   onOpen?: () => void;
-  scrollToView?: (viewRef: RefObject<View>) => void;
+  scrollToView?: (viewRef: RefObject<View | null>) => void;
   titleFontSize: number;
   titleLineHeight: number;
 }) {
@@ -292,7 +294,7 @@ function RegionSection({
   scrollToView,
 }: {
   region: Region;
-  scrollToView?: (viewRef: RefObject<View>) => void;
+  scrollToView?: (viewRef: RefObject<View | null>) => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const viewRef = useRef<View>(null);

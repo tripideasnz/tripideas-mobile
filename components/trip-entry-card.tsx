@@ -1,5 +1,5 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { Alert, Pressable, Text, View } from 'react-native';
+import { Alert, Text, View } from 'react-native';
 
 import { PersonalPlaceCardView } from '@/components/personal-place-card-view';
 import { PlaceCard } from '@/components/place-card';
@@ -98,25 +98,15 @@ export function TripEntryCard({
             <IconAction accessibilityLabel={`Go to next place after ${title}`} disabled={!canMoveDown} icon="arrow-downward" onPress={onNavigateDown} />
           </View>
           <View style={{ flex: 1 }} />
-          <Pressable
-            accessibilityLabel={`More actions for ${title}`}
-            accessibilityRole="button"
-            hitSlop={8}
-            onPress={() => Alert.alert(title, undefined, [
-              { text: 'Cancel', style: 'cancel' },
-              { text: 'Remove from Trip', style: 'destructive', onPress: confirmRemove },
-            ])}
-            style={({ pressed }) => ({
-              alignItems: 'center',
-              height: 44,
-              justifyContent: 'center',
-              opacity: pressed ? 0.55 : 1,
-              width: 44,
-            })}>
-            <MaterialIcons color={Palette.textBody} name="more-horiz" size={24} />
-          </Pressable>
+          <IconAction
+            accessibilityLabel={`Remove ${title} from Trip`}
+            destructive
+            icon="delete-outline"
+            onPress={confirmRemove}
+            size="compact"
+          />
         </View>
-        <Text style={{ ...Type.cardTitle, marginBottom: Space.sm }}>Note for {title}</Text>
+        <Text style={{ ...Type.cardTitle, marginBottom: Space.sm }}>Personal Notes</Text>
         <AutosaveNote
           accessibilityLabel={`note for ${title}`}
           onSave={onSaveNote}

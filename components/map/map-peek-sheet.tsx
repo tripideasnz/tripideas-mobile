@@ -156,7 +156,7 @@ export function MapPeekSheet({
 
           {places.length > 0 ? (
             <ScrollView
-              contentContainerStyle={{ gap: Space.md }}
+              contentContainerStyle={{ gap: Space.md, paddingTop: Space.md }}
               horizontal
               showsHorizontalScrollIndicator={false}>
               {places.slice(0, 4).map((place, index) => (
@@ -170,7 +170,7 @@ export function MapPeekSheet({
 
                     router.push({
                       pathname: '/place/[slug]',
-                      params: { slug: place.slug.current },
+                      params: { origin: 'map', slug: place.slug.current },
                     });
                   }}
                   style={({ pressed }) => ({

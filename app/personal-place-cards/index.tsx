@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { Alert, Pressable, ScrollView, View } from 'react-native';
 
 import { PersonalPlaceCardView } from '@/components/personal-place-card-view';
+import { SignedOutFeature } from '@/components/signed-out-feature';
+import { useSession } from '@/auth/provider';
 import { AppText } from '@/components/ui/app-text';
 import { IconAction } from '@/components/ui/icon-action';
 import { LoadingView } from '@/components/ui/loading-view';
@@ -13,6 +15,7 @@ import { usePersonalPlaceCards } from '@/personal-place-cards/provider';
 import { useMyTrips } from '@/trips/provider';
 
 export default function PersonalPlaceCardsScreen() {
+  const { isLoading: isLoadingSession, session, signIn } = useSession();
   const router = useRouter();
   const { cards, create, deleteCard, isLoading } = usePersonalPlaceCards();
   const { trips } = useMyTrips();
@@ -35,6 +38,16 @@ export default function PersonalPlaceCardsScreen() {
       setIsCreating(false);
     }
   };
+
+  if (isLoadingSession) return <LoadingView />;
+  if (!session) {
+    return (
+      <SignedOutFeature
+        message="Sign in to view and edit your private Personal Places"
+        onSignIn={signIn}
+      />
+    );
+  }
 
   return (
     <ScrollView
@@ -100,7 +113,6 @@ export default function PersonalPlaceCardsScreen() {
                     ]
                   );
                 }}
-                size="compact"
               />
             </View>
           </View>

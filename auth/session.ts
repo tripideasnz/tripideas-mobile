@@ -22,7 +22,7 @@ export type AuthContextValue = SessionState & {
     refreshToken: string;
     user: AuthUser | null;
   }) => Promise<boolean>;
-  signIn: () => Promise<void>;
+  signIn: () => Promise<boolean>;
   signOut: () => Promise<void>;
 };
 

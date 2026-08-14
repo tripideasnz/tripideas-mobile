@@ -4,6 +4,7 @@ import type { GestureResponderEvent, ViewStyle } from 'react-native';
 
 import { Palette, Radius } from '@/constants/design';
 type SavePlaceButtonProps = {
+  isSignedIn?: boolean;
   isSaved: boolean;
   onPress: (event: GestureResponderEvent) => void;
   style?: ViewStyle;
@@ -11,6 +12,7 @@ type SavePlaceButtonProps = {
 
 export function SavePlaceButton({
   isSaved,
+  isSignedIn = true,
   onPress,
   style,
 }: SavePlaceButtonProps) {
@@ -18,7 +20,11 @@ export function SavePlaceButton({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={
-        isSaved ? 'Remove from favourites' : 'Add to favourites'
+        !isSignedIn
+          ? 'Sign in to save Favourites'
+          : isSaved
+            ? 'Remove from favourites'
+            : 'Add to favourites'
       }
       hitSlop={8}
       onPress={onPress}

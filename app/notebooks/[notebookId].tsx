@@ -3,7 +3,6 @@ import {
   useLocalSearchParams,
   useRouter,
 } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -894,24 +893,14 @@ export default function NotebookDetailScreen() {
                         if (target) navigateToPage(target);
                       }}
                     />
-                    <Pressable
-                      accessibilityLabel={`More actions for page ${index + 1}`}
-                      accessibilityRole="button"
+                    <IconAction
+                      accessibilityLabel={`Delete page ${index + 1}`}
+                      destructive
                       disabled={mutationDisabled}
-                      hitSlop={8}
-                      onPress={() => Alert.alert(`Page ${index + 1} actions`, undefined, [
-                        { text: 'Cancel', style: 'cancel' },
-                        { text: 'Delete Page', style: 'destructive', onPress: () => confirmDeletePage(item.id) },
-                      ])}
-                      style={({ pressed }) => ({
-                        alignItems: 'center',
-                        height: 36,
-                        justifyContent: 'center',
-                        opacity: mutationDisabled ? 0.35 : pressed ? 0.55 : 1,
-                        width: 36,
-                      })}>
-                      <Ionicons color={Palette.textMuted} name="ellipsis-horizontal" size={20} />
-                    </Pressable>
+                      icon="delete-outline"
+                      onPress={() => confirmDeletePage(item.id)}
+                      size="compact"
+                    />
                   </View>
                   {editingPageIds.has(item.id) ? (
                     <AppTextInput
@@ -1045,11 +1034,11 @@ export default function NotebookDetailScreen() {
                     accessibilityLabel={`Add photo to page ${index + 1}`}
                     disabled={mutationDisabled || photoBusyPage === page.id}
                     label={
-                      photoBusyPage === page.id ? 'Uploading…' : 'Add Photo'
+                      photoBusyPage === page.id ? 'Uploading…' : 'Add photos'
                     }
                     onPress={() => void addPhoto(page.id)}
                     size="compact"
-                    style={{ alignSelf: 'flex-end', width: 112 }}
+                    style={{ alignSelf: 'flex-end' }}
                     variant="secondary"
                   />
                   <SaveLabel

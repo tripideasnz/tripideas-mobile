@@ -23,6 +23,7 @@ export default function RootLayout() {
                   headerBackTitle: '',
                 }}>
                 <Stack.Screen name="index" options={{ headerShown: false }} />
+                <Stack.Screen name="privacy-policy" options={{ title: 'Privacy Policy' }} />
                 <Stack.Screen
                   name="(tabs)"
                   options={{ headerShown: false, title: '' }}

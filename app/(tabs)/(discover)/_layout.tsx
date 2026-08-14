@@ -1,6 +1,5 @@
 import { Stack, useNavigation } from 'expo-router';
-import { useEffect } from 'react';
-import React from 'react';
+import React, { useEffect } from 'react';
 
 import { HeaderBackButton } from '@/components/ui/header-back-button';
 

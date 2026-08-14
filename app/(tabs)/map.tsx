@@ -16,12 +16,14 @@ import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from '
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { type NativeSyntheticEvent, Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSession } from '@/auth/provider';
 
 import type { MapActiveFilter } from '@/components/map/map-active-filters';
 import { MapActivitiesSheet } from '@/components/map/map-activities-sheet';
 import { fitCameraToPlaces } from '@/components/map/map-bounds';
 import { MapControls, MapZoomControls } from '@/components/map/map-controls';
 import { MapPeekSheet } from '@/components/map/map-peek-sheet';
+import { MapPin, MapPinColors } from '@/components/map/map-pin';
 import { MapStyleSheet } from '@/components/map/map-style-sheet';
 import { MapQuickFilters } from '@/components/map/map-quick-filters';
 import { orderMapNavigation } from '@/components/map/map-region-order';
@@ -122,7 +124,7 @@ function isSameSelection(
   return true;
 }
 
-type PlaceContext = { lat: number; lng: number; title: string; slug: string };
+type PlaceContext = { lat: number; lng: number; title: string; slug?: string };
 
 function getPlacesForSelection({
   places,
@@ -166,6 +168,7 @@ function getPlacesForSelection({
 }
 
 export default function MapScreen() {
+  const { session, signIn } = useSession();
   const router = useRouter();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
@@ -229,8 +232,8 @@ export default function MapScreen() {
     useCallback(() => {
       const lat = parseCoordinate(rawLat);
       const lng = parseCoordinate(rawLng);
-      if (lat !== null && lng !== null && rawSlug) {
-        setPlaceContext({ lat, lng, title: rawTitle ?? '', slug: rawSlug });
+      if (lat !== null && lng !== null) {
+        setPlaceContext({ lat, lng, title: rawTitle ?? '', slug: rawSlug || undefined });
       }
 
       if (rawTripId) {
@@ -244,7 +247,7 @@ export default function MapScreen() {
         setPlaceContext(null);
         // Trip selection intentionally persists across tab switches.
       };
-    }, [rawLat, rawLng, rawTitle, rawSlug, rawTripId, rawTripLabel])
+    }, [rawLat, rawLng, rawTitle, rawSlug, rawTripId, rawTripLabel, router])
   );
 
   // Dismiss local place context; never touches route params (rule 5).
@@ -257,7 +260,9 @@ export default function MapScreen() {
   const handlePlaceContextBack = useCallback(() => {
     if (placeContext?.slug) {
       router.push({ pathname: '/place/[slug]', params: { slug: placeContext.slug } });
+      return;
     }
+    if (router.canGoBack()) router.back();
   }, [placeContext, router]);
 
   // Exit rule 2: re-tapping the Map tab while already on it resets place context and filters,
@@ -526,7 +531,7 @@ export default function MapScreen() {
 
     if (id && id === selectedPlaceId) {
       // Second tap on the same pin — open place detail.
-      if (slug) router.push({ pathname: '/place/[slug]', params: { slug } });
+      if (slug) router.push({ pathname: '/place/[slug]', params: { origin: 'map', slug } });
       return;
     }
 
@@ -713,6 +718,11 @@ export default function MapScreen() {
     }
   };
 
+  const openSavedFilters = async () => {
+    if (!session && !(await signIn())) return;
+    setIsSavedSheetOpen(true);
+  };
+
   const regionSheet = (
     <MapRegionsSheet
       isLoading={isLoadingNavigation}
@@ -739,7 +749,7 @@ export default function MapScreen() {
       onSelect={applySelection}
       selection={selection}
       trips={trips}
-      visible={isSavedSheetOpen}
+      visible={Boolean(session) && isSavedSheetOpen}
     />
   );
 
@@ -854,9 +864,9 @@ export default function MapScreen() {
               ] as unknown as number,
               'circle-color': [
                 'case',
-                ['boolean', ['get', 'isFocused'], false], '#E74C3C',
-                ['boolean', ['get', 'isSelected'], false], '#005FA3',
-                '#0080C8',
+                ['boolean', ['get', 'isFocused'], false], MapPinColors.focused,
+                ['boolean', ['get', 'isSelected'], false], MapPinColors.selected,
+                MapPinColors.default,
               ] as unknown as string,
               'circle-stroke-width': [
                 'case',
@@ -874,16 +884,7 @@ export default function MapScreen() {
           <Marker
             lngLat={[placeContext.lng, placeContext.lat]}
             anchor="center">
-            <View
-              style={{
-                backgroundColor: '#E74C3C',
-                borderColor: '#fff',
-                borderRadius: 8,
-                borderWidth: 3,
-                height: 16,
-                width: 16,
-              }}
-            />
+            <MapPin emphasis="focused" />
           </Marker>
         ) : null}
 
@@ -934,7 +935,7 @@ export default function MapScreen() {
             }
             onActivitiesPress={() => setIsActivitiesSheetOpen(true)}
             onRegionsPress={() => setIsRegionsSheetOpen(true)}
-            onSavedPress={() => setIsSavedSheetOpen(true)}
+            onSavedPress={() => void openSavedFilters()}
           />
         )}
       </View>

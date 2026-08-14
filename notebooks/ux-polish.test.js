@@ -89,12 +89,12 @@ assert.match(detail, /setHighlightedPageId/);
 console.log('✓ Add and page navigation actions reuse the canonical icon treatment');
 
 assert.doesNotMatch(detail, /ReanimatedSwipeable|renderRightActions/);
-assert.match(detail, /name="ellipsis-horizontal"/);
-assert.match(detail, /More actions for page/);
+assert.match(detail, /icon="delete-outline"/);
+assert.match(detail, /accessibilityLabel=\{`Delete page/);
 assert.match(detail, /'Delete this page\?'/);
 assert.match(detail, /'Delete Page'/);
 assert.doesNotMatch(layout, /GestureHandlerRootView/);
-console.log('✓ Page deletion remains confirmed behind contextual overflow');
+console.log('✓ Page deletion remains confirmed behind the canonical compact trash action');
 
 assert.match(detail, /accessibilityLabel="Remove photo from page"/);
 assert.match(detail, /position: 'absolute'/);

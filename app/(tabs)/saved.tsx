@@ -9,6 +9,7 @@ import { useNotebooks } from '@/notebooks/provider';
 import { usePersonalPlaceCards } from '@/personal-place-cards/provider';
 import { useSavedPlaces } from '@/saved/provider';
 import { useMyTrips } from '@/trips/provider';
+import { useSession } from '@/auth/provider';
 
 function countText(count: number, singular: string, plural = `${singular}s`) {
   return `${count} ${count === 1 ? singular : plural}`;
@@ -16,17 +17,27 @@ function countText(count: number, singular: string, plural = `${singular}s`) {
 
 export default function SavedScreen() {
   const router = useRouter();
+  const { session, signIn } = useSession();
   const { isLoading: isLoadingFavourites, savedPlaceIds } = useSavedPlaces();
   const { isLoading: isLoadingTrips, trips } = useMyTrips();
   const { cards, isLoading: isLoadingPersonalPlaces } = usePersonalPlaceCards();
   const { isLoading: isLoadingNotebooks, notebooks } = useNotebooks();
 
+  const openPrivateFeature = async (
+    destination: '/favourites' | '/trips' | '/personal-place-cards' | '/notebooks'
+  ) => {
+    if (!session && !(await signIn())) return;
+    router.navigate(destination);
+  };
+
   const modules = [
     {
       accessibilityLabel: 'Open Favourites',
       icon: 'favorite-border' as const,
-      onPress: () => router.push('/favourites'),
-      stateText: isLoadingFavourites
+      onPress: () => void openPrivateFeature('/favourites'),
+      stateText: !session
+        ? 'Sign in to save Favourites'
+        : isLoadingFavourites
         ? 'Loading…'
         : savedPlaceIds.length
           ? countText(savedPlaceIds.length, 'place')
@@ -36,8 +47,10 @@ export default function SavedScreen() {
     {
       accessibilityLabel: 'Open Trips',
       icon: 'folder' as const,
-      onPress: () => router.push('/trips'),
-      stateText: isLoadingTrips
+      onPress: () => void openPrivateFeature('/trips'),
+      stateText: !session
+        ? 'Sign in to view private Trips'
+        : isLoadingTrips
         ? 'Loading…'
         : trips.length
           ? countText(trips.length, 'trip')
@@ -47,8 +60,10 @@ export default function SavedScreen() {
     {
       accessibilityLabel: 'Open Personal Places',
       icon: 'location-on' as const,
-      onPress: () => router.push('/personal-place-cards'),
-      stateText: isLoadingPersonalPlaces
+      onPress: () => void openPrivateFeature('/personal-place-cards'),
+      stateText: !session
+        ? 'Sign in to view Personal Places'
+        : isLoadingPersonalPlaces
         ? 'Loading…'
         : cards.length
           ? countText(cards.length, 'place')
@@ -58,8 +73,10 @@ export default function SavedScreen() {
     {
       accessibilityLabel: 'Open Notebooks',
       icon: 'menu-book' as const,
-      onPress: () => router.push('/notebooks'),
-      stateText: isLoadingNotebooks
+      onPress: () => void openPrivateFeature('/notebooks'),
+      stateText: !session
+        ? 'Sign in to view Notebooks'
+        : isLoadingNotebooks
         ? 'Loading…'
         : notebooks.length
           ? countText(notebooks.length, 'notebook')

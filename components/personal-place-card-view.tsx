@@ -55,7 +55,7 @@ export function PersonalPlaceCardView({
       accessibilityRole="button"
       onPress={onPress ?? (() => router.push({
         pathname: '/personal-place-cards/[cardId]',
-        params: { cardId: card.id },
+        params: { cardId: card.id, mode: 'view' },
       }))}
       style={({ pressed }) => ({
         marginBottom: embedded || compact ? 0 : Space.lg,

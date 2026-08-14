@@ -149,7 +149,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const hasAuthenticatedUserRef = useRef(false);
   const isRestoringRef = useRef(false);
   const refreshInFlightRef = useRef<Promise<boolean> | null>(null);
-  const signInInFlightRef = useRef<Promise<void> | null>(null);
+  const signInInFlightRef = useRef<Promise<boolean> | null>(null);
 
   const restoreSession = useCallback(async () => {
     if (isRestoringRef.current) return;
@@ -237,7 +237,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     } catch {
       console.error('[Auth] Authorize request failed.');
       setAuthError('Sign-in could not start. Please try again later.');
-      return;
+      return false;
     }
 
     let expectedState: string | null = null;
@@ -263,7 +263,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     if (browserOutcome.status === 'cancelled') {
       await clearCodeVerifier();
       setAuthError(null);
-      return;
+      return false;
     }
 
     if (browserOutcome.status === 'failed') {
@@ -280,7 +280,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       } else {
         setAuthError(null);
       }
-      return;
+      return false;
     }
 
     const parsed = parseCallbackUrl(browserOutcome.url);
@@ -288,23 +288,23 @@ export function AuthProvider({ children }: PropsWithChildren) {
     if (!parsed.ok) {
       if (hasAuthenticatedUserRef.current) {
         setAuthError(null);
-        return;
+        return false;
       }
       console.warn('[Auth] Callback validation failed.');
       setAuthError('Sign-in did not complete. Please try again.');
       await clearAuthStorage();
-      return;
+      return false;
     }
 
     if (parsed.state && expectedState && parsed.state !== expectedState) {
       console.error('[Auth] State mismatch. Aborting.');
       if (hasAuthenticatedUserRef.current) {
         setAuthError(null);
-        return;
+        return false;
       }
       setAuthError('Sign-in could not be verified. Please try again.');
       await clearAuthStorage();
-      return;
+      return false;
     }
     if (!parsed.state || !expectedState) {
       console.warn('[Auth] State verification skipped');
@@ -321,17 +321,17 @@ export function AuthProvider({ children }: PropsWithChildren) {
       console.error(`[Auth] Token exchange failed at safe stage: ${stage}.`);
       if (hasAuthenticatedUserRef.current) {
         setAuthError(null);
-        return;
+        return false;
       }
       setAuthError('Sign-in could not be completed. Please try again later.');
       setActiveToken(null);
       await clearAuthStorage();
       setState(authenticatedSession(null, ''));
-      return;
+      return false;
     }
 
     const user = mapTokenUser(tokens.user);
-    await acceptMobileTokens({ ...tokens, user });
+    return acceptMobileTokens({ ...tokens, user });
   }, [acceptMobileTokens]);
 
   const signIn = useCallback(() => {

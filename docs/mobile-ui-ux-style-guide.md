@@ -174,7 +174,7 @@ Ionicons. Reuse existing names and semantics:
 | Edit | `edit` in `IconAction` |
 | Share | `share` in an action cluster |
 | Map | map/location icon in an action cluster where that context uses icons |
-| Delete | `delete-outline`, compact destructive `IconAction` |
+| Delete | `delete-outline`, destructive `IconAction`; default on full cards, compact on deletable sub-components |
 | Overflow | `more-horiz`, with secondary/contextual actions behind it |
 | Adjacent navigation | `arrow-upward` / `arrow-downward` |
 | Back | shared 44-point white-circle control described above |
@@ -339,8 +339,16 @@ Use `PlaceMapPreview` for editorial/finished Place maps:
 - height `220`;
 - `Radius.card` clipping and card shadow;
 - non-interactive camera at zoom `13` unless an `onPress` action is supplied;
-- red `14 × 14` marker with white 2.5-point outline;
-- compact `Map preview` label overlay.
+- reuse the main-map pin semantics: blue for ordinary/default places, darker
+  blue for a selected place, and red with a white outline for the focused
+  single-place context;
+- do not add a `Map preview` label overlay;
+- retain MapLibre's standard information/attribution control where applicable.
+
+Map filter sheets place a prominent blue `Apply` action at top left. Ordinary
+region, activity, Favourite, and Trip rows use regular text weight; island and
+section headers carry the hierarchy through stronger type. Selection is shown
+by its check control rather than by changing the row label to bold.
 
 Current action presentation varies by context: Trip title actions use icon
 controls, while editorial Place map destinations use clearly labelled buttons.
@@ -353,8 +361,9 @@ appear in a finished gallery. Editors use their separate thumbnail grid.
 
 ## 12. Destructive actions
 
-- Use `delete-outline` with compact destructive `IconAction` on established
-  feature indexes.
+- Use `delete-outline` with a destructive `IconAction`. Use the default size on
+  full index cards and the compact size for deletable sub-components such as a
+  Trip entry or Notebook page.
 - Keep deletion separate from the row's navigation press.
 - Require an explicit confirmation dialog.
 - Preserve attachment, ownership, and active-count guards and show actionable
@@ -466,11 +475,11 @@ a competing pattern.
 | Editorial/finished Place hierarchy | `components/place-detail-content.tsx` |
 | Editorial Place screen | `app/(tabs)/(discover)/place/[slug].tsx` |
 | Personal Place finished/editor | `app/personal-place-cards/[cardId].tsx` |
-| Map preview | `components/place-map-preview.tsx` |
+| Map preview and shared pin | `components/place-map-preview.tsx`, `components/map/map-pin.tsx` |
 | Finished gallery/viewer | `components/place-photo-grid.tsx` |
 | Trip detail/actions/arrows | `app/trips/[tripId].tsx`, `components/trip-entry-card.tsx` |
 | Notebook adjacent-page navigation | `app/notebooks/[notebookId].tsx`, `notebooks/model.ts`, `content-blocks/pages.ts` |
-| Contextual overflow | `components/trip-entry-card.tsx` |
+| Destructive Trip-entry action | `components/trip-entry-card.tsx` |
 | Card surface | `components/ui/card-surface.tsx` |
 
 ## Recorded implementation inconsistencies

@@ -24,7 +24,7 @@ export function MapPlaceTile({ place }: { place: MapPlace }) {
 
         router.push({
           pathname: '/place/[slug]',
-          params: { slug: place.slug.current },
+          params: { origin: 'map', slug: place.slug.current },
         });
       }}
       style={({ pressed }) => ({

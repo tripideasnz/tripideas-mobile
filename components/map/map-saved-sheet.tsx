@@ -48,7 +48,7 @@ export function MapSavedSheet({
             accessibilityRole="button"
             onPress={onClose}
             style={({ pressed }) => ({ opacity: pressed ? 0.55 : 1 })}>
-            <Text style={{ fontSize: 16, fontWeight: '600' }}>Apply</Text>
+            <Text style={{ color: '#0080C8', fontSize: 17, fontWeight: '700' }}>Apply</Text>
           </Pressable>
           <Text style={{ fontSize: 19, fontWeight: '800' }}>Saved</Text>
           <Pressable
@@ -150,7 +150,7 @@ function SavedRow({
         style={{ marginRight: 12 }}
       />
       <View style={{ flex: 1 }}>
-        <Text style={{ fontSize: 16, fontWeight: '700' }}>{label}</Text>
+        <Text style={{ fontSize: 16, fontWeight: '400' }}>{label}</Text>
         {subtitle ? (
           <Text style={{ color: '#717171', fontSize: 13, marginTop: 2 }}>
             {subtitle}
