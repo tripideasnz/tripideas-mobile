@@ -8,6 +8,7 @@ export const Palette = {
   danger: '#c62828',
   favourite: '#e31b23',
   primary: '#111111',
+  success: '#238636',
   surface: '#ffffff',
   surfaceMuted: '#f7f7f5',
   text: '#111111',

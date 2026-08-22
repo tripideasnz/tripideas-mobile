@@ -13,7 +13,7 @@
       "bundleIdentifier": "nz.tripideas.app",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSLocationWhenInUseUsageDescription": "Tripideasnz may use your location to support map-based features and help show places relevant to your position."
+        "NSLocationWhenInUseUsageDescription": "TripIdeas uses your location to show where you are on the map and help you find places nearby."
       }
     },
     "android": {
@@ -46,6 +46,15 @@
         }
       ],
       "expo-secure-store",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "TripIdeas uses your location to show where you are on the map and help you find places nearby.",
+          "isIosBackgroundLocationEnabled": false,
+          "isAndroidBackgroundLocationEnabled": false,
+          "isAndroidForegroundServiceEnabled": false
+        }
+      ],
       [
         "expo-image-picker",
         {

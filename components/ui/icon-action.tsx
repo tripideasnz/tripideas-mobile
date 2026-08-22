@@ -11,6 +11,7 @@ export function IconAction({
   icon,
   onPress,
   size = 'default',
+  trip = false,
 }: {
   accessibilityLabel: string;
   destructive?: boolean;
@@ -18,8 +19,9 @@ export function IconAction({
   icon: ComponentProps<typeof MaterialIcons>['name'];
   onPress: () => void;
   size?: 'compact' | 'default';
+  trip?: boolean;
 }) {
-  const color = destructive ? Palette.danger : Palette.textBody;
+  const color = destructive ? Palette.danger : trip ? Palette.trip : Palette.textBody;
   const dimension = size === 'compact' ? 36 : 44;
   return (
     <Pressable
@@ -31,7 +33,7 @@ export function IconAction({
       onPress={onPress}
       style={({ pressed }) => ({
         alignItems: 'center',
-        borderColor: destructive ? Palette.danger : Palette.border,
+        borderColor: destructive ? Palette.danger : trip ? Palette.trip : Palette.border,
         borderRadius: Radius.pill,
         borderWidth: 1,
         height: dimension,
