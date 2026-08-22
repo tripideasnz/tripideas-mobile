@@ -60,6 +60,58 @@ export async function addNotebookPhoto(
   return finish(pending, addBlock);
 }
 
+export async function addNotebookPhotos(
+  userId: string,
+  notebookId: string,
+  pageId: string,
+  selected: SelectedPhoto[],
+  addBlock: AddBlock
+): Promise<{ completed: NotebookDetail[]; errors: unknown[]; pendingCount: number }> {
+  const pending: PendingNotebookPhotoBlock[] = [];
+  const errors: unknown[] = [];
+  for (const photo of selected) {
+    try {
+      const upload = await prepareNativePhotoUpload(userId, photo);
+      const item: PendingNotebookPhotoBlock = {
+        userId,
+        notebookId,
+        pageId,
+        uploadId: upload.id,
+        blockClientRequestId: `photo-block:${upload.clientRequestId}`,
+        createdAt: new Date().toISOString(),
+      };
+      await notebookPhotoBlockStorage.set(item);
+      pending.push(item);
+    } catch (error) {
+      errors.push(error);
+    }
+  }
+
+  const completed: NotebookDetail[] = [];
+  let attachmentBlocked = false;
+  for (const item of pending) {
+    try {
+      if (attachmentBlocked) {
+        // Continue the existing upload pipeline, but retain the pending block so
+        // it cannot overtake an earlier incomplete selection.
+        await startNativePhotoUpload(item.userId, item.uploadId);
+        continue;
+      }
+      const detail = await finish(item, addBlock);
+      if (detail) completed.push(detail);
+      else attachmentBlocked = true;
+    } catch (error) {
+      attachmentBlocked = true;
+      errors.push(error);
+    }
+  }
+  return {
+    completed,
+    errors,
+    pendingCount: Math.max(0, pending.length - completed.length),
+  };
+}
+
 export async function resumeNotebookPhotos(
   userId: string,
   notebookId: string,
@@ -69,12 +121,19 @@ export async function resumeNotebookPhotos(
     (item) => item.notebookId === notebookId
   );
   const completed: NotebookDetail[] = [];
+  let attachmentBlocked = false;
   for (const item of pending) {
     try {
+      if (attachmentBlocked) {
+        await startNativePhotoUpload(item.userId, item.uploadId);
+        continue;
+      }
       const detail = await finish(item, addBlock);
       if (detail) completed.push(detail);
+      else attachmentBlocked = true;
     } catch {
       // The pending record is retained for an explicit or restart retry.
+      attachmentBlocked = true;
     }
   }
   return {
@@ -86,7 +145,7 @@ export async function resumeNotebookPhotos(
 export async function listNotebookPhotoPreviews(
   userId: string,
   notebookId: string
-): Promise<Record<string, string>> {
+): Promise<Record<string, string[]>> {
   const [pending, uploads] = await Promise.all([
     notebookPhotoBlockStorage.list(userId),
     listNativePhotoUploads(userId),

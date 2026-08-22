@@ -4,13 +4,14 @@ import { readFile } from 'node:fs/promises';
 const read = (relativePath) =>
   readFile(new URL(`../${relativePath}`, import.meta.url), 'utf8');
 
-const [saved, list, detail, sharing, layout, collage, expandable, status] = await Promise.all([
+const [saved, list, detail, sharing, layout, collage, photoGrid, expandable, status] = await Promise.all([
   read('app/(tabs)/saved.tsx'),
   read('app/notebooks/index.tsx'),
   read('app/notebooks/[notebookId].tsx'),
   read('app/notebooks/[notebookId]/sharing.tsx'),
   read('app/_layout.tsx'),
   read('components/trip-image-collage.tsx'),
+  read('components/place-photo-grid.tsx'),
   read('components/ui/expandable-text.tsx'),
   read('components/ui/autosave-status.tsx'),
 ]);
@@ -88,6 +89,12 @@ assert.match(detail, /blockOffsets\.current\[page\.id\] = y/);
 assert.match(detail, /setHighlightedPageId/);
 console.log('✓ Add and page navigation actions reuse the canonical icon treatment');
 
+assert.match(detail, /pickPhotosForUpload\(\)/);
+assert.match(detail, /addNotebookPhotos/);
+assert.match(detail, /localPhotoPreviews\[page\.id\]\.map/);
+assert.match(detail, /width: '48%'/);
+console.log('✓ Notebook Add photos uses ordered multi-selection and batch previews');
+
 assert.doesNotMatch(detail, /ReanimatedSwipeable|renderRightActions/);
 assert.match(detail, /icon="delete-outline"/);
 assert.match(detail, /accessibilityLabel=\{`Delete page/);
@@ -96,8 +103,9 @@ assert.match(detail, /'Delete Page'/);
 assert.doesNotMatch(layout, /GestureHandlerRootView/);
 console.log('✓ Page deletion remains confirmed behind the canonical compact trash action');
 
-assert.match(detail, /accessibilityLabel="Remove photo from page"/);
-assert.match(detail, /position: 'absolute'/);
-assert.match(detail, />\s*×\s*<\/AppText>/);
+assert.match(detail, /<PlacePhotoGrid/);
+assert.match(detail, /onRemoveImage=/);
+assert.match(photoGrid, /accessibilityLabel=\{`Remove photo/);
+assert.match(photoGrid, /onRemoveImage\(image, activeIndex\)/);
 assert.doesNotMatch(detail, /label="Remove Photo"/);
-console.log('✓ Photo removal keeps the compact contextual control');
+console.log('✓ Notebook photos reuse the Place grid with compact per-photo removal');

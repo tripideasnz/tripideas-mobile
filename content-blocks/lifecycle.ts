@@ -7,6 +7,7 @@ import {
   deleteNotebookTextItem,
   reorderNotebookItems,
   updateNotebookTextItem,
+  updateNotebookBlock,
 } from '@/notebooks/api';
 import type { NotebookDetail } from '@/notebooks/types';
 
@@ -45,6 +46,10 @@ export function updateContentBlock(
           text: input.text,
         }
       );
+    case 'link':
+      return updateNotebookBlock(notebookId, blockId, expectedVersion, {
+        title: input.title, text: input.text, url: input.url,
+      });
   }
 }
 

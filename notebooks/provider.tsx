@@ -32,6 +32,8 @@ import {
   readNotebook,
   readNotebookContent,
   addNotebookPhotoBlock,
+  addNotebookLinkBlock,
+  updateNotebookBlock,
   deleteNotebookPhotoBlock,
   updateNotebook as updateNotebookRequest,
 } from '@/notebooks/api';
@@ -48,6 +50,7 @@ import type {
   NotebookSummary,
   UpdateNotebookInput,
 } from '@/notebooks/types';
+import type { RichBlockMetadataInput } from '@/content-blocks/types';
 
 type NotebookContextValue = {
   createNotebook: (input: CreateNotebookInput) => Promise<NotebookDetail>;
@@ -79,6 +82,8 @@ type NotebookContextValue = {
       clientRequestId: string;
     }) => Promise<NotebookDetail>;
     deletePhotoBlock: (id: string, blockId: string) => Promise<NotebookDetail>;
+    addLinkBlock: (input: { id: string; pageId: string; url: string; clientRequestId: string }) => Promise<NotebookDetail>;
+    updateRichBlock: (id: string, blockId: string, input: RichBlockMetadataInput & { title?: string | null; text?: string | null; url?: string }) => Promise<NotebookDetail>;
   };
   notebooks: NotebookSummary[];
   refresh: () => Promise<void>;
@@ -295,6 +300,16 @@ export function NotebookProvider({ children }: PropsWithChildren) {
             position: page.blocks.length,
           });
         }),
+      addLinkBlock: (input: { id: string; pageId: string; url: string; clientRequestId: string }) =>
+        authoritativeMutation(input.id, (detail) => {
+          const page = detail.pages?.find((candidate) => candidate.id === input.pageId);
+          if (!page) throw new ApiError(404, 'not_found');
+          return addNotebookLinkBlock({ notebookId: input.id, pageId: input.pageId,
+            url: input.url, clientRequestId: input.clientRequestId,
+            expectedVersion: detail.version, position: page.blocks.length });
+        }),
+      updateRichBlock: (id: string, blockId: string, input: RichBlockMetadataInput & { title?: string | null; text?: string | null; url?: string }) =>
+        authoritativeMutation(id, (detail) => updateNotebookBlock(id, blockId, detail.version, input)),
       deletePhotoBlock: (id: string, blockId: string) =>
         authoritativeMutation(id, (detail) =>
           deleteNotebookPhotoBlock(id, blockId, detail.version)

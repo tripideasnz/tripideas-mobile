@@ -52,6 +52,6 @@ assert.deepEqual(
     }],
     pending.notebookId
   ),
-  { [pending.pageId]: 'file:///private/local-preview.jpg' }
+  { [pending.pageId]: ['file:///private/local-preview.jpg'] }
 );
 console.log('✓ restart recovery restores owner-scoped local previews');

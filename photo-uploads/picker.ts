@@ -23,9 +23,12 @@ export async function pickPhotoForUpload(): Promise<SelectedPhoto | null> {
 }
 
 export async function pickPhotosForUpload(
-  selectionLimit: number
+  selectionLimit?: number
 ): Promise<SelectedPhoto[]> {
-  if (!Number.isInteger(selectionLimit) || selectionLimit < 1) return [];
+  if (
+    selectionLimit !== undefined &&
+    (!Number.isInteger(selectionLimit) || selectionLimit < 1)
+  ) return [];
   const result = await ImagePicker.launchImageLibraryAsync({
     allowsEditing: false,
     allowsMultipleSelection: true,
@@ -36,7 +39,7 @@ export async function pickPhotosForUpload(
     preferredAssetRepresentationMode:
       ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Current,
     quality: 1,
-    selectionLimit,
+    selectionLimit: selectionLimit ?? 0,
   });
   if (result.canceled) return [];
   return result.assets.map((asset) => ({

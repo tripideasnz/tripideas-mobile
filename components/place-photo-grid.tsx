@@ -19,6 +19,8 @@ function PhotoTile({
   image,
   index,
   onPress,
+  onRemove,
+  onImageError,
   overlayText,
   placeTitle,
 }: {
@@ -26,6 +28,8 @@ function PhotoTile({
   image: PlaceGalleryImage;
   index: number;
   onPress: () => void;
+  onRemove?: () => void;
+  onImageError?: () => void;
   overlayText?: string;
   placeTitle?: string;
 }) {
@@ -45,6 +49,7 @@ function PhotoTile({
       <Image
         accessibilityIgnoresInvertColors
         contentFit="cover"
+        onError={onImageError}
         source={{ uri: image.url }}
         style={{
           backgroundColor: Palette.surfaceMuted,
@@ -72,22 +77,54 @@ function PhotoTile({
           </Text>
         </View>
       ) : null}
+      {onRemove ? (
+        <Pressable
+          accessibilityLabel={`Remove photo ${index + 1}`}
+          accessibilityRole="button"
+          hitSlop={6}
+          onPress={(event) => {
+            event.stopPropagation();
+            onRemove();
+          }}
+          style={({ pressed }) => ({
+            alignItems: 'center',
+            backgroundColor: Palette.surface,
+            borderColor: Palette.trip,
+            borderRadius: Radius.pill,
+            borderWidth: 1,
+            bottom: Space.sm,
+            height: 36,
+            justifyContent: 'center',
+            opacity: pressed ? 0.65 : 1,
+            position: 'absolute',
+            right: Space.sm,
+            width: 36,
+          })}>
+          <Text style={{ color: Palette.trip, fontSize: 24, lineHeight: 26 }}>×</Text>
+        </Pressable>
+      ) : null}
     </Pressable>
   );
 }
 
 export function PlacePhotoGrid({
+  horizontalInset = 0,
   images,
+  onImageError,
+  onRemoveImage,
   placeTitle,
 }: {
+  horizontalInset?: number;
   images: PlaceGalleryImage[];
+  onImageError?: (image: PlaceGalleryImage, index: number) => void;
+  onRemoveImage?: (image: PlaceGalleryImage, index: number) => void;
   placeTitle?: string;
 }) {
   const { height: windowHeight, width: windowWidth } = useWindowDimensions();
   const viewerRef = useRef<FlatList<PlaceGalleryImage>>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const [isViewerOpen, setIsViewerOpen] = useState(false);
-  const contentWidth = windowWidth - Screen.gutter * 2;
+  const contentWidth = windowWidth - Screen.gutter * 2 - horizontalInset * 2;
   const gap = Space.sm;
   const halfWidth = (contentWidth - gap) / 2;
   const previewImages = images.slice(0, 4);
@@ -130,6 +167,8 @@ export function PlacePhotoGrid({
         setActiveIndex(index);
         setIsViewerOpen(true);
       }}
+      onImageError={onImageError ? () => onImageError(image, index) : undefined}
+      onRemove={onRemoveImage ? () => onRemoveImage(image, index) : undefined}
       overlayText={overlayText}
       placeTitle={placeTitle}
     />
@@ -206,24 +245,48 @@ export function PlacePhotoGrid({
                 <Text style={{ color: '#fff', ...Type.label }}>
                   {activeIndex + 1} / {images.length}
                 </Text>
-                <Pressable
-                  accessibilityLabel="Close photo viewer"
-                  accessibilityRole="button"
-                  hitSlop={10}
-                  onPress={closeViewer}
-                  style={({ pressed }) => ({
-                    alignItems: 'center',
-                    backgroundColor: 'rgba(255,255,255,0.12)',
-                    borderRadius: Radius.pill,
-                    elevation: 2,
-                    height: 44,
-                    justifyContent: 'center',
-                    opacity: pressed ? 0.6 : 1,
-                    width: 44,
-                    zIndex: 3,
-                  })}>
-                  <MaterialIcons color="#fff" name="close" size={26} />
-                </Pressable>
+                <View style={{ alignItems: 'center', flexDirection: 'row', gap: Space.sm }}>
+                  {onRemoveImage ? (
+                    <Pressable
+                      accessibilityLabel={`Remove photo ${activeIndex + 1}`}
+                      accessibilityRole="button"
+                      hitSlop={8}
+                      onPress={() => {
+                        const image = images[activeIndex];
+                        if (image) onRemoveImage(image, activeIndex);
+                        closeViewer();
+                      }}
+                      style={({ pressed }) => ({
+                        alignItems: 'center',
+                        backgroundColor: 'rgba(255,255,255,0.12)',
+                        borderRadius: Radius.pill,
+                        height: 36,
+                        justifyContent: 'center',
+                        opacity: pressed ? 0.6 : 1,
+                        width: 36,
+                      })}>
+                      <Text style={{ color: '#fff', fontSize: 24, lineHeight: 26 }}>×</Text>
+                    </Pressable>
+                  ) : null}
+                  <Pressable
+                    accessibilityLabel="Close photo viewer"
+                    accessibilityRole="button"
+                    hitSlop={10}
+                    onPress={closeViewer}
+                    style={({ pressed }) => ({
+                      alignItems: 'center',
+                      backgroundColor: 'rgba(255,255,255,0.12)',
+                      borderRadius: Radius.pill,
+                      elevation: 2,
+                      height: 44,
+                      justifyContent: 'center',
+                      opacity: pressed ? 0.6 : 1,
+                      width: 44,
+                      zIndex: 3,
+                    })}>
+                    <MaterialIcons color="#fff" name="close" size={26} />
+                  </Pressable>
+                </View>
               </View>
 
               <FlatList

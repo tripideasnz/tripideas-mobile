@@ -4,11 +4,13 @@ import type {
   ContentBlock,
   TextContentBlock,
   PhotoContentBlock,
+  LinkContentBlock,
 } from '@/content-blocks/types';
 
 export type ContentBlockRenderers = {
   text: (block: TextContentBlock, index: number) => ReactElement;
   photo: (block: PhotoContentBlock, index: number) => ReactElement;
+  link: (block: LinkContentBlock, index: number) => ReactElement;
 };
 
 export function renderContentBlock(
@@ -21,5 +23,7 @@ export function renderContentBlock(
       return renderers.text(block, index);
     case 'photo':
       return renderers.photo(block, index);
+    case 'link':
+      return renderers.link(block, index);
   }
 }

@@ -5,16 +5,14 @@ export function notebookPhotoPreviewUris(
   pending: PendingNotebookPhotoBlock[],
   uploads: LocalPhotoUploadRecord[],
   notebookId: string
-): Record<string, string> {
+): Record<string, string[]> {
   const uploadsById = new Map(uploads.map((upload) => [upload.id, upload]));
-  return Object.fromEntries(
-    pending
-      .filter((item) => item.notebookId === notebookId)
-      .flatMap((item) => {
-        const upload = uploadsById.get(item.uploadId);
-        return upload?.localFileUri
-          ? [[item.pageId, upload.localFileUri] as const]
-          : [];
-      })
-  );
+  const previews: Record<string, string[]> = {};
+  for (const item of pending) {
+    if (item.notebookId !== notebookId) continue;
+    const uri = uploadsById.get(item.uploadId)?.localFileUri;
+    if (!uri) continue;
+    previews[item.pageId] = [...(previews[item.pageId] ?? []), uri];
+  }
+  return previews;
 }

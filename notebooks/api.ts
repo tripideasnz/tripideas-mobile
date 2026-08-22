@@ -10,6 +10,7 @@ import type {
   NotebookSummary,
   UpdateNotebookInput,
 } from '@/notebooks/types';
+import type { RichBlockMetadataInput } from '@/content-blocks/types';
 
 const object = (value: unknown): Record<string, unknown> => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -172,6 +173,29 @@ export async function addNotebookPhotoBlock(input: {
       }
     )
   );
+}
+
+export async function addNotebookLinkBlock(input: {
+  notebookId: string; pageId: string; url: string; clientRequestId: string;
+  expectedVersion: number; position: number;
+}): Promise<NotebookDetail> {
+  const { notebookId, ...body } = input;
+  return parseNotebookContent(await apiFetch(
+    `/notebooks/${encodeURIComponent(notebookId)}/blocks/link`,
+    { method: 'POST', ...json(body) }
+  ));
+}
+
+export async function updateNotebookBlock(
+  notebookId: string,
+  blockId: string,
+  expectedVersion: number,
+  input: RichBlockMetadataInput & { title?: string | null; text?: string | null; url?: string }
+): Promise<NotebookDetail> {
+  return parseNotebookContent(await apiFetch(
+    `/notebooks/${encodeURIComponent(notebookId)}/blocks/${encodeURIComponent(blockId)}`,
+    { method: 'PATCH', ...json({ expectedVersion, ...input }) }
+  ));
 }
 
 export async function deleteNotebookPhotoBlock(

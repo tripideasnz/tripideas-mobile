@@ -103,6 +103,7 @@ async function performRequest(
   options?: RequestInit
 ): Promise<ApiResponse> {
   const headers: Record<string, string> = {};
+  headers['X-TripIdeas-Notebook-Contract'] = 'rich-v1';
   if (options?.body != null) {
     headers['Content-Type'] = 'application/json';
   }

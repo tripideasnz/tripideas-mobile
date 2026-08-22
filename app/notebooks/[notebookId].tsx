@@ -4,14 +4,15 @@ import {
   useRouter,
 } from 'expo-router';
 import { Image } from 'expo-image';
+import * as Crypto from 'expo-crypto';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Keyboard,
-  KeyboardAvoidingView,
+    KeyboardAvoidingView,
+    Modal,
   type LayoutChangeEvent,
   Platform,
-  Pressable,
   ScrollView,
   TextInput,
   View,
@@ -27,11 +28,13 @@ import { AppTextInput } from '@/components/ui/app-text-input';
 import { ExpandableText } from '@/components/ui/expandable-text';
 import { IconAction } from '@/components/ui/icon-action';
 import { LoadingView } from '@/components/ui/loading-view';
+import { PlacePhotoGrid } from '@/components/place-photo-grid';
 import {
   adjacentContentPageId,
   pagesFromContentBlocks,
 } from '@/content-blocks/pages';
 import { renderContentBlock } from '@/content-blocks/renderer';
+import type { ContentBlock } from '@/content-blocks/types';
 import { Palette, Radius, Screen, Space } from '@/constants/design';
 import { classifyNotebookError } from '@/notebooks/errors';
 import {
@@ -49,9 +52,10 @@ import {
 import { useNotebooks } from '@/notebooks/provider';
 import { authorizePhotoRead } from '@/notebooks/api';
 import type { NotebookDetail } from '@/notebooks/types';
-import { pickPhotoForUpload } from '@/photo-uploads/picker';
+import { pickPhotosForUpload } from '@/photo-uploads/picker';
+import { getOneForegroundLocation } from '@/location/foreground';
 import {
-  addNotebookPhoto,
+  addNotebookPhotos,
   listNotebookPhotoPreviews,
   resumeNotebookPhotos,
 } from '@/notebook-photo-blocks/service';
@@ -93,10 +97,15 @@ export default function NotebookDetailScreen() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
   const [localPhotoPreviews, setLocalPhotoPreviews] = useState<
-    Record<string, string>
+    Record<string, string[]>
   >({});
   const [photoBusyPage, setPhotoBusyPage] = useState<string | null>(null);
   const [pendingPhotoRetries, setPendingPhotoRetries] = useState(0);
+  const [linkPageId, setLinkPageId] = useState<string | null>(null);
+  const [linkUrl, setLinkUrl] = useState('');
+  const [temporalEditor, setTemporalEditor] = useState<{
+    blockId: string; precision: 'DATE' | 'DATETIME'; date: string; time: string;
+  } | null>(null);
   const titleRef = useRef('');
   const descriptionRef = useRef('');
   const titleDraftsRef = useRef<Record<string, string>>({});
@@ -594,37 +603,87 @@ export default function NotebookDetailScreen() {
     if (!session) return;
     setActionError(null);
     try {
-      const selected = await pickPhotoForUpload();
-      if (!selected) return;
+      const selected = await pickPhotosForUpload();
+      if (selected.length === 0) return;
       setLocalPhotoPreviews((current) => ({
         ...current,
-        [pageId]: selected.uri,
+        [pageId]: selected.map((photo) => photo.uri),
       }));
       setPhotoBusyPage(pageId);
-      const latest = await addNotebookPhoto(
+      const result = await addNotebookPhotos(
         session.userId,
         detail.id,
         pageId,
         selected,
         mutate.addPhotoBlock
       );
+      const latest = result.completed.at(-1);
       if (latest) {
-        setLocalPhotoPreviews((current) => {
-          const next = { ...current };
-          delete next[pageId];
-          return next;
-        });
         applyAuthoritativeDetail(latest);
       }
-      else {
-        setPendingPhotoRetries((current) => current + 1);
+      const pendingPreviews = await listNotebookPhotoPreviews(
+        session.userId,
+        detail.id
+      );
+      setLocalPhotoPreviews(pendingPreviews);
+      const durablePendingCount = Object.values(pendingPreviews)
+        .reduce((count, previews) => count + previews.length, 0);
+      setPendingPhotoRetries(durablePendingCount);
+      if (durablePendingCount > 0) {
         setActionError('Photo upload paused. Retry when connectivity returns.');
+      } else if (result.errors[0]) {
+        handleMutationError(result.errors[0]);
       }
     } catch (error) {
       handleMutationError(error);
     } finally {
       setPhotoBusyPage(null);
     }
+  };
+
+  const addLink = async () => {
+    if (!linkPageId) return;
+    const normalized = linkUrl.trim();
+    if (!/^https?:\/\/[^\s]+$/i.test(normalized)) {
+      setActionError('Enter a valid http:// or https:// link.');
+      return;
+    }
+    await runImmediateMutation(() => mutate.addLinkBlock({
+      id: detail.id, pageId: linkPageId, url: normalized,
+      clientRequestId: Crypto.randomUUID(),
+    }));
+    setLinkPageId(null);
+    setLinkUrl('');
+  };
+
+  const showMetadataActions = (block: ContentBlock) => {
+    const now = new Date();
+    Alert.alert('Object details', undefined, [
+      { text: block.isImportant ? 'Remove importance' : 'Mark important', onPress: () => void runImmediateMutation(() =>
+        mutate.updateRichBlock(detail.id, block.id, { isImportant: !block.isImportant })) },
+      { text: block.event ? 'Change date/time' : 'Add date/time', onPress: () => {
+        const current = block.event?.precision === 'DATETIME' ? new Date(block.event.dateTime) : now;
+        setTemporalEditor({ blockId: block.id, precision: block.event?.precision ?? 'DATE',
+          date: block.event?.precision === 'DATE' ? block.event.date : current.toISOString().slice(0, 10),
+          time: `${String(current.getHours()).padStart(2, '0')}:${String(current.getMinutes()).padStart(2, '0')}` });
+      } },
+      ...(block.event ? [{ text: 'Remove date/time', style: 'destructive' as const, onPress: () => void runImmediateMutation(() =>
+        mutate.updateRichBlock(detail.id, block.id, { event: null })) }] : []),
+      { text: 'Pin now', onPress: () => void getOneForegroundLocation().then((result) => {
+        if (result.status !== 'granted') { setActionError('Location is unavailable. You can still choose a point on the map.'); return; }
+        return runImmediateMutation(() => mutate.updateRichBlock(detail.id, block.id, {
+          location: { ...result.point, source: 'PIN_NOW' },
+        }));
+      }) },
+      { text: block.location ? 'Change location on map' : 'Choose location on map', onPress: () => router.push({
+        pathname: '/notebooks/location-picker',
+        params: { notebookId: detail.id, blockId: block.id,
+          latitude: block.location?.latitude, longitude: block.location?.longitude },
+      }) },
+      ...(block.location ? [{ text: 'Remove location', style: 'destructive' as const, onPress: () => void runImmediateMutation(() =>
+        mutate.updateRichBlock(detail.id, block.id, { location: null })) }] : []),
+      { text: 'Cancel', style: 'cancel' },
+    ]);
   };
 
   const retryPhotos = async () => {
@@ -673,6 +732,33 @@ export default function NotebookDetailScreen() {
           headerLeft: () => <HeaderBackButton color={Palette.trip} onPress={handleBack} />,
         }}
       />
+      <Modal animationType="fade" onRequestClose={() => setTemporalEditor(null)} transparent visible={temporalEditor !== null}>
+        <View style={{ alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.35)', flex: 1, justifyContent: 'center', padding: Screen.gutter }}>
+          {temporalEditor ? <View style={{ backgroundColor: Palette.surface, borderRadius: Radius.card, gap: Space.md, padding: Space.xl, width: '100%' }}>
+            <AppText variant="section">Date and time</AppText>
+            <View style={{ flexDirection: 'row', gap: Space.sm }}>
+              <AppButton label="Date only" onPress={() => setTemporalEditor((current) => current ? { ...current, precision: 'DATE' } : null)} size="compact" variant={temporalEditor.precision === 'DATE' ? 'primary' : 'secondary'} />
+              <AppButton label="Date + time" onPress={() => setTemporalEditor((current) => current ? { ...current, precision: 'DATETIME' } : null)} size="compact" variant={temporalEditor.precision === 'DATETIME' ? 'primary' : 'secondary'} />
+            </View>
+            <AppTextInput accessibilityLabel="Event date" autoCapitalize="none" onChangeText={(date) => setTemporalEditor((current) => current ? { ...current, date } : null)} placeholder="YYYY-MM-DD" value={temporalEditor.date} />
+            {temporalEditor.precision === 'DATETIME' ? <AppTextInput accessibilityLabel="Event time" autoCapitalize="none" onChangeText={(time) => setTemporalEditor((current) => current ? { ...current, time } : null)} placeholder="HH:MM" value={temporalEditor.time} /> : null}
+            <View style={{ flexDirection: 'row', gap: Space.sm, justifyContent: 'flex-end' }}>
+              <AppButton label="Cancel" onPress={() => setTemporalEditor(null)} size="compact" variant="secondary" />
+              <AppButton label="Apply" onPress={() => {
+                const editor = temporalEditor;
+                if (!/^\d{4}-\d{2}-\d{2}$/.test(editor.date) || (editor.precision === 'DATETIME' && !/^\d{2}:\d{2}$/.test(editor.time))) {
+                  setActionError('Enter the date as YYYY-MM-DD and time as HH:MM.'); return;
+                }
+                const event = editor.precision === 'DATE'
+                  ? { precision: 'DATE' as const, date: editor.date }
+                  : { precision: 'DATETIME' as const, dateTime: new Date(`${editor.date}T${editor.time}:00`).toISOString(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone };
+                setTemporalEditor(null);
+                void runImmediateMutation(() => mutate.updateRichBlock(detail.id, editor.blockId, { event }));
+              }} size="compact" />
+            </View>
+          </View> : null}
+        </View>
+      </Modal>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={88}
@@ -894,6 +980,13 @@ export default function NotebookDetailScreen() {
                       }}
                     />
                     <IconAction
+                      accessibilityLabel={`Edit details for page ${index + 1}`}
+                      disabled={mutationDisabled}
+                      icon="more-horiz"
+                      onPress={() => showMetadataActions(item)}
+                      size="compact"
+                    />
+                    <IconAction
                       accessibilityLabel={`Delete page ${index + 1}`}
                       destructive
                       disabled={mutationDisabled}
@@ -938,95 +1031,79 @@ export default function NotebookDetailScreen() {
                       value={textDrafts[item.id] ?? item.text}
                     />
                   )}
-                  {page.blocks.slice(1).map((block) =>
-                    block.type === 'photo' ? (
-                      <View
-                        key={block.id}
-                        style={{ position: 'relative' }}>
-                        {photoUrls[block.photoAssetId] ? (
-                          <Image
-                            accessibilityLabel="Notebook photo"
-                            contentFit="contain"
-                            onError={() => {
-                              const attempts =
-                                photoRefreshAttemptsRef.current[
-                                  block.photoAssetId
-                                ] ?? 0;
-                              if (attempts >= 2) return;
-                              photoRefreshAttemptsRef.current[
-                                block.photoAssetId
-                              ] = attempts + 1;
-                              void refreshPhotoUrl(block.photoAssetId);
-                            }}
-                            source={{ uri: photoUrls[block.photoAssetId] }}
-                            style={{
-                              aspectRatio: 4 / 3,
-                              backgroundColor: Palette.surfaceMuted,
-                              borderRadius: Radius.control,
-                              width: '100%',
-                            }}
-                          />
-                        ) : (
-                          <View
-                            style={{
-                              alignItems: 'center',
-                              aspectRatio: 4 / 3,
-                              backgroundColor: Palette.surfaceMuted,
-                              borderRadius: Radius.control,
-                              justifyContent: 'center',
-                            }}>
-                            <AppText color={Palette.textMuted}>
-                              Loading photo…
-                            </AppText>
+                  <MetadataSummary block={item} />
+                  <PlacePhotoGrid
+                    horizontalInset={Space.lg}
+                    images={page.blocks.slice(1).flatMap((block) =>
+                      block.type === 'photo' && photoUrls[block.photoAssetId]
+                        ? [{
+                            _key: block.id,
+                            alt: 'Notebook photo',
+                            url: photoUrls[block.photoAssetId],
+                          }]
+                        : []
+                    )}
+                    onImageError={(image) => {
+                      const block = page.blocks.find((candidate) => candidate.id === image._key);
+                      if (!block || block.type !== 'photo') return;
+                      const attempts = photoRefreshAttemptsRef.current[block.photoAssetId] ?? 0;
+                      if (attempts >= 2) return;
+                      photoRefreshAttemptsRef.current[block.photoAssetId] = attempts + 1;
+                      void refreshPhotoUrl(block.photoAssetId);
+                    }}
+                    onRemoveImage={mutationDisabled ? undefined : (image) => {
+                      if (!image._key) return;
+                      void runImmediateMutation(() =>
+                        mutate.deletePhotoBlock(detail.id, image._key!)
+                      );
+                    }}
+                    placeTitle={item.title ?? `Notebook page ${index + 1}`}
+                  />
+                  {page.blocks.filter((block) => block.type === 'link').map((block) =>
+                    block.type === 'link' ? (
+                      <View key={block.id} style={{ borderColor: Palette.border, borderRadius: Radius.control, borderWidth: 1, gap: Space.xs, padding: Space.md }}>
+                        <View style={{ alignItems: 'center', flexDirection: 'row', gap: Space.sm }}>
+                          <View style={{ flex: 1 }}>
+                            <AppText variant="bodyStrong">{block.title || block.url}</AppText>
+                            {block.title ? <AppText color={Palette.textMuted} variant="caption">{block.url}</AppText> : null}
+                            {block.text ? <AppText>{block.text}</AppText> : null}
                           </View>
-                        )}
-                        <Pressable
-                          accessibilityLabel="Remove photo from page"
-                          accessibilityRole="button"
-                          disabled={mutationDisabled}
-                          onPress={() =>
-                            void runImmediateMutation(() =>
-                              mutate.deletePhotoBlock(detail.id, block.id)
-                            )
-                          }
-                          style={({ pressed }) => ({
-                            alignItems: 'center',
-                            backgroundColor: Palette.surface,
-                            borderColor: Palette.trip,
-                            borderRadius: Radius.pill,
-                            borderWidth: 1,
-                            bottom: Space.sm,
-                            height: 36,
-                            justifyContent: 'center',
-                            opacity: mutationDisabled ? 0.4 : pressed ? 0.65 : 1,
-                            position: 'absolute',
-                            right: Space.sm,
-                            width: 36,
-                          })}>
-                          <AppText
-                            color={Palette.trip}
-                            style={{ fontSize: 24, lineHeight: 26 }}>
-                            ×
-                          </AppText>
-                        </Pressable>
+                          <IconAction accessibilityLabel="Edit link details" icon="more-horiz" onPress={() => showMetadataActions(block)} size="compact" />
+                          <IconAction accessibilityLabel="Delete link" destructive icon="delete-outline" onPress={() => void runImmediateMutation(() => mutate.deletePhotoBlock(detail.id, block.id))} size="compact" />
+                        </View>
+                        <AppTextInput accessibilityLabel="Link title" defaultValue={block.title ?? ''}
+                          key={`${block.id}-title-${block.updatedAt}`} maxLength={200} placeholder="Optional title"
+                          onEndEditing={(event) => void runImmediateMutation(() => mutate.updateRichBlock(detail.id, block.id, { title: event.nativeEvent.text || null }))} />
+                        <AppTextInput accessibilityLabel="Link note" defaultValue={block.text ?? ''}
+                          key={`${block.id}-note-${block.updatedAt}`} maxLength={100000} multiline placeholder="Optional note"
+                          onEndEditing={(event) => void runImmediateMutation(() => mutate.updateRichBlock(detail.id, block.id, { text: event.nativeEvent.text || null }))} />
+                        <MetadataSummary block={block} />
                       </View>
                     ) : null
                   )}
-                  {localPhotoPreviews[page.id] ? (
+                  {localPhotoPreviews[page.id]?.length ? (
                     <View style={{ gap: Space.sm }}>
-                      <Image
-                        accessibilityLabel="Pending Notebook photo preview"
-                        contentFit="contain"
-                        source={{ uri: localPhotoPreviews[page.id] }}
-                        style={{
-                          aspectRatio: 4 / 3,
-                          backgroundColor: Palette.surfaceMuted,
-                          borderRadius: Radius.control,
-                          width: '100%',
-                        }}
-                      />
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm }}>
+                        {localPhotoPreviews[page.id].map((uri, previewIndex) => (
+                          <Image
+                            accessibilityLabel={`Pending Notebook photo ${previewIndex + 1}`}
+                            contentFit="cover"
+                            key={`${uri}-${previewIndex}`}
+                            source={{ uri }}
+                            style={{
+                              aspectRatio: 1,
+                              backgroundColor: Palette.surfaceMuted,
+                              borderRadius: Radius.control,
+                              opacity: 0.65,
+                              width: '48%',
+                            }}
+                          />
+                        ))}
+                      </View>
                       <AppText color={Palette.textMuted} variant="caption">
-                        Photo upload pending
+                        {localPhotoPreviews[page.id].length === 1
+                          ? 'Photo upload pending'
+                          : `${localPhotoPreviews[page.id].length} photo uploads pending`}
                       </AppText>
                     </View>
                   ) : null}
@@ -1041,6 +1118,20 @@ export default function NotebookDetailScreen() {
                     style={{ alignSelf: 'flex-end' }}
                     variant="secondary"
                   />
+                  {linkPageId === page.id ? (
+                    <View style={{ gap: Space.sm }}>
+                      <AppTextInput accessibilityLabel="Link URL" autoCapitalize="none" autoCorrect={false}
+                        keyboardType="url" onChangeText={setLinkUrl} placeholder="https://…" value={linkUrl} />
+                      <View style={{ flexDirection: 'row', gap: Space.sm, justifyContent: 'flex-end' }}>
+                        <AppButton label="Cancel" onPress={() => { setLinkPageId(null); setLinkUrl(''); }} size="compact" variant="secondary" />
+                        <AppButton label="Add link" onPress={() => void addLink()} size="compact" />
+                      </View>
+                    </View>
+                  ) : (
+                    <AppButton accessibilityLabel={`Add link to page ${index + 1}`} label="Add link"
+                      onPress={() => { setLinkPageId(page.id); setLinkUrl(''); }} size="compact"
+                      style={{ alignSelf: 'flex-end' }} variant="secondary" />
+                  )}
                   <SaveLabel
                     accessibilityLabel={`Page ${index + 1} text`}
                     onRetry={() => void saveText(
@@ -1052,6 +1143,7 @@ export default function NotebookDetailScreen() {
                 </View>
                   ),
                   photo: () => <View />,
+                  link: () => <View />,
                 })
               )
             )}
@@ -1075,6 +1167,16 @@ function Notice({ text }: { text: string }) {
       <AppText>{text}</AppText>
     </View>
   );
+}
+
+function MetadataSummary({ block }: { block: ContentBlock }) {
+  const labels: string[] = [];
+  if (block.isImportant) labels.push('Important');
+  if (block.event?.precision === 'DATE') labels.push(block.event.date);
+  if (block.event?.precision === 'DATETIME') labels.push(new Date(block.event.dateTime).toLocaleString());
+  if (block.location) labels.push('Location saved');
+  if (labels.length === 0) return null;
+  return <AppText color={Palette.textMuted} variant="caption">{labels.join(' · ')}</AppText>;
 }
 
 function PageNavigationButton({

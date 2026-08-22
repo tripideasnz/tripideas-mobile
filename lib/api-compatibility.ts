@@ -6,6 +6,9 @@ export const REQUIRED_MOBILE_API_CAPABILITIES = [
   'photo-assets',
   'mixed-itineraries',
   'trip-api-authority',
+  'notebook-link-blocks',
+  'notebook-rich-block-metadata',
+  'notebook-explicit-location',
 ] as const;
 
 export type ApiCompatibility =
@@ -79,4 +82,3 @@ export function isRouteUnavailableError(error: unknown): boolean {
     (error.code === 'NOT_FOUND' || error.code === 'request_failed')
   );
 }
-
