@@ -10,6 +10,7 @@ import { usePersonalPlaceCards } from '@/personal-place-cards/provider';
 import { useSavedPlaces } from '@/saved/provider';
 import { useMyTrips } from '@/trips/provider';
 import { useSession } from '@/auth/provider';
+import { useDiaries } from '@/diaries/provider';
 
 function countText(count: number, singular: string, plural = `${singular}s`) {
   return `${count} ${count === 1 ? singular : plural}`;
@@ -22,9 +23,10 @@ export default function SavedScreen() {
   const { isLoading: isLoadingTrips, trips } = useMyTrips();
   const { cards, isLoading: isLoadingPersonalPlaces } = usePersonalPlaceCards();
   const { isLoading: isLoadingNotebooks, notebooks } = useNotebooks();
+  const { diaries, isLoading: isLoadingDiaries } = useDiaries();
 
   const openPrivateFeature = async (
-    destination: '/favourites' | '/trips' | '/personal-place-cards' | '/notebooks'
+    destination: '/favourites' | '/trips' | '/personal-place-cards' | '/notebooks' | '/diaries'
   ) => {
     if (!session && !(await signIn())) return;
     router.navigate(destination);
@@ -82,6 +84,19 @@ export default function SavedScreen() {
           ? countText(notebooks.length, 'notebook')
           : 'No notebooks yet',
       title: 'Notebooks',
+    },
+    {
+      accessibilityLabel: 'Open Diaries',
+      icon: 'auto-stories' as const,
+      onPress: () => void openPrivateFeature('/diaries'),
+      stateText: !session
+        ? 'Sign in to view private Diaries'
+        : isLoadingDiaries
+        ? 'Loading…'
+        : diaries.length
+          ? countText(diaries.length, 'diary', 'diaries')
+          : 'No diaries yet',
+      title: 'Diaries',
     },
   ];
 

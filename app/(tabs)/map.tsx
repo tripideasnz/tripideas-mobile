@@ -31,6 +31,7 @@ import { MapRegionsSheet } from '@/components/map/map-regions-sheet';
 import { MapSavedSheet } from '@/components/map/map-saved-sheet';
 import type { MapContentSelection } from '@/components/map/map-selection';
 import { MapTileView } from '@/components/map/map-tile-view';
+import { useMapSelection } from '@/components/map/use-map-selection';
 import { HeaderBackButton } from '@/components/ui/header-back-button';
 import { MAP_STYLE_URL, MAP_STYLES, type MapStyleId } from '@/constants/map';
 import { Palette, Radius, Shadow, Space } from '@/constants/design';
@@ -47,6 +48,7 @@ import type {
   MapPlace,
 } from '@/sanity/types';
 import { useMyTrips } from '@/trips/provider';
+import { getOneForegroundLocation, type ForegroundPoint } from '@/location/foreground';
 
 const DEFAULT_CENTER: LngLat = [174.77557, -41.28664];
 const DEFAULT_ZOOM = 5;
@@ -69,6 +71,8 @@ function hasValidCoordinates(place: MapPlace): place is MappablePlace {
     Number.isFinite(place.coordinates?.lng)
   );
 }
+
+const mapPlaceId = (place: MapPlace) => place._id ?? place.slug?.current ?? `${place.coordinates?.lat}-${place.coordinates?.lng}`;
 
 function parseCoordinate(value: string | undefined): number | null {
   const n = parseFloat(value ?? '');
@@ -220,9 +224,22 @@ export default function MapScreen() {
   const [isRegionsSheetOpen, setIsRegionsSheetOpen] = useState(false);
   const [isSavedSheetOpen, setIsSavedSheetOpen] = useState(false);
   const [isStyleSheetOpen, setIsStyleSheetOpen] = useState(false);
-  const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
+  const openMapPlace = useCallback((place: Pick<MapPlace, 'slug'>) => { const slug = place.slug?.current; if (slug) router.push({ pathname: '/place/[slug]', params: { origin: 'map', slug } }); }, [router]);
+  const { activate: activatePlace, clear: clearSelectedPlace, select: setSelectedPlaceId, selectedId: selectedPlaceId } = useMapSelection(openMapPlace);
   const [mapStyleId, setMapStyleId] = useState<MapStyleId>('streets');
   const [visibleBounds, setVisibleBounds] = useState<LngLatBounds | null>(null);
+  const [userPosition, setUserPosition] = useState<ForegroundPoint | null>(null);
+
+  const locateUser = useCallback(async () => {
+    const result = await getOneForegroundLocation();
+    if (result.status !== 'granted') return;
+    setUserPosition(result.point);
+    cameraRef.current?.easeTo({
+      center: [result.point.longitude, result.point.latitude],
+      zoom: Math.max(lastCameraRef.current.zoom, 13),
+      duration: 400,
+    });
+  }, []);
 
   // Activate place context from URL params on focus; clear local state on blur.
   // Trip selection from URL params is applied once then the param is cleared so
@@ -254,7 +271,7 @@ export default function MapScreen() {
   const clearPlaceContext = useCallback(() => {
     setPlaceContext(null);
     setSelectedPlaceId(null);
-  }, []);
+  }, [setSelectedPlaceId]);
 
   // Navigate back to the originating place using the preserved slug (rule 4).
   const handlePlaceContextBack = useCallback(() => {
@@ -285,7 +302,7 @@ export default function MapScreen() {
       setFitResetTrigger((n) => n + 1);
     });
     return unsubscribe;
-  }, [navigation, hasPlaceContext, selection, selectedActivityTagIds, router]);
+  }, [navigation, hasPlaceContext, selection, selectedActivityTagIds, router, setSelectedPlaceId]);
 
   // Animate camera to the focused place when context is active and map is ready.
   useEffect(() => {
@@ -479,10 +496,7 @@ export default function MapScreen() {
   const placesGeoJSON = useMemo((): GeoJSON.FeatureCollection => ({
     type: 'FeatureCollection',
     features: displayedPlaces.map((place) => {
-      const featureId =
-        place._id ??
-        place.slug?.current ??
-        `${place.coordinates.lat}-${place.coordinates.lng}`;
+      const featureId = mapPlaceId(place);
       const slugCurrent = place.slug?.current ?? null;
       return {
         type: 'Feature' as const,
@@ -499,6 +513,7 @@ export default function MapScreen() {
       };
     }),
   }), [displayedPlaces, selectedPlaceId, placeContext]);
+  const selectedMapPlace = useMemo(() => displayedPlaces.find((place) => mapPlaceId(place) === selectedPlaceId) ?? null, [displayedPlaces, selectedPlaceId]);
 
   // True when the focused place appears in the dataset (can be highlighted via layer paint).
   const hasFocusedInDataset =
@@ -527,19 +542,10 @@ export default function MapScreen() {
     }
 
     const id = properties?.id as string | null;
-    const slug = properties?.slug as string | null;
-
-    if (id && id === selectedPlaceId) {
-      // Second tap on the same pin — open place detail.
-      if (slug) router.push({ pathname: '/place/[slug]', params: { origin: 'map', slug } });
-      return;
-    }
-
-    // First tap — select and recenter. Don't navigate yet.
-    setSelectedPlaceId(id);
-    const targetZoom = Math.max(lastCameraRef.current.zoom, 12);
-    cameraRef.current?.easeTo({ center: coords, zoom: targetZoom, duration: 350 });
+    const place = displayedPlaces.find((candidate) => mapPlaceId(candidate) === id);
+    if (id && place) activatePlace(id, place);
   };
+  const handleThumbnailPress = useCallback((place: MapPlace) => activatePlace(mapPlaceId(place), place), [activatePlace]);
 
   const isLoading =
     isLoadingPlaces ||
@@ -792,7 +798,7 @@ export default function MapScreen() {
           console.error('[Map] Map or style failed to load.');
         }}
         onDidFinishLoadingMap={() => setIsMapReady(true)}
-        onPress={() => setSelectedPlaceId(null)}
+        onPress={clearSelectedPlace}
         onRegionDidChange={(event) => {
           lastCameraRef.current = {
             center: event.nativeEvent.center,
@@ -879,12 +885,19 @@ export default function MapScreen() {
           />
         </GeoJSONSource>
 
+        {selectedMapPlace ? <Marker anchor="bottom" lngLat={[selectedMapPlace.coordinates.lng, selectedMapPlace.coordinates.lat]}><Pressable accessibilityLabel={`${selectedMapPlace.title || 'Place'}, selected. Open place.`} accessibilityRole="button" onPress={(event) => { event.stopPropagation(); openMapPlace(selectedMapPlace); }} style={({ pressed }) => ({ ...Shadow.floating, backgroundColor: Palette.surface, borderColor: Palette.trip, borderRadius: Radius.control, borderWidth: 1, marginBottom: 18, maxWidth: 190, opacity: pressed ? 0.65 : 1, paddingHorizontal: Space.md, paddingVertical: Space.sm })}><Text numberOfLines={2} style={{ color: Palette.text, fontSize: 14, fontWeight: '700' }}>{selectedMapPlace.title || 'Place'}</Text></Pressable></Marker> : null}
+
         {/* Fallback marker when the focused place is not in the main dataset */}
         {placeContext && !hasFocusedInDataset ? (
           <Marker
             lngLat={[placeContext.lng, placeContext.lat]}
             anchor="center">
             <MapPin emphasis="focused" />
+          </Marker>
+        ) : null}
+        {userPosition ? (
+          <Marker lngLat={[userPosition.longitude, userPosition.latitude]} anchor="center">
+            <MapPin emphasis="selected" />
           </Marker>
         ) : null}
 
@@ -949,6 +962,10 @@ export default function MapScreen() {
         <MapControls
           onLayersPress={() => setIsStyleSheetOpen(true)}
           onRecenterPress={() => {
+            if (!placeContext && selection.type === 'all' && selectedActivityTagIds.length === 0) {
+              void locateUser();
+              return;
+            }
             if (placeContext) {
               cameraRef.current?.easeTo({
                 center: [placeContext.lng, placeContext.lat] as LngLat,
@@ -1026,11 +1043,13 @@ export default function MapScreen() {
             })
           }
           onMinimise={() => setTrayState('minimised')}
+          onPlacePress={handleThumbnailPress}
           onQueryChange={setQuery}
           onRemoveFilter={removeActiveFilter}
           places={visiblePlaces}
           query={query}
           resultCount={visiblePlaces.length}
+          selectedPlaceId={selectedPlaceId}
         />
       </View>
 

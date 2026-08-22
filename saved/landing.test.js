@@ -13,7 +13,7 @@ const [saved, savedModule, trips, favourites, layout, tabs] = await Promise.all(
   read('app/(tabs)/_layout.tsx'),
 ]);
 
-const orderedModules = ["title: 'Favourites'", "title: 'Trips'", "title: 'Personal Places'", "title: 'Notebooks'"];
+const orderedModules = ["title: 'Favourites'", "title: 'Trips'", "title: 'Personal Places'", "title: 'Notebooks'", "title: 'Diaries'"];
 let previousModule = -1;
 for (const moduleTitle of orderedModules) {
   const position = saved.indexOf(moduleTitle);
@@ -22,7 +22,7 @@ for (const moduleTitle of orderedModules) {
 }
 console.log('✓ Saved modules use the approved ordering');
 
-for (const route of ["openPrivateFeature('/favourites')", "openPrivateFeature('/trips')", "openPrivateFeature('/personal-place-cards')", "openPrivateFeature('/notebooks')"]) {
+for (const route of ["openPrivateFeature('/favourites')", "openPrivateFeature('/trips')", "openPrivateFeature('/personal-place-cards')", "openPrivateFeature('/notebooks')", "openPrivateFeature('/diaries')"]) {
   assert.match(saved, new RegExp(route.replace(/[()]/g, '\\$&')));
 }
 assert.match(saved, /if \(!session && !\(await signIn\(\)\)\) return/);
@@ -41,10 +41,12 @@ assert.match(saved, /countText\(savedPlaceIds\.length, 'place'\)/);
 assert.match(saved, /countText\(trips\.length, 'trip'\)/);
 assert.match(saved, /countText\(cards\.length, 'place'\)/);
 assert.match(saved, /countText\(notebooks\.length, 'notebook'\)/);
+assert.match(saved, /countText\(diaries\.length, 'diary', 'diaries'\)/);
 assert.match(saved, /No favourites yet/);
 assert.match(saved, /No trips yet/);
 assert.match(saved, /No personal places yet/);
 assert.match(saved, /No notebooks yet/);
+assert.match(saved, /No diaries yet/);
 console.log('✓ populated, empty, and loading state text preserve module geometry');
 
 assert.doesNotMatch(saved, /Add new trip|New trip name|label="Create"|<PlaceCard|<TripImageCollage/);

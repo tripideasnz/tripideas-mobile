@@ -1,6 +1,6 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Image } from 'expo-image';
-import { useRouter } from 'expo-router';
+import { useEffect, useRef } from 'react';
 import {
   Keyboard,
   Pressable,
@@ -29,11 +29,13 @@ type MapPeekSheetProps = {
   isMinimised: boolean;
   onHandlePress: () => void;
   onMinimise: () => void;
+  onPlacePress: (place: MapPlace) => void;
   onQueryChange: (query: string) => void;
   onRemoveFilter: (filterId: string) => void;
   places: MapPlace[];
   query: string;
   resultCount: number;
+  selectedPlaceId: string | null;
 };
 
 export function MapPeekSheet({
@@ -42,13 +44,19 @@ export function MapPeekSheet({
   isMinimised,
   onHandlePress,
   onMinimise,
+  onPlacePress,
   onQueryChange,
   onRemoveFilter,
   places,
   query,
   resultCount,
+  selectedPlaceId,
 }: MapPeekSheetProps) {
-  const router = useRouter();
+  const placesRef = useRef<ScrollView>(null);
+  useEffect(() => {
+    const index = places.findIndex((place) => (place._id ?? place.slug?.current) === selectedPlaceId);
+    if (index >= 0) placesRef.current?.scrollTo({ animated: true, x: Math.max(0, index * (142 + Space.md) - Space.md) });
+  }, [places, selectedPlaceId]);
 
   const countLabel = isLoading
     ? 'Loading...'
@@ -156,25 +164,24 @@ export function MapPeekSheet({
 
           {places.length > 0 ? (
             <ScrollView
+              ref={placesRef}
               contentContainerStyle={{ gap: Space.md, paddingTop: Space.md }}
               horizontal
               showsHorizontalScrollIndicator={false}>
-              {places.slice(0, 4).map((place, index) => (
+              {places.map((place, index) => {
+                const placeId = place._id ?? place.slug?.current ?? null; const selected = placeId === selectedPlaceId;
+                return (
                 <Pressable
+                  accessibilityLabel={`${place.title || 'Place'}${selected ? ', selected. Activate again to open.' : ''}`}
                   disabled={!place.slug?.current}
                   key={place._id ?? place.slug?.current ?? index}
-                  onPress={() => {
-                    if (!place.slug?.current) {
-                      return;
-                    }
-
-                    router.push({
-                      pathname: '/place/[slug]',
-                      params: { origin: 'map', slug: place.slug.current },
-                    });
-                  }}
+                  onPress={() => onPlacePress(place)}
                   style={({ pressed }) => ({
+                    borderColor: selected ? Palette.trip : 'transparent',
+                    borderRadius: Radius.small,
+                    borderWidth: 2,
                     opacity: pressed ? 0.7 : 1,
+                    padding: 2,
                     width: 142,
                   })}>
                   <View
@@ -216,7 +223,7 @@ export function MapPeekSheet({
                     </Text>
                   ) : null}
                 </Pressable>
-              ))}
+              ); })}
             </ScrollView>
           ) : null}
         </>
