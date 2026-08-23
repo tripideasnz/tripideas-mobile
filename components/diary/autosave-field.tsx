@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { View, type TextInputProps } from 'react-native';
-import { AppTextInput } from '@/components/ui/app-text-input';
+import { AppTextInput, AutoExpandingTextInput } from '@/components/ui/app-text-input';
 import { AutosaveStatus, type AutosaveState } from '@/components/ui/autosave-status';
 import { Space } from '@/constants/design';
 
-export function DiaryAutosaveField({ accessibilityLabel, autoFocus = false, inputStyle, maxLength, multiline = false, onSave, placeholder, value }: {
-  accessibilityLabel: string; autoFocus?: boolean; maxLength?: number; multiline?: boolean; onSave: (value: string) => Promise<void | string>;
+export function DiaryAutosaveField({ accessibilityLabel, autoExpand = false, autoFocus = false, inputStyle, maxLength, multiline = false, onSave, placeholder, value }: {
+  accessibilityLabel: string; autoExpand?: boolean; autoFocus?: boolean; maxLength?: number; multiline?: boolean; onSave: (value: string) => Promise<void | string>;
   inputStyle?: TextInputProps['style']; placeholder: string; value: string;
 }) {
   const [draft, setDraft] = useState(value); const [state, setState] = useState<AutosaveState>('idle');
@@ -22,7 +22,9 @@ export function DiaryAutosaveField({ accessibilityLabel, autoFocus = false, inpu
     }).catch(() => { if (revision.current === currentRevision) setState('failed'); }); }, 700);
     return () => clearTimeout(timer);
   }, [draft, retry]);
-  return <View style={{ gap: Space.xs }}><AppTextInput accessibilityLabel={accessibilityLabel} autoFocus={autoFocus} maxLength={maxLength} multiline={multiline}
+  const shouldAutoExpand = autoExpand || (!multiline && Boolean(inputStyle));
+  const Input = shouldAutoExpand ? AutoExpandingTextInput : AppTextInput;
+  return <View style={{ gap: Space.xs }}><Input accessibilityLabel={accessibilityLabel} autoFocus={autoFocus} maxLength={maxLength} multiline={multiline || shouldAutoExpand}
     onContentSizeChange={multiline ? (event) => {
       const nextHeight = Math.min(180, Math.max(48, Math.ceil(event.nativeEvent.contentSize.height)));
       setInputHeight((current) => Math.abs(current - nextHeight) >= 2 ? nextHeight : current);

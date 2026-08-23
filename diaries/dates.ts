@@ -51,6 +51,14 @@ export function adjacentDiaryDate(dates: string[], current: string, offset: -1 |
   return index < 0 ? null : dates[index + offset] ?? null;
 }
 
+export function offsetDiaryDate(current: string, offset: -1 | 1): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(current)) return null;
+  const value = new Date(`${current}T00:00:00.000Z`);
+  if (Number.isNaN(value.valueOf())) return null;
+  value.setUTCDate(value.getUTCDate() + offset);
+  return value.toISOString().slice(0, 10);
+}
+
 export function outsideDiaryRange(date: string, startDate: string | null, endDate: string | null): boolean {
   return Boolean((startDate && date < startDate) || (endDate && date > endDate));
 }

@@ -4,14 +4,17 @@ import {
   Marker,
   type CameraRef,
 } from '@maplibre/maplibre-react-native';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 
 import { PlaceCard } from '@/components/place-card';
 import { PersonalPlaceCardView } from '@/components/personal-place-card-view';
+import { MapPin } from '@/components/map/map-pin';
+import { MapZoomControls } from '@/components/map/map-controls';
+import { useMapSelection } from '@/components/map/use-map-selection';
 import { HeaderBackButton } from '@/components/ui/header-back-button';
-import { Palette } from '@/constants/design';
+import { Palette, Radius } from '@/constants/design';
 import { MAP_STYLE_URL } from '@/constants/map';
 import { fetchPlaceCardsByIds } from '@/sanity/place-cards';
 import { useMyTrips } from '@/trips/provider';
@@ -23,6 +26,9 @@ type MappablePlace = PlaceCardData & {
     lng: number;
   };
 };
+type TripMapSelection =
+  | { kind: 'editorial'; place: MappablePlace }
+  | { kind: 'personal'; entryId: string; card: import('@/personal-place-cards/types').PersonalPlaceCard };
 
 function hasValidCoordinates(place: PlaceCardData): place is MappablePlace {
   return (
@@ -32,6 +38,7 @@ function hasValidCoordinates(place: PlaceCardData): place is MappablePlace {
 }
 
 export default function TripMapScreen() {
+  const router = useRouter();
   const { tripId } = useLocalSearchParams<{
     tripId?: string | string[];
   }>();
@@ -39,8 +46,18 @@ export default function TripMapScreen() {
   const { getTrip, isLoading: isLoadingTrips } = useMyTrips();
   const trip = getTrip(selectedTripId);
   const cameraRef = useRef<CameraRef>(null);
+  const zoomRef = useRef(5);
+  const centerRef = useRef<[number, number]>([174.77557, -41.28664]);
   const [places, setPlaces] = useState<PlaceCardData[]>([]);
-  const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
+  const openSelection = useCallback((selection: TripMapSelection) => {
+    if (selection.kind === 'editorial') {
+      const slug = selection.place.slug?.current;
+      if (slug) router.push({ pathname: '/place/[slug]', params: { slug } });
+      return;
+    }
+    router.push({ pathname: '/personal-place-cards/[cardId]', params: { cardId: selection.card.id, mode: 'view' } });
+  }, [router]);
+  const { activate, clear: clearSelection, select, selectedId: selectedPlaceId } = useMapSelection(openSelection);
   const [isLoadingPlaces, setIsLoadingPlaces] = useState(false);
   const [isMapReady, setIsMapReady] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -98,7 +115,7 @@ export default function TripMapScreen() {
   useEffect(() => {
     if (!trip || placeIds.length === 0) {
       setPlaces([]);
-      setSelectedPlaceId(null);
+      select(null);
       setErrorMessage(null);
       setIsLoadingPlaces(false);
       return;
@@ -108,7 +125,7 @@ export default function TripMapScreen() {
 
     setIsLoadingPlaces(true);
     setErrorMessage(null);
-    setSelectedPlaceId(null);
+    select(null);
 
     fetchPlaceCardsByIds(placeIds)
       .then((data) => {
@@ -135,7 +152,7 @@ export default function TripMapScreen() {
     };
     // A stable string prevents refetching when unrelated trip fields change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [placeIdsKey, selectedTripId]);
+  }, [placeIdsKey, selectedTripId, select]);
 
   useEffect(() => {
     if (!isMapReady || allCoordinates.length === 0) {
@@ -206,7 +223,9 @@ export default function TripMapScreen() {
                 mapStyle={MAP_STYLE_URL}
                 touchPitch={false}
                 touchRotate={false}
+                onPress={clearSelection}
                 onDidFinishLoadingMap={() => setIsMapReady(true)}
+                onRegionDidChange={(event) => { zoomRef.current = event.nativeEvent.zoom; centerRef.current = event.nativeEvent.center; }}
                 style={{ flex: 1 }}>
                 <Camera
                   ref={cameraRef}
@@ -220,17 +239,8 @@ export default function TripMapScreen() {
                     key={place._id ?? place.slug?.current ?? index}
                     id={String(place._id ?? place.slug?.current ?? index)}
                     lngLat={[place.coordinates.lng, place.coordinates.lat]}
-                    onPress={() => setSelectedPlaceId(place._id ?? null)}>
-                    <View
-                      style={{
-                        borderColor: '#fff',
-                        borderRadius: 6,
-                        borderWidth: 2,
-                        backgroundColor: '#0080C8',
-                        height: 12,
-                        width: 12,
-                      }}
-                    />
+                    onPress={() => { const markerId = place._id ?? place.slug?.current; if (markerId) activate(markerId, { kind: 'editorial', place }); }}>
+                    <MapPin emphasis={selectedPlaceId === (place._id ?? place.slug?.current) ? 'selected' : 'default'} />
                   </Marker>
                 ))}
                 {personalMarkers.map((item) => (
@@ -238,20 +248,17 @@ export default function TripMapScreen() {
                     key={item.entryId}
                     id={`personal:${item.entryId}`}
                     lngLat={[item.longitude, item.latitude]}
-                    onPress={() => setSelectedPlaceId(`personal:${item.entryId}`)}>
-                    <View
-                      style={{
-                        borderColor: '#fff',
-                        borderRadius: 6,
-                        borderWidth: 2,
-                        backgroundColor: '#E74C3C',
-                        height: 12,
-                        width: 12,
-                      }}
-                    />
+                    onPress={() => activate(`personal:${item.entryId}`, { kind: 'personal', entryId: item.entryId, card: item.card })}>
+                    <MapPin emphasis={selectedPlaceId === `personal:${item.entryId}` ? 'selected' : 'default'} />
                   </Marker>
                 ))}
               </MapLibreMap>
+              <View style={{ position: 'absolute', right: 16, top: 16 }}>
+                <MapZoomControls
+                  onZoomInPress={() => { zoomRef.current = Math.min(20, zoomRef.current + 1); cameraRef.current?.easeTo({ center: centerRef.current, zoom: zoomRef.current, duration: 180 }); }}
+                  onZoomOutPress={() => { zoomRef.current = Math.max(2, zoomRef.current - 1); cameraRef.current?.easeTo({ center: centerRef.current, zoom: zoomRef.current, duration: 180 }); }}
+                />
+              </View>
             </View>
           ) : (
             <View
@@ -277,9 +284,9 @@ export default function TripMapScreen() {
               contentContainerStyle={{ padding: 16, paddingBottom: 24 }}
               style={{ maxHeight: '42%' }}>
               {selectedPersonal ? (
-                <PersonalPlaceCardView card={selectedPersonal.card} />
+                <View accessibilityLabel={`${selectedPersonal.card.title || 'Personal Place'}, selected`} accessibilityState={{ selected: true }} style={{ borderColor: Palette.trip, borderRadius: Radius.card, borderWidth: 2, overflow: 'hidden' }}><PersonalPlaceCardView card={selectedPersonal.card} onPress={() => openSelection({ kind: 'personal', entryId: selectedPersonal.entryId, card: selectedPersonal.card })} /></View>
               ) : selectedPlace ? (
-                <PlaceCard place={selectedPlace} />
+                <View accessibilityLabel={`${selectedPlace.title || 'Place'}, selected`} accessibilityState={{ selected: true }} style={{ borderColor: Palette.trip, borderRadius: Radius.card, borderWidth: 2, overflow: 'hidden' }}><PlaceCard onPress={() => openSelection({ kind: 'editorial', place: selectedPlace as MappablePlace })} place={selectedPlace} /></View>
               ) : (
                 <Text
                   style={{

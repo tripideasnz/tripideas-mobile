@@ -36,11 +36,13 @@ function getDistanceLabel(distanceKm: number | undefined) {
 
 export function PlaceCard({
   embedded = false,
+  onPress,
   place,
   showSaveButton = true,
   showSnippet = false,
 }: {
   embedded?: boolean;
+  onPress?: () => void;
   place: PlaceCardData;
   showSaveButton?: boolean;
   showSnippet?: boolean;
@@ -56,6 +58,7 @@ export function PlaceCard({
     <Pressable
       disabled={!canOpenPlace}
       onPress={() => {
+        if (onPress) { onPress(); return; }
         if (!place.slug?.current) {
           return;
         }

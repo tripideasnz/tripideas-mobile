@@ -16,7 +16,7 @@ import { useSession } from '@/auth/provider';
 import { AppButton } from '@/components/ui/app-button';
 import { HeaderBackButton } from '@/components/ui/header-back-button';
 import { AppText } from '@/components/ui/app-text';
-import { AppTextInput } from '@/components/ui/app-text-input';
+import { AppTextInput, AutoExpandingTextInput } from '@/components/ui/app-text-input';
 import { IconAction } from '@/components/ui/icon-action';
 import { LoadingView } from '@/components/ui/loading-view';
 import { TripImageCollage } from '@/components/trip-image-collage';
@@ -225,7 +225,7 @@ export default function NotebookListScreen() {
                 padding: Space.lg,
               }}>
               <AppText variant="section">New Notebook</AppText>
-              <AppTextInput
+              <AutoExpandingTextInput
                 accessibilityLabel="Notebook title"
                 autoFocus
                 maxLength={200}

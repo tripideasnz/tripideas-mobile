@@ -108,12 +108,14 @@ function PhotoTile({
 }
 
 export function PlacePhotoGrid({
+  bottomMargin = Space.xxl,
   horizontalInset = 0,
   images,
   onImageError,
   onRemoveImage,
   placeTitle,
 }: {
+  bottomMargin?: number;
   horizontalInset?: number;
   images: PlaceGalleryImage[];
   onImageError?: (image: PlaceGalleryImage, index: number) => void;
@@ -180,7 +182,7 @@ export function PlacePhotoGrid({
         style={{
           flexDirection: images.length === 1 ? 'column' : 'row',
           gap,
-          marginBottom: Space.xxl,
+          marginBottom: bottomMargin,
           overflow: 'hidden',
         }}>
         {images.length === 1 ? (

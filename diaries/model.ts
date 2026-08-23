@@ -64,3 +64,11 @@ export function validateDiaryDates(startDate: string, endDate: string) {
     ? 'End date must not be before start date.'
     : null;
 }
+
+export function diaryCoverAssetIds(diary: {
+  coverPhotoAssetId: string | null;
+  coverPhotoAssetIds?: string[];
+}): string[] {
+  if (diary.coverPhotoAssetIds) return diary.coverPhotoAssetIds;
+  return diary.coverPhotoAssetId ? [diary.coverPhotoAssetId] : [];
+}

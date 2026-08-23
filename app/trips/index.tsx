@@ -9,7 +9,7 @@ import { useSession } from '@/auth/provider';
 import { IconAction } from '@/components/ui/icon-action';
 import { AppButton } from '@/components/ui/app-button';
 import { AppText } from '@/components/ui/app-text';
-import { AppTextInput } from '@/components/ui/app-text-input';
+import { AutoExpandingTextInput } from '@/components/ui/app-text-input';
 import { StatusText } from '@/components/ui/status-text';
 import { Palette, Radius, Screen, Space } from '@/constants/design';
 import { fetchPlaceCardsByIds } from '@/sanity/place-cards';
@@ -164,7 +164,7 @@ export default function TripsScreen() {
 
       {showCreate ? (
         <View style={{ alignItems: 'center', flexDirection: 'row', gap: Space.md, marginBottom: Space.lg }}>
-          <AppTextInput
+          <AutoExpandingTextInput
             accessibilityLabel="New trip name"
             autoFocus
             onChangeText={(value) => {

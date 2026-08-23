@@ -37,7 +37,7 @@ export type DiaryCoordinates = { latitude: number; longitude: number };
 export type DiaryTopic = { id: string; title: string; startTime: string | null; position: number; version: number; creationMethod: 'USER' | 'AI'; manuallyEditedAt: string | null; items: DiaryItem[] };
 export type DiaryDay = { id: string; date: string; heading: string | null; summary: string | null; position: number; topics: DiaryTopic[] };
 export type DiarySource = { sourceKind: 'NOTEBOOK' | 'TRIP'; sourceId: string; addedAt: string };
-export type Diary = { id: string; title: string; description: string | null; coverPhotoAssetId: string | null; startDate: string | null; endDate: string | null; state: 'ACTIVE'; version: number; days: DiaryDay[]; sources: DiarySource[]; createdAt: string; updatedAt: string };
+export type Diary = { id: string; title: string; description: string | null; coverPhotoAssetId: string | null; coverPhotoAssetIds?: string[]; startDate: string | null; endDate: string | null; state: 'ACTIVE'; version: number; days: DiaryDay[]; sources: DiarySource[]; createdAt: string; updatedAt: string };
 
 export type DiarySourceCandidate = {
   sourceKind: DiaryItemSourceKind;

@@ -19,7 +19,7 @@ import { AutosaveNote } from '@/components/ui/autosave-note';
 import { IconAction } from '@/components/ui/icon-action';
 import { LoadingView } from '@/components/ui/loading-view';
 import { TripImageCollage } from '@/components/trip-image-collage';
-import { AppTextInput } from '@/components/ui/app-text-input';
+import { AutoExpandingTextInput } from '@/components/ui/app-text-input';
 import { Palette, Radius, Screen, Space, Type } from '@/constants/design';
 import { fetchPlaceCardsByIds } from '@/sanity/place-cards';
 import { getTripImages } from '@/trips/images';
@@ -319,12 +319,10 @@ export default function TripDetailScreen() {
         <>
           {isEditingName ? (
             <View style={{ marginBottom: Space.xxl }}>
-              <AppTextInput
+              <AutoExpandingTextInput
                 accessibilityLabel="Trip name"
                 autoFocus
                 onChangeText={setName}
-                onSubmitEditing={() => void saveName()}
-                returnKeyType="done"
                 style={{
                   ...Type.title,
                   minHeight: 58,

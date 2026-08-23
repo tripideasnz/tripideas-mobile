@@ -12,7 +12,7 @@ type Context = {
   diaries: Diary[]; isLoading: boolean;
   createDiary(input: { title: string; startDate: string | null; endDate: string | null }): Promise<Diary>;
   deleteDiary(diaryId: string): Promise<void>;
-  updateDiaryMetadata(diaryId: string, input: { title?: string; description?: string | null; coverPhotoAssetId?: string | null }): Promise<void>;
+  updateDiaryMetadata(diaryId: string, input: { title?: string; description?: string | null; coverPhotoAssetId?: string | null; coverPhotoAssetIds?: string[] }): Promise<void>;
   ensureDay(diaryId: string, date: string): Promise<DiaryDay>;
   updateDateRange(diaryId: string, startDate: string | null, endDate: string | null, removeOutside?: boolean): Promise<{ outsideDays: DiaryDay[] }>;
   deleteDay(diaryId: string, dayId: string): Promise<void>;
@@ -61,7 +61,7 @@ export function DiaryProvider({ children }: PropsWithChildren) {
     async createDiary(input) {
       const timestamp = now();
       const diary: Diary = { id: id('diary'), title: input.title.trim(), description: null,
-        coverPhotoAssetId: null, startDate: input.startDate, endDate: input.endDate,
+        coverPhotoAssetId: null, coverPhotoAssetIds: [], startDate: input.startDate, endDate: input.endDate,
         state: 'ACTIVE', version: 1, days: [], sources: [], createdAt: timestamp, updatedAt: timestamp };
       await mutate((current) => [diary, ...current]); return diary;
     },

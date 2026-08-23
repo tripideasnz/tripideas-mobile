@@ -24,7 +24,7 @@ import { AppButton } from '@/components/ui/app-button';
 import { HeaderBackButton } from '@/components/ui/header-back-button';
 import { AutosaveStatus, type AutosaveState } from '@/components/ui/autosave-status';
 import { AppText } from '@/components/ui/app-text';
-import { AppTextInput } from '@/components/ui/app-text-input';
+import { AppTextInput, AutoExpandingTextInput } from '@/components/ui/app-text-input';
 import { ExpandableText } from '@/components/ui/expandable-text';
 import { IconAction } from '@/components/ui/icon-action';
 import { LoadingView } from '@/components/ui/loading-view';
@@ -815,7 +815,7 @@ export default function NotebookDetailScreen() {
                 flexDirection: 'row',
                 gap: Space.sm,
               }}>
-              <AppTextInput
+              <AutoExpandingTextInput
                 accessibilityLabel="Notebook title"
                 editable={!mutationDisabled}
                 maxLength={200}
@@ -932,7 +932,7 @@ export default function NotebookDetailScreen() {
                       flexDirection: 'row',
                       gap: Space.xs,
                     }}>
-                    <AppTextInput
+                    <AutoExpandingTextInput
                       ref={(input) => {
                         pageTitleRefs.current[item.id] = input;
                       }}

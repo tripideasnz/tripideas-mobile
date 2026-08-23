@@ -11,7 +11,7 @@ import { PlaceMapPreview } from '@/components/place-map-preview';
 import { SignedOutFeature } from '@/components/signed-out-feature';
 import { AppButton } from '@/components/ui/app-button';
 import { AppText } from '@/components/ui/app-text';
-import { AppTextInput } from '@/components/ui/app-text-input';
+import { AppTextInput, AutoExpandingTextInput } from '@/components/ui/app-text-input';
 import { AutosaveStatus } from '@/components/ui/autosave-status';
 import { IconAction } from '@/components/ui/icon-action';
 import { ShowMoreText } from '@/components/ui/show-more-text';
@@ -378,7 +378,7 @@ export default function PersonalPlaceCardScreen() {
         <AppButton label="Done" onPress={() => void finishEditing()} size="compact" />
       </View>
 
-      <AppTextInput
+      <AutoExpandingTextInput
         accessibilityLabel="Personal Place title"
         maxLength={200}
         onChangeText={(value) => updateDraft('title', value)}

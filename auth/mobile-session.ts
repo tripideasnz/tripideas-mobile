@@ -102,9 +102,17 @@ export async function restoreMobileSession(
   try {
     const tokens = await dependencies.refresh(refreshToken);
     return await persistMobileSession(tokens, dependencies);
-  } catch {
+  } catch (error) {
     dependencies.setActiveToken(null);
-    await dependencies.clearAuthStorage();
+    const status = error && typeof error === 'object' && 'status' in error
+      ? Number(error.status)
+      : null;
+    // Network/5xx restoration failures are retryable. Preserve the refresh
+    // token so foreground restoration can try again; only an explicit client
+    // rejection proves that the persisted session is no longer usable.
+    if (status !== null && status >= 400 && status < 500) {
+      await dependencies.clearAuthStorage();
+    }
     return signedOutSession();
   }
 }

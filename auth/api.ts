@@ -115,8 +115,15 @@ export async function mobileRefresh(refreshToken: string): Promise<TokenResponse
   });
 
   if (!response.ok) {
-    throw new Error('Mobile token refresh request failed');
+    throw new MobileRefreshError(response.status);
   }
 
   return response.json() as Promise<TokenResponse>;
+}
+
+export class MobileRefreshError extends Error {
+  constructor(public readonly status: number) {
+    super('Mobile token refresh request failed');
+    this.name = 'MobileRefreshError';
+  }
 }

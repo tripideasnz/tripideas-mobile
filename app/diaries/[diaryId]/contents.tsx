@@ -9,10 +9,16 @@ import { HeaderBackButton } from '@/components/ui/header-back-button';
 import { Palette, Screen, Space } from '@/constants/design';
 import { formatDiaryDate, instantiatedDiaryIndex } from '@/diaries/dates';
 import { useDiaries } from '@/diaries/provider';
+import { useSession } from '@/auth/provider';
+import { LoadingView } from '@/components/ui/loading-view';
+import { SignedOutFeature } from '@/components/signed-out-feature';
 
 export default function DiaryIndexScreen() {
   const router = useRouter(); const { diaryId } = useLocalSearchParams<{ diaryId: string }>(); const { diaries } = useDiaries();
+  const { isLoading: sessionLoading, session, signIn } = useSession();
   const diary = diaries.find(({ id }) => id === diaryId); const days = useMemo(() => diary ? instantiatedDiaryIndex(diary.days) : [], [diary]);
+  if (sessionLoading) return <LoadingView />;
+  if (!session) return <SignedOutFeature message="Sign in to view and edit your private Diaries" onSignIn={signIn} />;
   if (!diary) return <View style={{ padding: Screen.gutter }}><AppText>This Diary is not available on this device.</AppText></View>;
   const openDay = (date: string) => router.push({ pathname: '/diaries/[diaryId]/day', params: { diaryId: diary.id, date } });
   const firstDate = days[0]?.date ?? diary.startDate ?? diary.endDate;

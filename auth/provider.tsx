@@ -147,9 +147,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [state, setState] = useState<SessionState>(initialSessionState);
   const [authError, setAuthError] = useState<string | null>(null);
   const hasAuthenticatedUserRef = useRef(false);
+  const stateRef = useRef(state);
   const isRestoringRef = useRef(false);
   const refreshInFlightRef = useRef<Promise<boolean> | null>(null);
   const signInInFlightRef = useRef<Promise<boolean> | null>(null);
+  useEffect(() => { stateRef.current = state; }, [state]);
 
   const restoreSession = useCallback(async () => {
     if (isRestoringRef.current) return;
@@ -197,7 +199,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (next) => {
-      if (next === 'active') void restoreSession();
+      // A live bearer is refreshed lazily by authenticatedApiFetch on 401.
+      // Reusing a rotating refresh token here can race that request refresh.
+      if (next === 'active' && !stateRef.current.session) void restoreSession();
     });
     return () => sub.remove();
   }, [restoreSession]);

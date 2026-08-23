@@ -92,7 +92,7 @@ async function run() {
   const state = await restoreMobileSession(dependencies({
     loadRefreshToken: async () => 'expired',
     refresh: async () => {
-      throw new Error('expired');
+      throw Object.assign(new Error('expired'), { status: 401 });
     },
     clearAuthStorage: async () => events.push('storage cleared'),
     setActiveToken: (token) => events.push(`active ${token}`),
@@ -100,6 +100,18 @@ async function run() {
   assert.equal(state.session, null);
   assert.equal(state.user, null);
   assert.deepEqual(events, ['active null', 'storage cleared']);
+  }
+
+  {
+  const events = [];
+  const state = await restoreMobileSession(dependencies({
+    loadRefreshToken: async () => 'retryable',
+    refresh: async () => { throw new TypeError('Network request failed'); },
+    clearAuthStorage: async () => events.push('storage cleared'),
+    setActiveToken: (token) => events.push(`active ${token}`),
+  }));
+  assert.equal(state.session, null);
+  assert.deepEqual(events, ['active null']);
   }
 
   {

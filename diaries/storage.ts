@@ -6,7 +6,9 @@ const VERSION = 'prototype-v1';
 export const diaryStorageKey = (userId: string) => `tripideas.diaries.user.${userId}.${VERSION}`;
 
 function normalizeDiaries(values: Diary[]): Diary[] {
-  return values.map((diary) => ({ ...diary, days: (diary.days ?? []).map((day) => ({ ...day,
+  return values.map((diary) => ({ ...diary,
+    coverPhotoAssetIds: diary.coverPhotoAssetIds ?? (diary.coverPhotoAssetId ? [diary.coverPhotoAssetId] : []),
+    days: (diary.days ?? []).map((day) => ({ ...day,
     topics: (day.topics ?? []).map((topic) => ({ ...topic, startTime: topic.startTime ?? null, items: (topic.items ?? []).map((item) =>
       item.type === 'NARRATIVE' ? { ...item, title: item.title ?? null } : item) })) })) }));
 }
