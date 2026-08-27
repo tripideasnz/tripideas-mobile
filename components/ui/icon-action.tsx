@@ -6,22 +6,27 @@ import { Palette, Radius } from '@/constants/design';
 
 export function IconAction({
   accessibilityLabel,
+  color: customColor,
   destructive = false,
   disabled = false,
   icon,
   onPress,
+  semantic,
   size = 'default',
   trip = false,
 }: {
   accessibilityLabel: string;
+  color?: string;
   destructive?: boolean;
   disabled?: boolean;
   icon: ComponentProps<typeof MaterialIcons>['name'];
   onPress: () => void;
+  semantic?: 'edit';
   size?: 'compact' | 'default';
   trip?: boolean;
 }) {
-  const color = destructive ? Palette.danger : trip ? Palette.trip : Palette.textBody;
+  const usesTripColor = trip || semantic === 'edit';
+  const color = customColor ?? (destructive ? Palette.danger : usesTripColor ? Palette.trip : Palette.textBody);
   const dimension = size === 'compact' ? 36 : 44;
   return (
     <Pressable
@@ -33,7 +38,7 @@ export function IconAction({
       onPress={onPress}
       style={({ pressed }) => ({
         alignItems: 'center',
-        borderColor: destructive ? Palette.danger : trip ? Palette.trip : Palette.border,
+        borderColor: customColor ?? (destructive ? Palette.danger : usesTripColor ? Palette.trip : Palette.border),
         borderRadius: Radius.pill,
         borderWidth: 1,
         height: dimension,

@@ -36,12 +36,14 @@ function getDistanceLabel(distanceKm: number | undefined) {
 
 export function PlaceCard({
   embedded = false,
+  navigationOrigin,
   onPress,
   place,
   showSaveButton = true,
   showSnippet = false,
 }: {
   embedded?: boolean;
+  navigationOrigin?: 'favourites';
   onPress?: () => void;
   place: PlaceCardData;
   showSaveButton?: boolean;
@@ -65,7 +67,7 @@ export function PlaceCard({
 
         router.push({
           pathname: '/place/[slug]',
-          params: { slug: place.slug.current },
+          params: { slug: place.slug.current, origin: navigationOrigin },
         });
       }}
       style={({ pressed }) => ({

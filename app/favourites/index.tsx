@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { ScrollView } from 'react-native';
 
 import { PlaceCard } from '@/components/place-card';
+import { PlaceSearch } from '@/components/place-search';
 import { SignedOutFeature } from '@/components/signed-out-feature';
 import { StatusText } from '@/components/ui/status-text';
 import { Palette, Screen, Space } from '@/constants/design';
@@ -62,13 +63,14 @@ export default function FavouritesScreen() {
         paddingHorizontal: Screen.gutter,
         paddingTop: Screen.top,
       }}>
+      <PlaceSearch placeholder="Find a Place to favourite" />
       {isLoading ? (
         <StatusText>Loading favourites...</StatusText>
       ) : errorMessage ? (
         <StatusText>{errorMessage}</StatusText>
       ) : places.length ? (
         places.map((place, index) => (
-          <PlaceCard key={place._id ?? place.slug?.current ?? index} place={place} />
+          <PlaceCard key={place._id ?? place.slug?.current ?? index} navigationOrigin="favourites" place={place} />
         ))
       ) : (
         <StatusText>No favourites yet.</StatusText>

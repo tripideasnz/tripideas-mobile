@@ -11,7 +11,7 @@ import { ScrollView, Text, View } from 'react-native';
 import { PlaceCard } from '@/components/place-card';
 import { PersonalPlaceCardView } from '@/components/personal-place-card-view';
 import { MapPin } from '@/components/map/map-pin';
-import { MapZoomControls } from '@/components/map/map-controls';
+import { MapRecenterControl, MapZoomControls } from '@/components/map/map-controls';
 import { useMapSelection } from '@/components/map/use-map-selection';
 import { HeaderBackButton } from '@/components/ui/header-back-button';
 import { Palette, Radius } from '@/constants/design';
@@ -19,6 +19,7 @@ import { MAP_STYLE_URL } from '@/constants/map';
 import { fetchPlaceCardsByIds } from '@/sanity/place-cards';
 import { useMyTrips } from '@/trips/provider';
 import type { PlaceCardData } from '@/types/content';
+import { useMapUserLocation } from '@/location/use-map-user-location';
 
 type MappablePlace = PlaceCardData & {
   coordinates: {
@@ -46,17 +47,18 @@ export default function TripMapScreen() {
   const { getTrip, isLoading: isLoadingTrips } = useMyTrips();
   const trip = getTrip(selectedTripId);
   const cameraRef = useRef<CameraRef>(null);
+  const { locateUser, userPosition } = useMapUserLocation(cameraRef);
   const zoomRef = useRef(5);
   const centerRef = useRef<[number, number]>([174.77557, -41.28664]);
   const [places, setPlaces] = useState<PlaceCardData[]>([]);
   const openSelection = useCallback((selection: TripMapSelection) => {
     if (selection.kind === 'editorial') {
       const slug = selection.place.slug?.current;
-      if (slug) router.push({ pathname: '/place/[slug]', params: { slug } });
+      if (slug) router.push({ pathname: '/place/[slug]', params: { slug, origin: 'trip-map', tripId: selectedTripId } });
       return;
     }
-    router.push({ pathname: '/personal-place-cards/[cardId]', params: { cardId: selection.card.id, mode: 'view' } });
-  }, [router]);
+    router.push({ pathname: '/personal-place-cards/[cardId]', params: { cardId: selection.card.id, mode: 'view', origin: 'trip-map', tripId: selectedTripId } });
+  }, [router, selectedTripId]);
   const { activate, clear: clearSelection, select, selectedId: selectedPlaceId } = useMapSelection(openSelection);
   const [isLoadingPlaces, setIsLoadingPlaces] = useState(false);
   const [isMapReady, setIsMapReady] = useState(false);
@@ -182,7 +184,9 @@ export default function TripMapScreen() {
     <View style={{ flex: 1, backgroundColor: '#fff' }}>
       <Stack.Screen
         options={{
-          headerLeft: () => <HeaderBackButton color={Palette.trip} />,
+          headerLeft: () => <HeaderBackButton color={Palette.trip} fallbackHref={selectedTripId
+            ? { pathname: '/trips/[tripId]', params: { tripId: selectedTripId } }
+            : '/trips'} />,
           title,
         }}
       />
@@ -252,8 +256,10 @@ export default function TripMapScreen() {
                     <MapPin emphasis={selectedPlaceId === `personal:${item.entryId}` ? 'selected' : 'default'} />
                   </Marker>
                 ))}
+                {userPosition ? <Marker anchor="center" lngLat={[userPosition.longitude, userPosition.latitude]}><MapPin emphasis="selected" /></Marker> : null}
               </MapLibreMap>
-              <View style={{ position: 'absolute', right: 16, top: 16 }}>
+              <View style={{ gap: 8, position: 'absolute', right: 16, top: 16 }}>
+                <MapRecenterControl onPress={() => void locateUser()} />
                 <MapZoomControls
                   onZoomInPress={() => { zoomRef.current = Math.min(20, zoomRef.current + 1); cameraRef.current?.easeTo({ center: centerRef.current, zoom: zoomRef.current, duration: 180 }); }}
                   onZoomOutPress={() => { zoomRef.current = Math.max(2, zoomRef.current - 1); cameraRef.current?.easeTo({ center: centerRef.current, zoom: zoomRef.current, duration: 180 }); }}

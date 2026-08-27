@@ -32,28 +32,28 @@ export default function RootLayout() {
                 <Stack.Screen
                   name="personal-place-cards/index"
                   options={{
-                    headerLeft: () => <HeaderBackButton color={Palette.trip} />,
+                    headerLeft: () => <HeaderBackButton color={Palette.trip} fallbackHref="/saved" />,
                     title: 'Personal Places',
                   }}
                 />
                 <Stack.Screen
                   name="personal-place-cards/[cardId]"
                   options={{
-                    headerLeft: () => <HeaderBackButton color={Palette.trip} />,
                     title: 'Personal Place',
                   }}
                 />
+                <Stack.Screen name="personal-place-cards/location-picker" options={{ title: 'Choose location' }} />
                 <Stack.Screen
                   name="favourites/index"
                   options={{
-                    headerLeft: () => <HeaderBackButton color={Palette.trip} />,
+                    headerLeft: () => <HeaderBackButton color={Palette.trip} fallbackHref="/saved" />,
                     title: 'Favourites',
                   }}
                 />
                 <Stack.Screen
                   name="trips/index"
                   options={{
-                    headerLeft: () => <HeaderBackButton color={Palette.trip} />,
+                    headerLeft: () => <HeaderBackButton color={Palette.trip} fallbackHref="/saved" />,
                     title: 'Trips',
                   }}
                 />
@@ -84,7 +84,7 @@ export default function RootLayout() {
                 <Stack.Screen
                   name="photo-upload-dev"
                   options={{
-                    headerLeft: () => <HeaderBackButton />,
+                    headerLeft: () => <HeaderBackButton fallbackHref="/" />,
                     title: 'Photo upload verification',
                   }}
                 />

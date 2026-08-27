@@ -47,12 +47,22 @@ function getCoordinates(place: PlacePage | null) {
 }
 
 export default function PlaceScreen() {
-  const { origin, slug } = useLocalSearchParams<{
+  const { date, diaryId, editorialPlaceId, notebookId, origin, slug, tripId } = useLocalSearchParams<{
+    date?: string | string[];
+    diaryId?: string | string[];
+    editorialPlaceId?: string | string[];
     origin?: string | string[];
+    notebookId?: string | string[];
     slug?: string | string[];
+    tripId?: string | string[];
   }>();
   const selectedSlug = Array.isArray(slug) ? slug[0] : slug;
+  const selectedDate = Array.isArray(date) ? date[0] : date;
+  const selectedDiaryId = Array.isArray(diaryId) ? diaryId[0] : diaryId;
+  const selectedEditorialPlaceId = Array.isArray(editorialPlaceId) ? editorialPlaceId[0] : editorialPlaceId;
   const selectedOrigin = Array.isArray(origin) ? origin[0] : origin;
+  const selectedNotebookId = Array.isArray(notebookId) ? notebookId[0] : notebookId;
+  const selectedTripId = Array.isArray(tripId) ? tripId[0] : tripId;
   const router = useRouter();
   const [place, setPlace] = useState<PlacePage | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -74,7 +84,7 @@ export default function PlaceScreen() {
     setMapMessage(null);
 
     sanityClient
-      .fetch<PlacePage | null>(PLACE_QUERY, { slug: selectedSlug })
+      .fetch<PlacePage | null>(PLACE_QUERY, { editorialPlaceId: selectedEditorialPlaceId ?? '', slug: selectedSlug })
       .then((data) => {
         if (!isMounted) {
           return;
@@ -100,7 +110,7 @@ export default function PlaceScreen() {
     return () => {
       isMounted = false;
     };
-  }, [selectedSlug]);
+  }, [selectedEditorialPlaceId, selectedSlug]);
 
   const title = place?.title ?? 'Place';
   const fullText = place ? getBodyText(place) : undefined;
@@ -127,6 +137,11 @@ export default function PlaceScreen() {
         lng: String(coordinates.longitude),
         title,
         slug: selectedSlug ?? '',
+        origin: selectedOrigin ?? 'place',
+        notebookId: selectedNotebookId,
+        diaryId: selectedDiaryId,
+        date: selectedDate,
+        tripId: selectedTripId,
       },
     });
   };
@@ -137,7 +152,28 @@ export default function PlaceScreen() {
         options={{
           headerLeft: () => (
             <HeaderBackButton
+              color={selectedOrigin === 'favourites' || selectedOrigin === 'trip-map' ? Palette.trip : undefined}
               onPress={() => {
+                if (router.canGoBack()) {
+                  router.back();
+                  return;
+                }
+                if (selectedOrigin === 'favourites') {
+                  router.dismissTo('/favourites');
+                  return;
+                }
+                if (selectedOrigin === 'trip-map' && selectedTripId) {
+                  router.dismissTo({ pathname: '/trips/[tripId]/map', params: { tripId: selectedTripId } });
+                  return;
+                }
+                if (selectedOrigin === 'notebook' && selectedNotebookId) {
+                  router.dismissTo({ pathname: '/notebooks/[notebookId]', params: { notebookId: selectedNotebookId } });
+                  return;
+                }
+                if (selectedOrigin === 'diary' && selectedDiaryId && selectedDate) {
+                  router.dismissTo({ pathname: '/diaries/[diaryId]/day', params: { diaryId: selectedDiaryId, date: selectedDate } });
+                  return;
+                }
                 if (selectedOrigin === 'map') {
                   router.navigate('/map');
                   return;

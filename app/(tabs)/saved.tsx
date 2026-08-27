@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { SavedModule } from '@/components/saved-module';
 import { AppText } from '@/components/ui/app-text';
+import { SavedObjectIcons } from '@/components/ui/saved-object-icons';
 import { Palette, Screen, Space } from '@/constants/design';
 import { useNotebooks } from '@/notebooks/provider';
 import { usePersonalPlaceCards } from '@/personal-place-cards/provider';
@@ -61,7 +62,7 @@ export default function SavedScreen() {
     },
     {
       accessibilityLabel: 'Open Personal Places',
-      icon: 'location-on' as const,
+      icon: SavedObjectIcons.personalPlace,
       onPress: () => void openPrivateFeature('/personal-place-cards'),
       stateText: !session
         ? 'Sign in to view Personal Places'

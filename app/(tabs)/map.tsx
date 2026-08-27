@@ -128,7 +128,18 @@ function isSameSelection(
   return true;
 }
 
-type PlaceContext = { lat: number; lng: number; title: string; slug?: string };
+type PlaceContext = {
+  cardId?: string;
+  date?: string;
+  diaryId?: string;
+  lat: number;
+  lng: number;
+  notebookId?: string;
+  origin?: string;
+  slug?: string;
+  title: string;
+  tripId?: string;
+};
 
 function getPlacesForSelection({
   places,
@@ -183,8 +194,8 @@ export default function MapScreen() {
   const lastCameraRef = useRef({ center: DEFAULT_CENTER, zoom: DEFAULT_ZOOM });
 
   // URL params are the arrival signal — read-only, never written back.
-  const { lat: rawLat, lng: rawLng, title: rawTitle, slug: rawSlug, tripId: rawTripId, tripLabel: rawTripLabel } =
-    useLocalSearchParams<{ lat?: string; lng?: string; title?: string; slug?: string; tripId?: string; tripLabel?: string }>();
+  const { cardId: rawCardId, date: rawDate, diaryId: rawDiaryId, lat: rawLat, lng: rawLng, notebookId: rawNotebookId, origin: rawOrigin, title: rawTitle, slug: rawSlug, tripId: rawTripId, tripLabel: rawTripLabel } =
+    useLocalSearchParams<{ cardId?: string; date?: string; diaryId?: string; lat?: string; lng?: string; notebookId?: string; origin?: string; title?: string; slug?: string; tripId?: string; tripLabel?: string }>();
 
   // Place context lives in local state; URL params only trigger it on focus.
   const [placeContext, setPlaceContext] = useState<PlaceContext | null>(null);
@@ -250,7 +261,7 @@ export default function MapScreen() {
       const lat = parseCoordinate(rawLat);
       const lng = parseCoordinate(rawLng);
       if (lat !== null && lng !== null) {
-        setPlaceContext({ lat, lng, title: rawTitle ?? '', slug: rawSlug || undefined });
+        setPlaceContext({ cardId: rawCardId || undefined, date: rawDate || undefined, diaryId: rawDiaryId || undefined, lat, lng, notebookId: rawNotebookId || undefined, origin: rawOrigin || undefined, title: rawTitle ?? '', slug: rawSlug || undefined, tripId: rawTripId || undefined });
       }
 
       if (rawTripId) {
@@ -264,7 +275,7 @@ export default function MapScreen() {
         setPlaceContext(null);
         // Trip selection intentionally persists across tab switches.
       };
-    }, [rawLat, rawLng, rawTitle, rawSlug, rawTripId, rawTripLabel, router])
+    }, [rawCardId, rawDate, rawDiaryId, rawLat, rawLng, rawNotebookId, rawOrigin, rawTitle, rawSlug, rawTripId, rawTripLabel, router])
   );
 
   // Dismiss local place context; never touches route params (rule 5).
@@ -273,10 +284,23 @@ export default function MapScreen() {
     setSelectedPlaceId(null);
   }, [setSelectedPlaceId]);
 
-  // Navigate back to the originating place using the preserved slug (rule 4).
+  // Return to the explicit Saved workflow source. The map tab's generic history
+  // can point at Discover, so it is only safe when no source context was supplied.
   const handlePlaceContextBack = useCallback(() => {
+    if (placeContext?.origin === 'notebook' && placeContext.notebookId) {
+      router.dismissTo({ pathname: '/notebooks/[notebookId]', params: { notebookId: placeContext.notebookId } });
+      return;
+    }
+    if (placeContext?.origin === 'diary' && placeContext.diaryId && placeContext.date) {
+      router.dismissTo({ pathname: '/diaries/[diaryId]/day', params: { diaryId: placeContext.diaryId, date: placeContext.date } });
+      return;
+    }
+    if (placeContext?.cardId) {
+      router.dismissTo({ pathname: '/personal-place-cards/[cardId]', params: { cardId: placeContext.cardId, date: placeContext.date, diaryId: placeContext.diaryId, mode: 'view', notebookId: placeContext.notebookId, origin: placeContext.origin, tripId: placeContext.tripId } });
+      return;
+    }
     if (placeContext?.slug) {
-      router.push({ pathname: '/place/[slug]', params: { slug: placeContext.slug } });
+      router.dismissTo({ pathname: '/place/[slug]', params: { slug: placeContext.slug, date: placeContext.date, diaryId: placeContext.diaryId, notebookId: placeContext.notebookId, origin: placeContext.origin, tripId: placeContext.tripId } });
       return;
     }
     if (router.canGoBack()) router.back();
@@ -294,7 +318,7 @@ export default function MapScreen() {
       console.log('[Map] tab re-press reset: clearing place context and fitting full map');
       // Clear URL params so useFocusEffect sees null coords on next focus and does not
       // re-activate place context when the user leaves and returns to this tab.
-      router.setParams({ lat: undefined, lng: undefined, title: undefined, slug: undefined, tripId: undefined, tripLabel: undefined } as any);
+      router.setParams({ cardId: undefined, date: undefined, diaryId: undefined, lat: undefined, lng: undefined, notebookId: undefined, origin: undefined, title: undefined, slug: undefined, tripId: undefined, tripLabel: undefined } as any);
       setPlaceContext(null);
       setSelectedPlaceId(null);
       setSelection({ type: 'all' });

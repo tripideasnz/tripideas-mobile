@@ -15,6 +15,7 @@ import { SignedOutFeature } from '@/components/signed-out-feature';
 import { useSession } from '@/auth/provider';
 
 import { TripEntryCard } from '@/components/trip-entry-card';
+import { PlaceSearch } from '@/components/place-search';
 import { AutosaveNote } from '@/components/ui/autosave-note';
 import { IconAction } from '@/components/ui/icon-action';
 import { LoadingView } from '@/components/ui/loading-view';
@@ -44,6 +45,7 @@ export default function TripDetailScreen() {
   const router = useRouter();
   const {
     getTrip,
+    addPlaceToTrip,
     isLoading: isLoadingTrips,
     refresh,
     removeTripEntry,
@@ -59,16 +61,11 @@ export default function TripDetailScreen() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [personalPhotoUrls, setPersonalPhotoUrls] = useState<Record<string, string>>({});
   const [highlightedEntryId, setHighlightedEntryId] = useState<string | null>(null);
+  const [isSearchingPlaces, setIsSearchingPlaces] = useState(false);
+  const [isAddingPlace, setIsAddingPlace] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
   const entryOffsetsRef = useRef<Record<string, number>>({});
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const handleBack = useCallback(() => {
-    if (router.canGoBack()) {
-      router.back();
-      return;
-    }
-    router.replace('/trips');
-  }, [router]);
 
   useFocusEffect(
     useCallback(() => {
@@ -303,8 +300,18 @@ export default function TripDetailScreen() {
         options={{
           headerBackVisible: false,
           headerLeft: () => (
-            <HeaderBackButton color={Palette.trip} onPress={handleBack} />
+            <HeaderBackButton color={Palette.trip} fallbackHref="/trips" />
           ),
+          headerRight: () => trip ? <IconAction
+            accessibilityLabel="Share Trip"
+            icon="share"
+            onPress={() => Alert.alert('Share trip', undefined, [
+              { style: 'cancel', text: 'Cancel' },
+              { onPress: () => router.push({ pathname: '/trips/[tripId]/shared', params: { tripId: trip.id } }), text: 'Preview' },
+              { onPress: () => void createPublicShare(), text: 'Share' },
+            ])}
+            trip
+          /> : null,
           title: '',
         }}
       />
@@ -429,27 +436,6 @@ export default function TripDetailScreen() {
                     })
                   }
                 />
-                <IconAction
-                  accessibilityLabel="Share Trip"
-                  icon="share"
-                  onPress={() => {
-                    Alert.alert('Share trip', undefined, [
-                      { style: 'cancel', text: 'Cancel' },
-                      {
-                        onPress: () =>
-                          router.push({
-                            pathname: '/trips/[tripId]/shared',
-                            params: { tripId: trip.id },
-                          }),
-                        text: 'Preview',
-                      },
-                      {
-                        onPress: () => void createPublicShare(),
-                        text: 'Share',
-                      },
-                    ]);
-                  }}
-                />
               </View>
             </View>
             <AutosaveNote
@@ -460,9 +446,28 @@ export default function TripDetailScreen() {
             />
           </View>
 
-          <Text style={{ ...Type.section, marginBottom: Space.lg }}>
-            Places
-          </Text>
+          <View style={{ alignItems: 'center', flexDirection: 'row', marginBottom: Space.lg }}>
+            <Text style={{ flex: 1, ...Type.section }}>Places</Text>
+            <IconAction
+              accessibilityLabel={isSearchingPlaces ? 'Close Place search' : 'Search and add Place'}
+              icon={isSearchingPlaces ? 'close' : 'add'}
+              onPress={() => setIsSearchingPlaces((value) => !value)}
+            />
+          </View>
+
+          {isSearchingPlaces ? <View style={{ marginBottom: Space.xxl }}>
+            <PlaceSearch
+              onPlacePress={(place) => {
+                if (!place._id || isAddingPlace) return;
+                setIsAddingPlace(true);
+                void addPlaceToTrip(trip.id, place._id)
+                  .then(() => setIsSearchingPlaces(false))
+                  .catch(() => Alert.alert('Unable to add Place', 'Check your connection and try again.'))
+                  .finally(() => setIsAddingPlace(false));
+              }}
+              placeholder={isAddingPlace ? 'Adding Place…' : 'Search TripIdeas Places'}
+            />
+          </View> : null}
 
           {isLoadingPlaces ? (
             <LoadingView />

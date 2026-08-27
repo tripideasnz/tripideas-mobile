@@ -72,6 +72,14 @@ export function MapZoomControls({
   );
 }
 
+export function MapRecenterControl({ onPress }: { onPress: () => void }) {
+  return (
+    <View style={{ ...Shadow.floating, backgroundColor: 'rgba(255,255,255,0.96)', borderColor: Palette.border, borderRadius: Radius.card, borderWidth: 1, overflow: 'hidden' }}>
+      <ControlButton accessibilityLabel="Show my location and recenter map" icon="my-location" onPress={onPress} />
+    </View>
+  );
+}
+
 function ControlButton({
   accessibilityLabel,
   icon,

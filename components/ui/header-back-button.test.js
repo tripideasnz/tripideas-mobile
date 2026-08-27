@@ -4,11 +4,12 @@ import { readFile } from 'node:fs/promises';
 const read = (relativePath) =>
   readFile(new URL(`../../${relativePath}`, import.meta.url), 'utf8');
 
-const [button, root, discover, notebookList, notebookDetail, tripDetail, tripMap, map] =
+const [button, root, discover, diaryList, notebookList, notebookDetail, tripDetail, tripMap, map] =
   await Promise.all([
     read('components/ui/header-back-button.tsx'),
     read('app/_layout.tsx'),
     read('app/(tabs)/(discover)/_layout.tsx'),
+    read('app/diaries/index.tsx'),
     read('app/notebooks/index.tsx'),
     read('app/notebooks/[notebookId].tsx'),
     read('app/trips/[tripId].tsx'),
@@ -26,6 +27,8 @@ assert.match(button, /borderWidth: StyleSheet\.hairlineWidth/);
 assert.match(button, /color = Palette\.text/);
 assert.match(button, /Ionicons color=\{color\} name="chevron-back" size=\{24\}/);
 assert.match(button, /opacity: pressed \? 0\.5 : 1/);
+assert.match(button, /if \(router\.canGoBack\(\)\) router\.back\(\)/);
+assert.match(button, /else if \(fallbackHref\) router\.replace\(fallbackHref\)/);
 
 for (const source of [root, discover, notebookList, notebookDetail, tripDetail, tripMap, map]) {
   assert.match(source, /@\/components\/ui\/header-back-button/);
@@ -35,6 +38,10 @@ assert.doesNotMatch(notebookDetail, /@react-navigation\/elements/);
 for (const source of [root, notebookList, notebookDetail, tripDetail, tripMap]) {
   assert.match(source, /HeaderBackButton color=\{Palette\.trip\}/);
 }
+for (const routeName of ['favourites/index', 'trips/index', 'personal-place-cards/index']) {
+  assert.match(root, new RegExp(`name="${routeName}"[\\s\\S]{0,240}fallbackHref="/saved"`));
+}
+assert.match(diaryList, /HeaderBackButton color=\{Palette\.trip\} fallbackHref="\/saved"/);
 assert.doesNotMatch(discover, /HeaderBackButton color=\{Palette\.trip\}/);
 assert.doesNotMatch(map, /HeaderBackButton color=\{Palette\.trip\}/);
-console.log('✓ top-left back controls share the explicit 44px white-circle treatment');
+console.log('✓ top-left back controls share history-first behavior, explicit deep-link fallbacks, and the 44px white-circle treatment');

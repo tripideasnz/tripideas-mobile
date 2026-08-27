@@ -20,7 +20,7 @@ export default function DiscoverLayout() {
     <Stack
       screenOptions={{
         headerBackVisible: false,
-        headerLeft: () => <HeaderBackButton />,
+        headerLeft: () => <HeaderBackButton fallbackHref="/discover" />,
       }}>
       <Stack.Screen
         name="discover"

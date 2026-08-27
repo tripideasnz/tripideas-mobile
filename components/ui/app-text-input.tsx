@@ -3,15 +3,17 @@ import { TextInput, type TextInputProps } from 'react-native';
 
 import { Palette, Radius, Space, Type } from '@/constants/design';
 
-export const AppTextInput = forwardRef<TextInput, TextInputProps>(
-  function AppTextInput({ style, ...props }, ref) {
+type AppTextInputProps = TextInputProps & { textVariant?: keyof typeof Type };
+
+export const AppTextInput = forwardRef<TextInput, AppTextInputProps>(
+  function AppTextInput({ style, textVariant = 'body', ...props }, ref) {
     return (
       <TextInput
         ref={ref}
         placeholderTextColor={Palette.textMuted}
         {...props}
         style={[
-          Type.body,
+          Type[textVariant],
           {
             backgroundColor: Palette.surface,
             borderColor: Palette.border,
@@ -29,7 +31,7 @@ export const AppTextInput = forwardRef<TextInput, TextInputProps>(
   }
 );
 
-export const AutoExpandingTextInput = forwardRef<TextInput, TextInputProps>(
+export const AutoExpandingTextInput = forwardRef<TextInput, AppTextInputProps>(
   function AutoExpandingTextInput({ style, ...props }, ref) {
     const [height, setHeight] = useState(48);
     const maximumHeight = 184;

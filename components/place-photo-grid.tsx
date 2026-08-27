@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Palette, Radius, Screen, Space, Type } from '@/constants/design';
 import type { PlaceGalleryImage } from '@/sanity/types';
+import { ContainedRemoveButton } from '@/components/ui/contained-remove-button';
 
 function PhotoTile({
   height,
@@ -78,30 +79,9 @@ function PhotoTile({
         </View>
       ) : null}
       {onRemove ? (
-        <Pressable
-          accessibilityLabel={`Remove photo ${index + 1}`}
-          accessibilityRole="button"
-          hitSlop={6}
-          onPress={(event) => {
-            event.stopPropagation();
-            onRemove();
-          }}
-          style={({ pressed }) => ({
-            alignItems: 'center',
-            backgroundColor: Palette.surface,
-            borderColor: Palette.trip,
-            borderRadius: Radius.pill,
-            borderWidth: 1,
-            bottom: Space.sm,
-            height: 36,
-            justifyContent: 'center',
-            opacity: pressed ? 0.65 : 1,
-            position: 'absolute',
-            right: Space.sm,
-            width: 36,
-          })}>
-          <Text style={{ color: Palette.trip, fontSize: 24, lineHeight: 26 }}>×</Text>
-        </Pressable>
+        <View style={{ bottom: Space.sm, position: 'absolute', right: Space.sm }}>
+          <ContainedRemoveButton label={`Remove photo ${index + 1}`} onPress={onRemove} />
+        </View>
       ) : null}
     </Pressable>
   );
@@ -248,28 +228,6 @@ export function PlacePhotoGrid({
                   {activeIndex + 1} / {images.length}
                 </Text>
                 <View style={{ alignItems: 'center', flexDirection: 'row', gap: Space.sm }}>
-                  {onRemoveImage ? (
-                    <Pressable
-                      accessibilityLabel={`Remove photo ${activeIndex + 1}`}
-                      accessibilityRole="button"
-                      hitSlop={8}
-                      onPress={() => {
-                        const image = images[activeIndex];
-                        if (image) onRemoveImage(image, activeIndex);
-                        closeViewer();
-                      }}
-                      style={({ pressed }) => ({
-                        alignItems: 'center',
-                        backgroundColor: 'rgba(255,255,255,0.12)',
-                        borderRadius: Radius.pill,
-                        height: 36,
-                        justifyContent: 'center',
-                        opacity: pressed ? 0.6 : 1,
-                        width: 36,
-                      })}>
-                      <Text style={{ color: '#fff', fontSize: 24, lineHeight: 26 }}>×</Text>
-                    </Pressable>
-                  ) : null}
                   <Pressable
                     accessibilityLabel="Close photo viewer"
                     accessibilityRole="button"

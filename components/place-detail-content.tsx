@@ -11,6 +11,7 @@ export function PlaceDetailContent({
   body,
   children,
   galleryImages = [],
+  galleryPosition = 'after-location',
   hero,
   location,
   mapActions,
@@ -20,6 +21,7 @@ export function PlaceDetailContent({
   body?: ReactNode;
   children?: ReactNode;
   galleryImages?: PlaceGalleryImage[];
+  galleryPosition?: 'after-location' | 'before-location';
   hero?: { alt: string; url: string } | null;
   location?: { latitude: number; longitude: number } | null;
   mapActions?: ReactNode;
@@ -58,6 +60,10 @@ export function PlaceDetailContent({
 
         {body ? <View style={{ marginBottom: Space.xl }}>{body}</View> : null}
 
+        {galleryPosition === 'before-location' ? (
+          <PlacePhotoGrid images={galleryImages} placeTitle={title} />
+        ) : null}
+
         {location ? (
           <View style={{ marginBottom: Space.xxl }}>
             <Text style={{ ...Type.section, marginBottom: Space.md }}>
@@ -72,7 +78,9 @@ export function PlaceDetailContent({
           </View>
         ) : null}
 
-        <PlacePhotoGrid images={galleryImages} placeTitle={title} />
+        {galleryPosition === 'after-location' ? (
+          <PlacePhotoGrid images={galleryImages} placeTitle={title} />
+        ) : null}
         {children}
       </View>
     </>

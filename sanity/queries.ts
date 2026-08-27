@@ -166,7 +166,7 @@ export const SUBREGION_QUERY = `
 `;
 
 export const PLACE_QUERY = `
-*[_type == "page" && slug.current == $slug][0]{
+*[_type == "page" && (_id == $editorialPlaceId || slug.current == $slug)][0]{
   _id,
   title,
   subtitle,
