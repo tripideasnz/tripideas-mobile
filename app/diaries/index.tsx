@@ -52,7 +52,7 @@ export default function DiaryLibraryScreen() {
   };
   return <SafeAreaView edges={['bottom']} style={{ flex: 1, backgroundColor: Palette.background }}>
     <Stack.Screen options={{
-      headerLeft: () => <HeaderBackButton color={Palette.trip} />,
+      headerLeft: () => <HeaderBackButton color={Palette.trip} fallbackHref="/saved" />,
       headerRight: () => session ? <Pressable accessibilityLabel="Add Diary" accessibilityRole="button"
         hitSlop={12} onPress={() => setCreating(true)} style={({ pressed }) => ({ opacity: pressed ? 0.55 : 1 })}>
         <MaterialIcons color={Palette.trip} name="add" size={30} />

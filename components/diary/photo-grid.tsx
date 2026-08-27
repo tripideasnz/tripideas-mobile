@@ -1,6 +1,5 @@
 import { PlacePhotoGrid } from '@/components/place-photo-grid';
 import { useOrderedDiaryPhotoImages } from '@/components/diary/photo-assets';
-import { Space } from '@/constants/design';
 
 export function DiaryPhotoGrid({
   assetIds,
@@ -16,7 +15,6 @@ export function DiaryPhotoGrid({
   const { images, refresh } = useOrderedDiaryPhotoImages(assetIds, label);
   return <PlacePhotoGrid
     bottomMargin={bottomMargin}
-    horizontalInset={Space.md}
     images={images}
     onImageError={refresh}
     onRemoveImage={onRemoveAsset ? (image) => image._key && onRemoveAsset(image._key) : undefined}

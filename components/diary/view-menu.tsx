@@ -17,7 +17,7 @@ export function DiaryViewMenu({ diaryId }: { diaryId: string }) {
       { text: 'Index', onPress: () => open('index') },
       { text: 'Map', onPress: () => open('map') },
       { text: 'Cancel', style: 'cancel' },
-    ])} style={({ pressed }) => ({ opacity: pressed ? 0.55 : 1 })}>
+    ])} style={({ pressed }) => ({ alignItems: 'center', height: 44, justifyContent: 'center', opacity: pressed ? 0.55 : 1, width: 44 })}>
     <MaterialIcons color={Palette.trip} name="menu-book" size={27} />
   </Pressable>;
 }

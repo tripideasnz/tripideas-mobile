@@ -98,7 +98,7 @@ assert.equal(await lastViewed.get('user-a', 'diary-b'), null);
 assert.notEqual(diaryLastViewedKey('user-a', 'diary-a'), diaryLastViewedKey('user-b', 'diary-a'));
 console.log('✓ last-viewed Diary Day is scoped to the signed-in user and Diary');
 
-const [saved, layout, library, cover, diaryIndex, day, provider, toolbar, dragRow, shell, autosaveField, picker, diaryMap, viewMenu, removeButton, plainAction, iconAction, finishAction] = await Promise.all([
+const [saved, layout, library, cover, diaryIndex, day, provider, toolbar, dragRow, shell, autosaveField, picker, diaryMap, viewMenu, removeButton, plainAction, iconAction, finishAction, structuralAdd, objectPresentation] = await Promise.all([
   readFile(new URL('../app/(tabs)/saved.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../app/_layout.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../app/diaries/index.tsx', import.meta.url), 'utf8'),
@@ -107,16 +107,18 @@ const [saved, layout, library, cover, diaryIndex, day, provider, toolbar, dragRo
   readFile(new URL('../app/diaries/[diaryId]/day.tsx', import.meta.url), 'utf8'),
   readFile(new URL('./provider.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../components/diary/object-toolbar.tsx', import.meta.url), 'utf8'),
-  readFile(new URL('../components/diary/drag-reorder-row.tsx', import.meta.url), 'utf8'),
-  readFile(new URL('../components/diary/object-editor-shell.tsx', import.meta.url), 'utf8'),
-  readFile(new URL('../components/diary/autosave-field.tsx', import.meta.url), 'utf8'),
+  readFile(new URL('../components/ui/drag-reorder-row.tsx', import.meta.url), 'utf8'),
+  readFile(new URL('../components/ui/saved-object-editor-shell.tsx', import.meta.url), 'utf8'),
+  readFile(new URL('../components/ui/saved-autosave-field.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../app/diaries/location-picker.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../app/diaries/[diaryId]/map.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../components/diary/view-menu.tsx', import.meta.url), 'utf8'),
-  readFile(new URL('../components/diary/contained-remove-button.tsx', import.meta.url), 'utf8'),
+  readFile(new URL('../components/ui/contained-remove-button.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../components/ui/plain-icon-action.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../components/ui/icon-action.tsx', import.meta.url), 'utf8'),
-  readFile(new URL('../components/diary/finish-edit-action.tsx', import.meta.url), 'utf8'),
+  readFile(new URL('../components/ui/finish-edit-action.tsx', import.meta.url), 'utf8'),
+  readFile(new URL('../components/ui/floating-structural-add.tsx', import.meta.url), 'utf8'),
+  readFile(new URL('../components/ui/saved-object-presentations.tsx', import.meta.url), 'utf8'),
 ]);
 assert.match(saved, /title: 'Diaries'/); assert.match(saved, /openPrivateFeature\('\/diaries'\)/);
 assert.match(layout, /<DiaryProvider>/); assert.match(library, /if \(!title\.trim\(\)\)/);
@@ -126,14 +128,18 @@ assert.doesNotMatch(library, /pathname: '\/diaries\/\[diaryId\]\/day'/); assert.
 assert.doesNotMatch(layout, /<ApiCompatibilityNotice/); assert.match(cover, /Diary Cover/); assert.match(cover, /outsideDays\.length/);
 assert.match(cover, /TripImageCollage/); assert.match(cover, /Edit Diary Cover/); assert.match(cover, /Tap to add up to 4 collage images/); assert.doesNotMatch(cover, /instantiatedDiaryIndex/);
 assert.match(cover, /gap: editing \? Space\.sm : Space\.xxl/); assert.match(cover, /bottomMargin=\{0\}/);
-assert.match(cover, /HeaderBackButton color=\{Palette\.trip\} onPress=\{\(\) => router\.replace\('\/diaries'\)\}/);
+assert.match(cover, /HeaderBackButton color=\{Palette\.trip\} fallbackHref="\/diaries"/);
 assert.match(cover, /function CoverModeTile/); assert.match(cover, /label="Diary"/); assert.match(cover, /label="Map"/); assert.match(cover, /flex: 1/); assert.match(cover, /minHeight: 132/);
 assert.match(cover, /getLastViewedDiaryDay/); assert.match(cover, /instantiated\.some/); assert.match(cover, /instantiated\[0\]\?\.date/); assert.match(cover, /diary\.startDate/);
 assert.doesNotMatch(cover, /DiaryViewMenu|accessibilityLabel="Open Diary Index"/); assert.match(cover, /headerRight: \(\) => null/);
 assert.match(cover, /accessibilityLabel="Diary title"[^>]*inputStyle=\{Type\.title\}/); assert.match(cover, /accessibilityLabel="Delete Diary" destructive icon="delete-outline"/); assert.doesNotMatch(cover, /accessibilityLabel="Delete Diary"[^>]*size="compact"/);
 assert.match(diaryIndex, /instantiatedDiaryIndex\(diary\.days\)/); assert.doesNotMatch(diaryIndex, /DiaryAutosaveField|Diary introduction/);
 assert.match(diaryIndex, /Only instantiated Diary Days appear here/);
+assert.doesNotMatch(diaryIndex, /Open first Day|Start first Day|firstDate/);
+assert.doesNotMatch(diaryIndex, /day\.heading \? 'bodyStrong'/);
 for (const label of ['Cover', 'Index', 'Map']) assert.match(viewMenu, new RegExp(`text: '${label}'`));
+assert.match(viewMenu, /height: 44/); assert.match(viewMenu, /width: 44/);
+assert.match(day, /width: dayMapFeatures\.length \? 96 : 44/);
 assert.match(provider, /async ensureDay/); assert.match(provider, /if \(existing\) return existing/); assert.match(provider, /outsideDiaryRange/);
 assert.match(day, /Previous day/); assert.match(day, /Next day/); assert.match(dragRow, /onStartShouldSetPanResponder/);
 assert.match(day, /!hasBoundedRange \? offsetDiaryDate\(date, 1\) : null/); assert.match(day, /actions\.ensureDay\(diary\.id, target\)\.then\(\(\) => router\.replace/);
@@ -150,40 +156,42 @@ assert.match(day, /topic\.startTime \? <AppText color=\{Palette\.textMuted\} var
 assert.match(day, /accessibilityLabel=\{`Edit \$\{topic\.title \|\| 'Topic'\}`\}/);
 assert.match(day, /icon="delete-outline"/); assert.match(day, /DiaryObjectEditorShell/); assert.match(shell, /ContainedRemoveButton/); assert.match(shell, /label=\{`Remove/);
 assert.match(removeButton, /borderRadius: Radius\.pill/); assert.match(removeButton, />×<\/Text>/);
-for (const label of ['NARRATIVE', 'PHOTO', 'LINK', 'PLACE', 'PIN']) assert.match(day, new RegExp(`'${label}'`));
+for (const label of ['NARRATIVE', 'PHOTO', 'LINK', 'PIN']) assert.match(day, new RegExp(`'${label}'`));
+assert.match(day, /savedPlaceLabel\('editorial'\)/); assert.match(day, /savedPlaceLabel\('personal'\)/);
 assert.doesNotMatch(provider, /activeTopicId|editingTopic|completedTopic/);
 for (const label of ['Narrative', 'Photo', 'Link', 'Place', 'Pin']) assert.match(toolbar, new RegExp(label));
-assert.ok(day.indexOf('<DiaryObjectToolbar') < day.indexOf('<TopicPhotoManagement'), 'Topic actions must remain visible above existing content');
+assert.match(day, /<FloatingContentAdd>[\s\S]*<DiaryObjectToolbar/);
+assert.ok(day.indexOf('<DiaryObjectToolbar') > day.indexOf("[...topic.items].sort"), 'Object picker belongs to the floating Add content control, not the Topic body');
 assert.match(day, /<KeyboardAvoidingView/); assert.match(day, /keyboardDismissMode="interactive"/);
-assert.match(day, /Paste a URL or search term/); assert.match(day, /Paste a link or search the web/); assert.match(day, /label="Use link"/); assert.doesNotMatch(day, /label="Add link"|supported search provider/); assert.match(day, /label="Open web"/); assert.match(day, /\^https\?:/);
+assert.match(day, /<SavedLinkCapture/); assert.doesNotMatch(day, /Paste a URL or search term|Paste a link or search the web|supported search provider/); assert.match(day, /isHttpUrl/);
 const completedLink = day.slice(day.indexOf("if (item.type === 'LINK')"), day.indexOf("if (item.type === 'LOCATION')"));
-assert.match(completedLink, /accessibilityRole="link"/); assert.match(completedLink, /color=\{Palette\.trip\}/); assert.match(completedLink, /textDecorationLine: 'underline'/); assert.doesNotMatch(completedLink, /Palette\.textMuted|variant="caption"/);
+assert.match(completedLink, /SavedLinkObject/); assert.match(objectPresentation, /accessibilityRole="link"/); assert.match(objectPresentation, /color=\{Palette\.trip\}/); assert.match(objectPresentation, /textDecorationLine: 'underline'/);
 const linkEditor = day.slice(day.indexOf("{item.type === 'LINK' ?"), day.indexOf("{item.type === 'LOCATION' ?"));
-assert.match(linkEditor, /accessibilityRole="link"/); assert.match(linkEditor, /textDecorationLine: 'underline'/); assert.match(linkEditor, /color=\{Palette\.textMuted\} variant="caption">\{domain\(item\.url\)\}/); assert.match(linkEditor, /accessibilityLabel="Link URL"/);
+assert.match(linkEditor, /SavedLinkObject/); assert.match(linkEditor, /accessibilityLabel="Link URL"/);
 assert.match(day, /<Modal animationType="slide"/); assert.match(day, /visible=\{Boolean\(capture\)\}/);
-assert.match(day, /const url = linkQuery\.trim\(\)/); assert.doesNotMatch(day, /url: linkQuery/);
-assert.match(day, /Choose a Place/); assert.match(day, /PERSONAL PLACES/); assert.match(day, /TRIPIDEAS PLACES/); assert.match(day, /SEARCH_QUERY/);
-assert.match(day, /getOneForegroundLocation/); assert.match(day, /Locate now/); assert.match(day, /Locate on map/); assert.doesNotMatch(day, /Update location|Change on map|Find on map|Save this location\?|Save Pin/);
+assert.match(day, /onSave=\{async \(\{ title, url \}\)/); assert.doesNotMatch(day, /linkQuery/);
+assert.match(day, /SavedPlaceSelector/); assert.doesNotMatch(day, /SEARCH_QUERY|selectPersonalPlace|selectEditorialPlace/);
+assert.match(day, /getOneForegroundLocation/); assert.match(day, /Locate now/); assert.match(day, /Locate on map/); assert.match(day, /Change location/); assert.doesNotMatch(day, /Update location|Change on map|Save this location\?/);
 assert.match(day, /result\.status !== 'granted'/); assert.match(day, /label="Cancel"/);
-assert.match(picker, /onPress=\{\(event\)/); assert.match(picker, /label="Cancel"/); assert.match(picker, /label=\{saving \? 'Saving…' : 'Save'\}/);
+assert.match(picker, /SavedLocationPicker/); assert.match(picker, /onCancel=\{backToDay\}/); assert.match(picker, /saveLabel="Save Pin"/);
 assert.match(day, /Open Day Map/); assert.match(diaryMap, /diaryMapFeatures\(diary\)/);
 assert.match(diaryMap, /focusFeatures/); assert.match(diaryMap, /feature\.dayId === dayId/); assert.match(diaryMap, /allFeatures\.map/);
 assert.match(diaryMap, /MapLibreMap/); assert.doesNotMatch(diaryMap, /getOneForegroundLocation/);
-assert.match(picker, /MapLibreMap/); assert.match(day, /getOneForegroundLocation/);
+assert.match(picker, /SavedLocationPicker/); assert.match(day, /getOneForegroundLocation/);
 assert.doesNotMatch(dragRow, /MaterialIcons|drag-handle/); assert.match(dragRow, /\[0, 1, 2\]\.map/); assert.match(dragRow, /height: 2, width: 20/); assert.match(dragRow, /height: 44/); assert.match(dragRow, /accessibilityActions/); assert.match(dragRow, /onStartShouldSetPanResponder/);
 assert.ok(dragRow.indexOf('{header}') < dragRow.indexOf('<Pressable accessibilityActions'), 'grip must share the internal object header');
 assert.match(shell, /header=\{<AppText/); assert.doesNotMatch(day, /icon="arrow-upward"|icon="arrow-downward"|moveTopic\(/);
-assert.doesNotMatch(day, /<DragReorderRow/); assert.doesNotMatch(day, /Update Day/);
+assert.match(day, /<DragReorderRow/); assert.doesNotMatch(day, /Update Day/);
 for (const field of ['Diary title', 'Diary introduction']) assert.match(cover, new RegExp(field));
 for (const field of ['Day heading', 'Day summary', 'Topic title', 'Link title', 'Link note']) assert.match(day, new RegExp(field));
 assert.match(day, /type: 'NARRATIVE', title: null, text: ''/); assert.doesNotMatch(day, /Add Narrative|Add narrative/);
 assert.match(day, /accessibilityLabel="Narrative title"/); assert.match(day, /maxLength=\{10_000\}/); assert.match(day, /item\.title \? <AppText variant="bodyStrong"/);
 assert.match(day, /actions\.addTopic\(diary\.id, target\.id, ''\)/); assert.match(day, /placeholder="Title"/); assert.doesNotMatch(day, /'New Topic'/);
 assert.match(day, /expandedItemId/); assert.match(day, /expanded=\{!compact && expandedItemId === item\.id\}/); assert.match(day, /setExpandedItemId\(item\.id\)/); assert.match(day, /setExpandedItemId\(null\)/);
-assert.match(day, /function CollapsedItem/); assert.match(shell, /onExpand/); assert.match(shell, /onCollapse/); assert.match(shell, /Finish editing/); assert.doesNotMatch(shell, /Save|Update|Add|Done/);
+assert.match(day, /function CollapsedItem/); assert.match(shell, /onExpand/); assert.match(shell, /onCollapse/); assert.match(shell, /Finish editing/); assert.doesNotMatch(shell, /accessibilityLabel={`(?:Save|Update|Add|Done)/);
 assert.match(shell, /FinishEditAction/); assert.match(shell, /ContainedRemoveButton/); assert.match(finishAction, /Palette\.success/); assert.match(finishAction, /name="check"/); assert.match(finishAction, /size === 'compact' \? 36 : 44/);
 assert.match(day, /accessibilityLabel="Day navigation"/); const dayHeader = day.slice(day.indexOf('accessibilityLabel="Day navigation"'), day.indexOf('accessibilityLabel="Day navigation"') + 700); assert.doesNotMatch(dayHeader, /Add Topic/);
-assert.equal(day.match(/accessibilityLabel="Add Topic"/g)?.length, 1); assert.match(day, /accessibilityLabel="Add Topic" accessibilityRole="button" onPress=\{createTopic\}/); assert.match(day, /backgroundColor: Palette\.trip/); assert.match(day, /position: 'absolute'/); assert.match(day, /bottom: Math\.max\(insets\.bottom, Screen\.bottom\)/);
+assert.equal(day.match(/accessibilityLabel="Add Topic"/g)?.length, 1); assert.match(day, /<FloatingStructuralAdd accessibilityLabel="Add Topic" onPress=\{createTopic\}/); assert.match(structuralAdd, /backgroundColor: Palette\.trip/); assert.match(structuralAdd, /position: 'absolute'/); assert.match(structuralAdd, /bottom: Math\.max\(insets\.bottom, Screen\.bottom\)/);
 assert.match(day, /accessibilityLabel="Edit Day heading and summary"[^>]*trip/); assert.match(day, /Alert\.alert\('Delete Day'/); assert.doesNotMatch(day, /Alert\.alert\('Delete Day'[\s\S]{0,300}size="compact"/);
 const dayEditor = day.slice(day.indexOf('{editingDay ?'), day.indexOf(': <View style={{ gap: Space.sm }}>', day.indexOf('{editingDay ?'))); assert.match(dayEditor, /accessibilityLabel="Day heading" inputStyle=\{Type\.title\}/); assert.match(dayEditor, /FinishEditAction accessibilityLabel="Finish editing Day"/); assert.doesNotMatch(dayEditor, /<AppButton label="Done"/);
 assert.match(day, /accessibilityLabel=\{`Edit \$\{topic\.title \|\| 'Topic'\}`\}[\s\S]*size="compact"[\s\S]*trip/);
@@ -192,15 +200,18 @@ assert.match(day, /placeholder="Title" value=\{topic\.title\}/);
 assert.match(day, /title\.trim\(\) \? actions\.updateTopic[\s\S]{0,180}: Promise\.resolve\(\)/);
 assert.match(day, /accessibilityLabel="Topic start time"/); assert.match(day, /placeholder="Start time"/); assert.match(day, /parseDiaryTopicTime\(value\)/); assert.match(day, /startTime: normalized/);
 assert.match(provider, /startTime: null/); assert.match(provider, /input: \{ title\?: string; startTime\?: string \| null \}/); assert.doesNotMatch(provider, /sort\([^\n]*startTime|startTime[^\n]*sort\(/);
-assert.match(iconAction, /trip \? Palette\.trip/); assert.match(iconAction, /size === 'compact' \? 36 : 44/);
+assert.match(iconAction, /const usesTripColor = trip \|\| semantic === 'edit'/); assert.match(iconAction, /usesTripColor \? Palette\.trip/); assert.match(iconAction, /size === 'compact' \? 36 : 44/);
 assert.doesNotMatch(day, /variant="caption">Title<\/AppText><DiaryAutosaveField accessibilityLabel="Narrative title"/);
-assert.match(day, /DiaryAutosaveField accessibilityLabel="Diary narrative"/); assert.match(autosaveField, /setTimeout/); assert.match(autosaveField, /700/); assert.match(autosaveField, /AutosaveStatus/); assert.match(autosaveField, /draftRef\.current !== saved\.current/);
-assert.match(autosaveField, /onContentSizeChange/); assert.match(autosaveField, /Math\.min\(180, Math\.max\(48/); assert.match(autosaveField, /Math\.abs\(current - nextHeight\) >= 2/); assert.match(autosaveField, /scrollEnabled=\{multiline\}/);
+assert.match(day, /DiaryAutosaveField accessibilityLabel="Diary narrative"/); assert.match(autosaveField, /setTimeout/); assert.match(autosaveField, /700/); assert.match(autosaveField, /AutosaveStatus/); assert.match(autosaveField, /draftRef\.current !== savedRef\.current/);
+assert.match(autosaveField, /onContentSizeChange/); assert.match(autosaveField, /Math\.min\(228, Math\.max\(48/); assert.match(autosaveField, /Math\.abs\(current - height\) >= 2/); assert.match(autosaveField, /scrollEnabled=\{multiline\}/); assert.match(autosaveField, /pendingRef/); assert.match(autosaveField, /flush/);
 assert.match(dragRow, /paddingVertical: Space\.xs/); assert.match(dragRow, /minHeight: 28/); assert.match(dragRow, /position: 'absolute'/); assert.match(dragRow, /height: 44/); assert.match(dragRow, /width: 44/); assert.match(shell, /expanded \? <View style=\{\{ gap: Space\.xs \}\}/);
 assert.doesNotMatch(cover, /<AppButton label="Done"/); assert.match(cover, /FinishEditAction accessibilityLabel="Finish editing Diary Cover" size="default"/); assert.match(cover, /DiaryAutosaveField accessibilityLabel="Diary title"/); assert.match(cover, /DiaryAutosaveField accessibilityLabel="Diary introduction"/);
-assert.match(day, /filter\(\(item\) => item\.type !== 'PHOTO'\)/); assert.match(day, /editable=\{!compact\}/); assert.match(day, /expanded=\{!compact && expandedItemId === item\.id\}/); assert.match(shell, /!editable \? <View/); assert.doesNotMatch(shell.slice(shell.indexOf('!editable ?'), shell.indexOf(': expanded ?')), /onExpand|FinishEditAction|Pressable/);
-assert.match(autosaveField, /typeof normalized === 'string'/); assert.match(autosaveField, /setDraft\(next\)/);
+assert.match(cover, /<SavedAutosaveScope>\{\(flush\) =>/); assert.match(cover, /await flush\(\)/); assert.match(cover, /done\(flush\)/);
+assert.match(day, /FinishEditAction accessibilityLabel="Finish editing Day"[\s\S]*finishDay\(flush\)/); assert.match(day, /const finishDay = async[\s\S]*await flush\(\)[\s\S]*setEditingDay\(false\)/);
+assert.match(day, /FinishEditAction accessibilityLabel="Finish editing Topic"[\s\S]*finishTopic\(flush\)/); assert.match(day, /const finishTopic = async[\s\S]*await flush\(\)[\s\S]*setActiveTopicId\(null\)/);
+assert.doesNotMatch(day, /filter\(\(item\) => item\.type !== 'PHOTO'\)/); assert.match(day, /editable=\{!compact\}/); assert.match(day, /expanded=\{!compact && expandedItemId === item\.id\}/); assert.match(shell, /!editable \? <View/); assert.match(day, /label=\{photos\.length === 1 \? 'Photo' : 'Photo group'\}/);
+assert.match(autosaveField, /typeof normalized === 'string'/); assert.match(autosaveField, /setDraft\(authoritative\)/);
 assert.match(day, /pendingRevealTopicId\.current = topic\.id/); assert.match(day, /onLayout=\{\(event\) => revealNewTopic\(topic\.id, event\.nativeEvent\.layout\.y\)\}/); assert.match(day, /Keyboard\.metrics\(\)\?\.height/); assert.match(day, /visibleHeight \* 0\.42/); assert.match(day, /scrollRef\.current\?\.scrollTo/); assert.match(day, /paddingBottom: 112/);
 assert.match(diaryMap, /MapZoomControls/); assert.match(diaryMap, /onRegionDidChange/); assert.match(diaryMap, /selectedFeature/); assert.match(diaryMap, /formatDiaryDate\(selectedDay\.date\)/); assert.match(diaryMap, /pathname: '\/diaries\/\[diaryId\]\/day'/);
-assert.match(picker, /MapZoomControls/); assert.match(picker, /onRegionDidChange/); assert.doesNotMatch(picker, /getOneForegroundLocation/);
+assert.match(picker, /SavedLocationPicker/); assert.doesNotMatch(picker, /MapZoomControls|onRegionDidChange|getOneForegroundLocation/);
 console.log('✓ Cover, sparse Index, full\/Day Map, compact Topic editing and Saved gating are wired');

@@ -7,7 +7,7 @@ import { MapZoomControls } from '@/components/map/map-controls';
 import { useMapSelection } from '@/components/map/use-map-selection';
 import { DiaryViewMenu } from '@/components/diary/view-menu';
 import { AppText } from '@/components/ui/app-text';
-import { HeaderBackButton } from '@/components/ui/header-back-button';
+import { HeaderBackButton as SharedHeaderBackButton } from '@/components/ui/header-back-button';
 import { Palette, Radius, Screen, Shadow, Space } from '@/constants/design';
 import { MAP_STYLE_URL } from '@/constants/map';
 import { diaryMapFeatures } from '@/diaries/model';
@@ -28,6 +28,11 @@ export default function DiaryMapScreen() {
   const focusFeatures = useMemo(() => dayId ? allFeatures.filter((feature) => feature.dayId === dayId) : allFeatures, [allFeatures, dayId]);
   const cameraFeatures = focusFeatures.length ? focusFeatures : allFeatures;
   const selectedFeature = allFeatures.find(({ itemId }) => itemId === selectedItemId); const selectedDay = diary?.days.find(({ id }) => id === selectedFeature?.dayId); const selectedTopic = selectedDay?.topics.find(({ id }) => id === selectedFeature?.topicId);
+  const sourceDay = diary?.days.find(({ id }) => id === dayId);
+  const mapFallback = dayId && sourceDay
+    ? { pathname: '/diaries/[diaryId]/day' as const, params: { diaryId, date: sourceDay.date } }
+    : { pathname: '/diaries/[diaryId]' as const, params: { diaryId } };
+  const HeaderBackButton = ({ color }: { color: string }) => <SharedHeaderBackButton color={color} fallbackHref={mapFallback} />;
   useEffect(() => { if (!ready || !cameraFeatures.length) return; const lngs = cameraFeatures.map(({ longitude }) => longitude); const lats = cameraFeatures.map(({ latitude }) => latitude); if (cameraFeatures.length === 1) camera.current?.easeTo({ center: [lngs[0], lats[0]], zoom: 13, duration: 350 }); else camera.current?.fitBounds([Math.min(...lngs), Math.min(...lats), Math.max(...lngs), Math.max(...lats)], { padding: { top: 56, right: 48, bottom: 56, left: 48 }, duration: 350 }); }, [cameraFeatures, ready]);
   if (sessionLoading) return <LoadingView />;
   if (!session) return <SignedOutFeature message="Sign in to view and edit your private Diaries" onSignIn={signIn} />;
