@@ -23,7 +23,7 @@ assert.match(input, /minHeight: height/);
 assert.doesNotMatch(input, /\{ height, maxHeight/);
 assert.match(input, /style=\{\[style, \{ maxHeight: maximumHeight, minHeight: height/);
 for (const source of [diaryIndex, tripIndex, tripDetail, notebookIndex, notebookDetail, placeDetail]) {
-  assert.match(source, /AutoExpandingTextInput/);
+  assert.match(source, source === notebookDetail ? /NotebookAutosaveField/ : /AutoExpandingTextInput/);
 }
 assert.match(diaryCover, /accessibilityLabel="Diary title" autoExpand/);
 assert.match(diaryDay, /accessibilityLabel=\{`Topic title[\s\S]{0,180}inputStyle=\{Type\.section\}/);

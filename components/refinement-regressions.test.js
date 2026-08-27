@@ -25,7 +25,7 @@ assert.match(mapTile, /origin: 'map'/);
 assert.match(place, /selectedOrigin === 'map'/);
 assert.match(place, /router\.navigate\('\/map'\)/);
 assert.match(tripEntry, /icon="delete-outline"[\s\S]*size="compact"/);
-assert.match(notebook, /accessibilityLabel=\{`Delete page/);
+assert.match(notebook, /accessibilityLabel=\{`Delete Page/);
 assert.match(notebook, /icon="delete-outline"/);
 assert.match(profile, /Creating and saving private content requires sign-in\./);
 assert.match(profile, /Linking\.canOpenURL/);
