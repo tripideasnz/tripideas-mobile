@@ -1,1216 +1,292 @@
-import {
-  Stack,
-  useLocalSearchParams,
-  useRouter,
-} from 'expo-router';
-import { Image } from 'expo-image';
 import * as Crypto from 'expo-crypto';
+import { Image } from 'expo-image';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Alert,
-  Keyboard,
-    KeyboardAvoidingView,
-    Modal,
-  type LayoutChangeEvent,
-  Platform,
-  ScrollView,
-  TextInput,
-  View,
-} from 'react-native';
+import { Alert, KeyboardAvoidingView, Modal, Platform, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useSession } from '@/auth/provider';
+import { NotebookAutosaveField, type NotebookAutosaveFieldHandle } from '@/components/notebook/autosave-field';
+import { NotebookObjectToolbar, type NotebookObjectAction } from '@/components/notebook/object-toolbar';
+import { DragReorderRow } from '@/components/ui/drag-reorder-row';
+import { PlacePhotoGrid } from '@/components/place-photo-grid';
 import { AppButton } from '@/components/ui/app-button';
-import { HeaderBackButton } from '@/components/ui/header-back-button';
-import { AutosaveStatus, type AutosaveState } from '@/components/ui/autosave-status';
 import { AppText } from '@/components/ui/app-text';
-import { AppTextInput, AutoExpandingTextInput } from '@/components/ui/app-text-input';
-import { ExpandableText } from '@/components/ui/expandable-text';
+import { SavedLinkCapture } from '@/components/ui/saved-link-capture';
+import { FinishEditAction } from '@/components/ui/finish-edit-action';
+import { FloatingStructuralAdd } from '@/components/ui/floating-structural-add';
+import { FloatingContentAdd } from '@/components/ui/floating-content-add';
+import { SavedPlaceSelector, type SavedPlaceSelection } from '@/components/ui/saved-place-selector';
+import { SavedObjectEditorShell } from '@/components/ui/saved-object-editor-shell';
+import { SavedObjectFocusScope, SavedObjectReveal } from '@/components/ui/saved-object-focus';
+import { SavedLinkObject, SavedPinObject, SavedPlaceObject, savedPlaceLabel } from '@/components/ui/saved-object-presentations';
+import { HeaderBackButton } from '@/components/ui/header-back-button';
 import { IconAction } from '@/components/ui/icon-action';
 import { LoadingView } from '@/components/ui/loading-view';
-import { PlacePhotoGrid } from '@/components/place-photo-grid';
-import {
-  adjacentContentPageId,
-  pagesFromContentBlocks,
-} from '@/content-blocks/pages';
-import { renderContentBlock } from '@/content-blocks/renderer';
-import type { ContentBlock } from '@/content-blocks/types';
+import { ShowMoreText } from '@/components/ui/show-more-text';
+import { pagesFromContentBlocks } from '@/content-blocks/pages';
+import { moveContentBlockIds, orderedContentBlocks } from '@/content-blocks/ordering';
+import type { ContentBlock, ContentPage, PhotoContentBlock, PlaceContentBlock, TextContentBlock } from '@/content-blocks/types';
 import { Palette, Radius, Screen, Space } from '@/constants/design';
-import { classifyNotebookError } from '@/notebooks/errors';
-import {
-  reconcileAutosaveDraft,
-  retryNotebookConflict,
-  shouldAdoptAutosaveResponse,
-} from '@/notebooks/autosave';
-import {
-  notebookBlockScrollOffset,
-  validateNotebookMetadata,
-} from '@/notebooks/model';
-import {
-  backFromNotebookDetail,
-} from '@/notebooks/navigation';
-import { useNotebooks } from '@/notebooks/provider';
-import { authorizePhotoRead } from '@/notebooks/api';
-import type { NotebookDetail } from '@/notebooks/types';
-import { pickPhotosForUpload } from '@/photo-uploads/picker';
 import { getOneForegroundLocation } from '@/location/foreground';
-import {
-  addNotebookPhotos,
-  listNotebookPhotoPreviews,
-  resumeNotebookPhotos,
-} from '@/notebook-photo-blocks/service';
+import { checkApiCapability, type ApiCapabilityStatus } from '@/lib/api-compatibility';
+import { isHttpUrl } from '@/lib/url';
+import { classifyNotebookError } from '@/notebooks/errors';
+import { groupContiguousNotebookPhotos, moveContiguousNotebookBlockIds } from '@/notebooks/presentation';
+import { authorizePhotoRead } from '@/notebooks/api';
+import { useNotebooks } from '@/notebooks/provider';
+import { addNotebookPhotos, listNotebookPhotoPreviews, resumeNotebookPhotos } from '@/notebook-photo-blocks/service';
+import { usePersonalPlaceCards } from '@/personal-place-cards/provider';
+import { pickPhotosForUpload } from '@/photo-uploads/picker';
 
-type SaveState = AutosaveState;
-type RetryConflict = () => Promise<void>;
-const AUTOSAVE_DELAY_MS = 700;
+type Capture =
+  | { action: 'Link'; pageId: string; clientRequestId: string }
+  | { action: Exclude<NotebookObjectAction, 'Link'>; pageId: string }
+  | null;
 
 export default function NotebookDetailScreen() {
   const router = useRouter();
   const { notebookId: rawNotebookId } = useLocalSearchParams<{ notebookId: string }>();
   const notebookId = Array.isArray(rawNotebookId) ? rawNotebookId[0] : rawNotebookId;
-  const { isLoading: isLoadingSession, session, signIn } = useSession();
-  const {
-    details,
-    loadNotebook,
-    mutate,
-  } = useNotebooks();
+  const { isLoading: sessionLoading, session, signIn } = useSession();
+  const { cards } = usePersonalPlaceCards();
+  const { details, loadNotebook, mutate } = useNotebooks();
   const detail = notebookId ? details[notebookId] : undefined;
-  const pages = useMemo(
-    () => detail ? detail.pages ?? pagesFromContentBlocks(detail.items) : [],
-    [detail]
-  );
-  const detailRef = useRef(detail);
-  detailRef.current = detail;
-  const [isLoading, setIsLoading] = useState(true);
-  const [isOffline, setIsOffline] = useState(false);
+  const pages = useMemo(() => detail ? detail.pages ?? pagesFromContentBlocks(detail.items) : [], [detail]);
+  const [loading, setLoading] = useState(true);
+  const [offline, setOffline] = useState(false);
   const [notFound, setNotFound] = useState(false);
-  const [conflict, setConflict] = useState(false);
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [descriptionEditing, setDescriptionEditing] = useState(false);
-  const [editingPageIds, setEditingPageIds] = useState<Set<string>>(new Set());
-  const [highlightedPageId, setHighlightedPageId] = useState<string | null>(null);
-  const [titleDrafts, setTitleDrafts] = useState<Record<string, string>>({});
-  const [textDrafts, setTextDrafts] = useState<Record<string, string>>({});
-  const [metadataState, setMetadataState] = useState<SaveState>('idle');
-  const [itemStates, setItemStates] = useState<Record<string, SaveState>>({});
-  const [actionError, setActionError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [capability, setCapability] = useState<ApiCapabilityStatus | 'checking'>('checking');
+  const [editingNotebook, setEditingNotebook] = useState(false);
+  const [editingPages, setEditingPages] = useState<Set<string>>(new Set());
+  const [editingBlocks, setEditingBlocks] = useState<Set<string>>(new Set());
+  const activeContentPageId = [...editingPages].at(-1);
+  const [capture, setCapture] = useState<Capture>(null);
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
-  const [localPhotoPreviews, setLocalPhotoPreviews] = useState<
-    Record<string, string[]>
-  >({});
+  const [pendingPreviews, setPendingPreviews] = useState<Record<string, string[]>>({});
   const [photoBusyPage, setPhotoBusyPage] = useState<string | null>(null);
-  const [pendingPhotoRetries, setPendingPhotoRetries] = useState(0);
-  const [linkPageId, setLinkPageId] = useState<string | null>(null);
-  const [linkUrl, setLinkUrl] = useState('');
-  const [temporalEditor, setTemporalEditor] = useState<{
-    blockId: string; precision: 'DATE' | 'DATETIME'; date: string; time: string;
-  } | null>(null);
-  const titleRef = useRef('');
-  const descriptionRef = useRef('');
-  const titleDraftsRef = useRef<Record<string, string>>({});
-  const textDraftsRef = useRef<Record<string, string>>({});
-  const metadataRevisionRef = useRef(0);
-  const itemRevisionsRef = useRef<Record<string, number>>({});
-  const metadataTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const itemTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-  const retryConflictRef = useRef<RetryConflict | null>(null);
-  const photoRefreshAttemptsRef = useRef<Record<string, number>>({});
-  const initializedNotebookRef = useRef<string | null>(null);
-  const hadAuthenticatedSessionRef = useRef(false);
+  const [pendingPhotoCount, setPendingPhotoCount] = useState(0);
+  const autosaveRefs = useRef<Record<string, NotebookAutosaveFieldHandle | null>>({});
+  const photoAttempts = useRef<Record<string, number>>({});
   const scrollRef = useRef<ScrollView>(null);
-  const blockSectionOffset = useRef(0);
-  const stickyToolbarHeight = useRef(0);
-  const blockOffsets = useRef<Record<string, number>>({});
-  const pageTitleRefs = useRef<Record<string, TextInput | null>>({});
-  const pendingScrollRef = useRef<{ focusTitle: boolean; itemId: string } | null>(null);
-  const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scrollContentRef = useRef<View>(null!);
+  const [revealPageId, setRevealPageId] = useState<string | null>(null);
 
-  const handleBack = useCallback(() => {
-    backFromNotebookDetail(router);
-  }, [router]);
+  const reload = useCallback(async () => {
+    if (!notebookId || !session) { setLoading(false); return; }
+    setLoading(true); setMessage(null); setNotFound(false);
+    try { await loadNotebook(notebookId, true); setOffline(false); }
+    catch (error) {
+      const failure = classifyNotebookError(error);
+      setOffline(failure === 'offline');
+      setNotFound(failure === 'not-found');
+      if (!detail && failure !== 'offline') setMessage('Could not load this Notebook.');
+    } finally { setLoading(false); }
+  }, [detail, loadNotebook, notebookId, session]);
 
-  const finishPendingScroll = useCallback(() => {
-    const pending = pendingScrollRef.current;
-    if (!pending) return false;
-    const { focusTitle, itemId } = pending;
-    const y = blockOffsets.current[itemId];
-    if (y === undefined) return false;
-    scrollRef.current?.scrollTo({
-      animated: true,
-      y: Math.max(
-        0,
-        notebookBlockScrollOffset(blockSectionOffset.current, y) -
-          stickyToolbarHeight.current
-      ),
-    });
-    if (focusTitle) {
-      requestAnimationFrame(() => pageTitleRefs.current[itemId]?.focus());
-    }
-    pendingScrollRef.current = null;
-    return true;
-  }, []);
-
-  const navigateToPage = useCallback((
-    itemId: string,
-    focusTitle = false
-  ) => {
-    if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
-    setHighlightedPageId(itemId);
-    highlightTimerRef.current = setTimeout(() => {
-      setHighlightedPageId((current) => current === itemId ? null : current);
-      highlightTimerRef.current = null;
-    }, 500);
-    pendingScrollRef.current = { focusTitle, itemId };
-    Keyboard.dismiss();
-    requestAnimationFrame(() => {
-      finishPendingScroll();
-    });
-  }, [finishPendingScroll]);
-
-  const applyAuthoritativeDetail = useCallback((
-    next: NotebookDetail,
-    options: {
-      metadataRevision?: number;
-      resetDrafts?: boolean;
-      savedItem?: { id: string; revision: number };
-    } = {}
-  ) => {
-    const { metadataRevision, resetDrafts = false, savedItem } = options;
-    const adoptMetadata =
-      resetDrafts ||
-      metadataRevisionRef.current === 0 ||
-      (metadataRevision !== undefined &&
-        shouldAdoptAutosaveResponse(
-          metadataRevisionRef.current,
-          metadataRevision
-        ));
-    if (adoptMetadata) {
-      titleRef.current = next.title;
-      descriptionRef.current = next.description ?? '';
-      setTitle(next.title);
-      setDescription(next.description ?? '');
-    }
-
-    const nextTitles: Record<string, string> = {};
-    const nextTexts: Record<string, string> = {};
-    const nextRevisions: Record<string, number> = {};
-    for (const item of next.items) {
-      if (item.type !== 'text') continue;
-      const revision = itemRevisionsRef.current[item.id] ?? 0;
-      const adoptItem =
-        resetDrafts ||
-        revision === 0 ||
-        (savedItem?.id === item.id &&
-          shouldAdoptAutosaveResponse(revision, savedItem.revision));
-      nextTitles[item.id] = reconcileAutosaveDraft(
-        item.title ?? '',
-        titleDraftsRef.current[item.id] ?? item.title ?? '',
-        revision,
-        savedItem?.id === item.id ? savedItem.revision : -1,
-        resetDrafts || revision === 0
-      );
-      nextTexts[item.id] = reconcileAutosaveDraft(
-        item.text,
-        textDraftsRef.current[item.id] ?? item.text,
-        revision,
-        savedItem?.id === item.id ? savedItem.revision : -1,
-        resetDrafts || revision === 0
-      );
-      nextRevisions[item.id] = adoptItem ? 0 : revision;
-    }
-    titleDraftsRef.current = nextTitles;
-    textDraftsRef.current = nextTexts;
-    itemRevisionsRef.current = nextRevisions;
-    setTitleDrafts(nextTitles);
-    setTextDrafts(nextTexts);
-
-    if (resetDrafts) {
-      metadataRevisionRef.current = 0;
-      setMetadataState('idle');
-      setItemStates({});
-    } else if (
-      metadataRevision !== undefined &&
-      metadataRevisionRef.current === metadataRevision
-    ) {
-      metadataRevisionRef.current = 0;
-      setMetadataState('idle');
-    }
-    if (
-      savedItem &&
-      itemRevisionsRef.current[savedItem.id] === 0
-    ) {
-      setItemStates((current) => ({ ...current, [savedItem.id]: 'idle' }));
-    }
-    setConflict(false);
-    retryConflictRef.current = null;
-    setActionError(null);
-    setIsOffline(false);
-  }, []);
-
-  const reload = useCallback(
-    async (replaceDrafts: boolean) => {
-      if (!notebookId) return;
-      setIsLoading(true);
-      setNotFound(false);
-      setActionError(null);
-      try {
-        const latest = await loadNotebook(notebookId);
-        if (latest && replaceDrafts) {
-          applyAuthoritativeDetail(latest, { resetDrafts: true });
-        }
-        setConflict(false);
-        setActionError(null);
-        setNotFound(false);
-        setIsOffline(false);
-      } catch (error) {
-        const failure = classifyNotebookError(error);
-        setIsOffline(failure === 'offline');
-        setNotFound(failure === 'not-found');
-        if (
-          !detailRef.current &&
-          failure !== 'offline' &&
-          failure !== 'not-found'
-        ) {
-          setActionError(
-            failure === 'route-unavailable'
-              ? 'Notebooks are unavailable on the connected API. Cached content remains available.'
-              : 'Could not load this Notebook. Please try again.'
-          );
-        }
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [applyAuthoritativeDetail, loadNotebook, notebookId]
-  );
-
-  useEffect(() => {
-    if (session) {
-      hadAuthenticatedSessionRef.current = true;
-      return;
-    }
-    setPhotoUrls({});
-    setLocalPhotoPreviews({});
-    if (!isLoadingSession && hadAuthenticatedSessionRef.current) {
-      hadAuthenticatedSessionRef.current = false;
-      router.replace('/notebooks');
-    }
-  }, [isLoadingSession, router, session]);
-
-  useEffect(() => {
-    if (!session || !notebookId) {
-      setIsLoading(false);
-      return;
-    }
-    void reload(!detail);
-    // Load once for the requested identity. Provider updates flow through detail.
+  useEffect(() => { void reload(); /* identity-scoped provider owns subsequent refreshes */
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [notebookId, session?.userId]);
-
+  useEffect(() => { let active = true; void checkApiCapability('notebook-object-blocks-v2').then((result) => { if (active) setCapability(result); }); return () => { active = false; }; }, []);
   useEffect(() => {
-    if (detail && initializedNotebookRef.current !== detail.id) {
-      initializedNotebookRef.current = detail.id;
-      applyAuthoritativeDetail(detail, { resetDrafts: true });
-    }
-  }, [applyAuthoritativeDetail, detail]);
+    if (!session || !notebookId) return;
+    void listNotebookPhotoPreviews(session.userId, notebookId).then(setPendingPreviews);
+    void resumeNotebookPhotos(session.userId, notebookId, mutate.addPhotoBlock).then(({ pendingCount }) => setPendingPhotoCount(pendingCount));
+  }, [mutate.addPhotoBlock, notebookId, session]);
 
-  useEffect(() => {
-    const ownerId = session?.userId;
-    if (!ownerId || !notebookId) return;
-    void listNotebookPhotoPreviews(ownerId, notebookId).then(
-      setLocalPhotoPreviews
-    );
-    void resumeNotebookPhotos(
-      ownerId,
-      notebookId,
-      mutate.addPhotoBlock
-    ).then(({ completed, pendingCount }) => {
-      setPendingPhotoRetries(pendingCount);
-      const latest = completed.at(-1);
-      if (latest) {
-        setLocalPhotoPreviews({});
-        applyAuthoritativeDetail(latest);
-      }
-    });
-  }, [
-    applyAuthoritativeDetail,
-    mutate.addPhotoBlock,
-    notebookId,
-    session?.userId,
-  ]);
-
-  useEffect(() => {
-    const photoIds = pages.flatMap((page) =>
-      page.blocks
-        .filter((block) => block.type === 'photo')
-        .map((block) => block.photoAssetId)
-    );
-    for (const assetId of photoIds) {
-      if (photoUrls[assetId]) continue;
-      void refreshPhotoUrl(assetId);
-    }
-  }, [pages, photoUrls]);
-
-  const refreshPhotoUrl = async (assetId: string) => {
-    try {
-      const authorization = await authorizePhotoRead(assetId);
-      setPhotoUrls((current) => ({
-        ...current,
-        [assetId]: authorization.url,
-      }));
-    } catch { /* keep the current safe placeholder or last in-memory URL */ }
-  };
-
-  useEffect(() => () => {
-    if (metadataTimerRef.current) clearTimeout(metadataTimerRef.current);
-    if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
-    Object.values(itemTimersRef.current).forEach(clearTimeout);
+  const refreshPhoto = useCallback(async (assetId: string) => {
+    try { const result = await authorizePhotoRead(assetId); setPhotoUrls((current) => ({ ...current, [assetId]: result.url })); }
+    catch { /* retain the safe placeholder or last in-memory URL */ }
   }, []);
-
-  const handleMutationError = (
-    error: unknown,
-    itemId?: string,
-    retry?: RetryConflict,
-    metadata = false
-  ) => {
-    const failure = classifyNotebookError(error);
-    if (failure === 'conflict') {
-      setConflict(true);
-      setActionError('This Notebook changed elsewhere.');
-      retryConflictRef.current = retry ?? null;
-    } else if (failure === 'offline') {
-      setIsOffline(true);
-      setActionError('You appear to be offline. Your changes have not been saved.');
-    } else if (failure === 'route-unavailable') {
-      setActionError('Notebooks are unavailable on the connected API. Your changes have not been saved.');
-    } else if (failure === 'not-found') {
-      setNotFound(true);
-    } else if (failure === 'validation') {
-      setActionError('Check this content and try again.');
-    } else {
-      setActionError('Could not save.');
+  useEffect(() => {
+    for (const block of pages.flatMap((page) => page.blocks)) {
+      if (block.type === 'photo' && !photoUrls[block.photoAssetId]) void refreshPhoto(block.photoAssetId);
     }
-    if (itemId) {
-      setItemStates((current) => ({ ...current, [itemId]: 'failed' }));
-    } else if (metadata) {
-      setMetadataState('failed');
+  }, [pages, photoUrls, refreshPhoto]);
+  useEffect(() => { if (!session) { setPhotoUrls({}); setPendingPreviews({}); } }, [session]);
+
+  const run = async (operation: () => Promise<unknown>) => {
+    setMessage(null);
+    try { await operation(); setOffline(false); return true; }
+    catch (error) {
+      const failure = classifyNotebookError(error);
+      setOffline(failure === 'offline');
+      setNotFound(failure === 'not-found');
+      setMessage(failure === 'conflict' ? 'This Notebook changed elsewhere. Reload and try again.' :
+        failure === 'validation' ? 'Check this content and try again.' : 'Could not save. Please try again.');
+      return false;
     }
   };
-
-  if (isLoadingSession) return <LoadingView />;
-  if (!session) {
-    return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: Palette.background }}>
-        <View style={{ gap: Space.lg, padding: Screen.gutter }}>
-          <AppText variant="title">Private Notebook</AppText>
-          <AppText>Sign in to view this Notebook.</AppText>
-          <AppButton label="Sign in" onPress={signIn} />
-        </View>
-      </SafeAreaView>
-    );
-  }
-  if (notFound) {
-    return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: Palette.background }}>
-        <View style={{ gap: Space.lg, padding: Screen.gutter }}>
-          <AppText variant="title">Notebook unavailable</AppText>
-          <AppText color={Palette.textMuted}>
-            It may have been deleted, or you may no longer have access.
-          </AppText>
-          <AppButton label="Back to Notebooks" onPress={() => router.replace('/notebooks')} />
-        </View>
-      </SafeAreaView>
-    );
-  }
-  if (isLoading && !detail) return <LoadingView />;
-  if (!detail) {
-    return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: Palette.background }}>
-        <View style={{ gap: Space.lg, padding: Screen.gutter }}>
-          <AppText color={Palette.danger}>
-            Could not load this Notebook.
-          </AppText>
-          <AppButton label="Retry" onPress={() => reload(true)} />
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  const mutationDisabled = isOffline || conflict;
-  const saveMetadata = async (revision: number) => {
-    const validation = validateNotebookMetadata(
-      titleRef.current,
-      descriptionRef.current
-    );
-    if (!validation.valid) {
-      setActionError(validation.message);
-      setMetadataState('failed');
-      return;
-    }
-    const current = detailRef.current;
-    if (
-      current &&
-      validation.title === current.title &&
-      validation.description === current.description
-    ) {
-      metadataRevisionRef.current = 0;
-      setMetadataState('idle');
-      setActionError(null);
-      return;
-    }
-    setMetadataState('saving');
-    setActionError(null);
-    try {
-      const latest = await mutate.updateMetadata(detail.id, {
-        title: validation.title,
-        description: validation.description,
-      });
-      applyAuthoritativeDetail(latest, { metadataRevision: revision });
-    } catch (error) {
-      handleMutationError(
-        error,
-        undefined,
-        () => saveMetadata(metadataRevisionRef.current),
-        true
-      );
-    }
+  const register = (key: string) => (handle: NotebookAutosaveFieldHandle | null) => { autosaveRefs.current[key] = handle; };
+  const flush = async (keys: string[]) => {
+    const results = await Promise.allSettled(keys.map((key) => autosaveRefs.current[key]?.flush()));
+    if (results.some((result) => result.status === 'rejected')) throw new Error('pending_autosave_failed');
   };
 
-  const scheduleMetadataSave = () => {
-    if (metadataTimerRef.current) clearTimeout(metadataTimerRef.current);
-    const revision = metadataRevisionRef.current;
-    metadataTimerRef.current = setTimeout(() => {
-      metadataTimerRef.current = null;
-      void saveMetadata(revision);
-    }, AUTOSAVE_DELAY_MS);
-  };
+  if (sessionLoading) return <LoadingView />;
+  if (!session) return <SafeAreaView style={{ backgroundColor: Palette.background, flex: 1 }}><View style={{ gap: Space.lg, padding: Screen.gutter }}><AppText variant="title">Private Notebook</AppText><AppText>Sign in to view this Notebook.</AppText><AppButton label="Sign in" onPress={signIn} /></View></SafeAreaView>;
+  if (notFound) return <SafeAreaView style={{ backgroundColor: Palette.background, flex: 1 }}><View style={{ gap: Space.lg, padding: Screen.gutter }}><AppText variant="title">Notebook unavailable</AppText><AppText color={Palette.textMuted}>It may have been deleted, or you may no longer have access.</AppText><AppButton label="Back to Notebooks" onPress={() => router.dismissTo('/notebooks')} /></View></SafeAreaView>;
+  if (loading && !detail) return <LoadingView />;
+  if (!detail) return <SafeAreaView style={{ backgroundColor: Palette.background, flex: 1 }}><View style={{ gap: Space.lg, padding: Screen.gutter }}><AppText color={Palette.danger}>{message ?? 'Could not load this Notebook.'}</AppText><AppButton label="Retry" onPress={() => void reload()} /></View></SafeAreaView>;
 
-  const saveText = async (itemId: string, revision: number) => {
-    const blockTitle = titleDraftsRef.current[itemId] ?? '';
-    if (blockTitle.length > 200) {
-      setActionError('Keep page titles under 200 characters.');
-      setItemStates((current) => ({ ...current, [itemId]: 'failed' }));
-      return;
-    }
-    const normalizedTitle = blockTitle.trim() || null;
-    const body = textDraftsRef.current[itemId] ?? '';
-    const currentItem = detailRef.current?.items.find(
-      (item) => item.id === itemId && item.type === 'text'
-    );
-    if (
-      currentItem?.type === 'text' &&
-      normalizedTitle === currentItem.title &&
-      body === currentItem.text
-    ) {
-      itemRevisionsRef.current[itemId] = 0;
-      setItemStates((current) => ({ ...current, [itemId]: 'idle' }));
-      setActionError(null);
-      return;
-    }
-    setItemStates((current) => ({ ...current, [itemId]: 'saving' }));
-    setActionError(null);
-    try {
-      const latest = await mutate.updateBlock(detail.id, itemId, {
-        type: 'text',
-        title: normalizedTitle,
-        text: body,
-      });
-      applyAuthoritativeDetail(latest, {
-        savedItem: { id: itemId, revision },
-      });
-    } catch (error) {
-      handleMutationError(error, itemId, () =>
-        saveText(itemId, itemRevisionsRef.current[itemId] ?? revision)
-      );
-    }
+  const v2Enabled = capability === 'supported' && !offline;
+  const addPage = () => run(async () => { const latest = await mutate.addBlock(detail.id, { type: 'text', text: '' }); const page = latest.pages?.at(-1); if (page) { setRevealPageId(page.id); setEditingPages((current) => new Set(current).add(page.id)); } });
+  const deletePage = (page: ContentPage) => {
+    const body = page.blocks.find((block): block is TextContentBlock => block.type === 'text' && block.role === 'pageBody');
+    if (!body) return;
+    Alert.alert('Delete this Page?', 'This Page and every object inside it will be removed.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Delete Page', style: 'destructive', onPress: () => void run(() => mutate.deleteBlock(detail.id, body.id)) }]);
   };
-
-  const scheduleTextSave = (itemId: string) => {
-    const existing = itemTimersRef.current[itemId];
-    if (existing) clearTimeout(existing);
-    const revision = itemRevisionsRef.current[itemId];
-    itemTimersRef.current[itemId] = setTimeout(() => {
-      delete itemTimersRef.current[itemId];
-      void saveText(itemId, revision);
-    }, AUTOSAVE_DELAY_MS);
+  const deleteObject = (block: ContentBlock) => void run(() => mutate.deleteObjectBlock(detail.id, block.id));
+  const move = (page: ContentPage, block: ContentBlock, offset: -1 | 1) => {
+    const ids = moveContentBlockIds(page.blocks, block.id, offset);
+    if (ids) void run(() => mutate.reorderPageBlocks(detail.id, page.id, ids));
   };
-
-  const runImmediateMutation = async (
-    operation: () => Promise<NotebookDetail>,
-    itemId?: string
-  ) => {
-    setActionError(null);
-    try {
-      applyAuthoritativeDetail(await operation());
-    } catch (error) {
-      handleMutationError(error, itemId, () =>
-        runImmediateMutation(operation, itemId)
-      );
-    }
+  const movePhotoRun = (page: ContentPage, blocks: PhotoContentBlock[], offset: -1 | 1) => {
+    const ids = moveContiguousNotebookBlockIds(page.blocks, blocks.map(({ id }) => id), offset);
+    if (ids) void run(() => mutate.reorderPageBlocks(detail.id, page.id, ids));
   };
-
-  const addPage = async () => {
-    setActionError(null);
-    const previousIds = new Set(detail.items.map((item) => item.id));
-    try {
-      const latest = await mutate.addBlock(detail.id, {
-        type: 'text',
-        text: '',
-      });
-      const newPage =
-        latest.items.find((item) => !previousIds.has(item.id)) ??
-        latest.items.at(-1);
-      applyAuthoritativeDetail(latest);
-      if (newPage) navigateToPage(newPage.id, true);
-    } catch (error) {
-      handleMutationError(error, undefined, addPage);
-    }
-  };
-
-  const confirmDeletePage = (itemId: string) => {
-    Alert.alert(
-      'Delete this page?',
-      'This page and its photos will be removed from this Notebook.',
-      [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete Page',
-        style: 'destructive',
-        onPress: () => {
-          const timer = itemTimersRef.current[itemId];
-          if (timer) clearTimeout(timer);
-          delete itemTimersRef.current[itemId];
-          const currentIndex = pages.findIndex((page) => page.id === itemId);
-          const targetId =
-            pages[currentIndex + 1]?.id ?? pages[currentIndex - 1]?.id;
-          setActionError(null);
-          void mutate.deleteBlock(detail.id, itemId)
-            .then((latest) => {
-              applyAuthoritativeDetail(latest);
-              if (targetId) navigateToPage(targetId);
-            })
-            .catch((error) => {
-              handleMutationError(error, itemId);
-            });
-        },
-      },
-      ]
-    );
-  };
-
   const addPhoto = async (pageId: string) => {
-    if (!session) return;
-    setActionError(null);
+    const selected = await pickPhotosForUpload(); if (!selected.length) return;
+    setPendingPreviews((current) => ({ ...current, [pageId]: selected.map(({ uri }) => uri) }));
+    setPhotoBusyPage(pageId);
     try {
-      const selected = await pickPhotosForUpload();
-      if (selected.length === 0) return;
-      setLocalPhotoPreviews((current) => ({
-        ...current,
-        [pageId]: selected.map((photo) => photo.uri),
-      }));
-      setPhotoBusyPage(pageId);
-      const result = await addNotebookPhotos(
-        session.userId,
-        detail.id,
-        pageId,
-        selected,
-        mutate.addPhotoBlock
-      );
-      const latest = result.completed.at(-1);
-      if (latest) {
-        applyAuthoritativeDetail(latest);
-      }
-      const pendingPreviews = await listNotebookPhotoPreviews(
-        session.userId,
-        detail.id
-      );
-      setLocalPhotoPreviews(pendingPreviews);
-      const durablePendingCount = Object.values(pendingPreviews)
-        .reduce((count, previews) => count + previews.length, 0);
-      setPendingPhotoRetries(durablePendingCount);
-      if (durablePendingCount > 0) {
-        setActionError('Photo upload paused. Retry when connectivity returns.');
-      } else if (result.errors[0]) {
-        handleMutationError(result.errors[0]);
-      }
-    } catch (error) {
-      handleMutationError(error);
-    } finally {
-      setPhotoBusyPage(null);
-    }
+      const result = await addNotebookPhotos(session.userId, detail.id, pageId, selected, mutate.addPhotoBlock);
+      const next = await listNotebookPhotoPreviews(session.userId, detail.id); setPendingPreviews(next);
+      setPendingPhotoCount(Object.values(next).reduce((count, values) => count + values.length, 0));
+      if (result.errors.length) setMessage('Some photo uploads paused. Retry when connectivity returns.');
+    } finally { setPhotoBusyPage(null); }
+  };
+  const openCapture = (pageId: string, action: NotebookObjectAction) => {
+    if (action === 'Text') { void run(async () => { const latest = await mutate.addTextBlock({ id: detail.id, pageId, clientRequestId: Crypto.randomUUID(), title: null, text: '' }); const created = latest.pages?.find(({ id }) => id === pageId)?.blocks.at(-1); if (created) setEditingBlocks((current) => new Set(current).add(created.id)); }); return; }
+    if (action === 'Photo') { void addPhoto(pageId); return; }
+    setCapture(action === 'Link'
+      ? { pageId, action, clientRequestId: Crypto.randomUUID() }
+      : { pageId, action });
+  };
+  const confirmPlace = async (selectedPlace: SavedPlaceSelection) => {
+    if (!capture || capture.action !== 'Place') return;
+    const pageId = capture.pageId;
+    const saved = selectedPlace.kind === 'editorial'
+      ? await run(() => { const { place } = selectedPlace; const latitude = place.coordinates?.lat; const longitude = place.coordinates?.lng; return mutate.addPlaceBlock({ id: detail.id, pageId, clientRequestId: Crypto.randomUUID(), titleSnapshot: place.title || 'TripIdeas Place', reference: { kind: 'editorial', editorialPlaceId: place._id! }, locationSnapshot: typeof latitude === 'number' && typeof longitude === 'number' ? { latitude, longitude, accuracyMeters: null } : null }); })
+      : await run(() => { const { card } = selectedPlace; return mutate.addPlaceBlock({ id: detail.id, pageId, clientRequestId: Crypto.randomUUID(), titleSnapshot: card.title || 'Personal Place', reference: { kind: 'personal', personalPlaceCardId: card.id }, locationSnapshot: card.location ? { latitude: card.location.latitude, longitude: card.location.longitude, accuracyMeters: null } : null }); });
+    if (saved) setCapture(null);
+  };
+  const pinNow = async (pageId: string) => {
+    const result = await getOneForegroundLocation();
+    if (result.status !== 'granted') { Alert.alert('Location unavailable', result.status === 'denied' ? 'Permission was not granted. You can still use Locate on map.' : 'Try Locate on map instead.'); return; }
+    const saved = await run(() => mutate.addPinBlock({ id: detail.id, pageId, clientRequestId: Crypto.randomUUID(), title: null, location: { ...result.point, source: 'PIN_NOW' } }));
+    if (saved) setCapture(null);
   };
 
-  const addLink = async () => {
-    if (!linkPageId) return;
-    const normalized = linkUrl.trim();
-    if (!/^https?:\/\/[^\s]+$/i.test(normalized)) {
-      setActionError('Enter a valid http:// or https:// link.');
-      return;
-    }
-    await runImmediateMutation(() => mutate.addLinkBlock({
-      id: detail.id, pageId: linkPageId, url: normalized,
-      clientRequestId: Crypto.randomUUID(),
-    }));
-    setLinkPageId(null);
-    setLinkUrl('');
-  };
+  return <SafeAreaView edges={['bottom']} style={{ backgroundColor: Palette.background, flex: 1 }}>
+    <Stack.Screen options={{ headerLeft: () => <HeaderBackButton color={Palette.trip} fallbackHref="/notebooks" /> }} />
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={88} style={{ flex: 1 }}>
+      <SavedObjectFocusScope contentRef={scrollContentRef} scrollRef={scrollRef}><ScrollView ref={scrollRef} innerViewRef={scrollContentRef} contentContainerStyle={{ gap: Space.xl, paddingBottom: Screen.bottom, paddingHorizontal: Screen.gutter, paddingTop: Screen.top }} keyboardDismissMode="interactive" keyboardShouldPersistTaps="handled">
+        {offline ? <Notice text="Offline: showing saved content. Editing is unavailable." /> : null}
+        {capability === 'unreachable' ? <Notice text="Could not verify object editing right now. Saved Notebook content remains available." /> : null}
+        {capability === 'unsupported' ? <Notice text="This API does not support Notebook objects-v2. Existing content remains readable." /> : null}
+        {message ? <AppText color={Palette.danger}>{message}</AppText> : null}
+        {pendingPhotoCount ? <AppButton label="Retry Photo Uploads" size="compact" variant="secondary" onPress={() => void resumeNotebookPhotos(session.userId, detail.id, mutate.addPhotoBlock).then(({ pendingCount }) => setPendingPhotoCount(pendingCount))} /> : null}
 
-  const showMetadataActions = (block: ContentBlock) => {
-    const now = new Date();
-    Alert.alert('Object details', undefined, [
-      { text: block.isImportant ? 'Remove importance' : 'Mark important', onPress: () => void runImmediateMutation(() =>
-        mutate.updateRichBlock(detail.id, block.id, { isImportant: !block.isImportant })) },
-      { text: block.event ? 'Change date/time' : 'Add date/time', onPress: () => {
-        const current = block.event?.precision === 'DATETIME' ? new Date(block.event.dateTime) : now;
-        setTemporalEditor({ blockId: block.id, precision: block.event?.precision ?? 'DATE',
-          date: block.event?.precision === 'DATE' ? block.event.date : current.toISOString().slice(0, 10),
-          time: `${String(current.getHours()).padStart(2, '0')}:${String(current.getMinutes()).padStart(2, '0')}` });
-      } },
-      ...(block.event ? [{ text: 'Remove date/time', style: 'destructive' as const, onPress: () => void runImmediateMutation(() =>
-        mutate.updateRichBlock(detail.id, block.id, { event: null })) }] : []),
-      { text: 'Pin now', onPress: () => void getOneForegroundLocation().then((result) => {
-        if (result.status !== 'granted') { setActionError('Location is unavailable. You can still choose a point on the map.'); return; }
-        return runImmediateMutation(() => mutate.updateRichBlock(detail.id, block.id, {
-          location: { ...result.point, source: 'PIN_NOW' },
-        }));
-      }) },
-      { text: block.location ? 'Change location on map' : 'Choose location on map', onPress: () => router.push({
-        pathname: '/notebooks/location-picker',
-        params: { notebookId: detail.id, blockId: block.id,
-          latitude: block.location?.latitude, longitude: block.location?.longitude },
-      }) },
-      ...(block.location ? [{ text: 'Remove location', style: 'destructive' as const, onPress: () => void runImmediateMutation(() =>
-        mutate.updateRichBlock(detail.id, block.id, { location: null })) }] : []),
-      { text: 'Cancel', style: 'cancel' },
-    ]);
-  };
+        {editingNotebook ? <View style={{ backgroundColor: Palette.surfaceMuted, borderRadius: Radius.card, gap: Space.md, padding: Space.lg }}>
+          <View style={{ alignItems: 'flex-start', flexDirection: 'row', gap: Space.sm }}><View style={{ flex: 1 }}><NotebookAutosaveField ref={register('notebook-title')} accessibilityLabel="Notebook title" maxLength={200} placeholder="Notebook title" textVariant="title" value={detail.title} onSave={(title) => title.trim() ? mutate.updateMetadata(detail.id, { title: title.trim() }).then(() => title.trim()) : Promise.reject(new Error('title_required'))} /></View><FinishEditAction accessibilityLabel="Finish editing Notebook" size="default" onPress={() => void flush(['notebook-title', 'notebook-description']).then(() => setEditingNotebook(false)).catch(() => setMessage('Could not save. Tap the status to retry.'))} /></View>
+          <NotebookAutosaveField ref={register('notebook-description')} accessibilityLabel="Notebook description" maxLength={10_000} multiline placeholder="Optional description" value={detail.description ?? ''} onSave={(description) => mutate.updateMetadata(detail.id, { description: description.trim() ? description : null }).then(() => description)} />
+        </View> : <View style={{ gap: Space.sm }}><View style={{ alignItems: 'center', flexDirection: 'row', gap: Space.sm }}><AppText style={{ flex: 1 }} variant="title">{detail.title}</AppText><IconAction accessibilityLabel="Edit Notebook title and description" icon="edit" semantic="edit" onPress={() => setEditingNotebook(true)} /></View>{detail.description ? <ShowMoreText accessibilityLabel="Notebook description" value={detail.description} /> : null}</View>}
 
-  const retryPhotos = async () => {
-    if (!session) return;
-    setActionError(null);
-    const { completed, pendingCount } = await resumeNotebookPhotos(
-      session.userId,
-      detail.id,
-      mutate.addPhotoBlock
-    );
-    setPendingPhotoRetries(pendingCount);
-    const latest = completed.at(-1);
-    if (latest) {
-      setLocalPhotoPreviews(
-        await listNotebookPhotoPreviews(session.userId, detail.id)
-      );
-      applyAuthoritativeDetail(latest);
-    }
-    if (pendingCount > 0) {
-      setActionError('Photo upload is still paused. Please try again.');
-    }
-  };
+        {pages.length ? pages.map((page, pageIndex) => <SavedObjectReveal key={page.id} revealKey={revealPageId === page.id ? page.id : null}><NotebookPage notebookId={detail.id} page={page} pageIndex={pageIndex} editing={editingPages.has(page.id)} v2Enabled={v2Enabled}
+          photoUrls={photoUrls} pendingPreviews={pendingPreviews[page.id] ?? []} photoBusy={photoBusyPage === page.id}
+          cards={cards} editingBlocks={editingBlocks} register={register}
+          onEdit={() => setEditingPages((current) => new Set(current).add(page.id))}
+          onFinish={async () => { await flush(Object.keys(autosaveRefs.current)); setEditingPages((current) => { const next = new Set(current); next.delete(page.id); return next; }); setEditingBlocks(new Set()); }}
+          onDelete={() => deletePage(page)}
+          onToolbar={(action) => openCapture(page.id, action)} onRemove={deleteObject} onMove={(block, offset) => move(page, block, offset)}
+          onMovePhotoRun={(blocks, offset) => movePhotoRun(page, blocks, offset)}
+          onSaveBlock={(block, input) => mutate.updateRichBlock(detail.id, block.id, input)}
+          onExpand={(id) => setEditingBlocks((current) => new Set(current).add(id))} onCollapse={(id) => setEditingBlocks((current) => { const next = new Set(current); next.delete(id); return next; })}
+          onPhotoError={(block) => { const attempts = photoAttempts.current[block.photoAssetId] ?? 0; if (attempts < 2) { photoAttempts.current[block.photoAssetId] = attempts + 1; void refreshPhoto(block.photoAssetId); } }} /></SavedObjectReveal>) : <AppText color={Palette.textMuted}>No Pages yet. Add one to start writing.</AppText>}
+      </ScrollView></SavedObjectFocusScope>
+    </KeyboardAvoidingView>
+    {activeContentPageId ? <FloatingContentAdd disabled={!v2Enabled || Boolean(photoBusyPage)}>{(close) => <><AppText variant="section">Add content to this Page</AppText><NotebookObjectToolbar disabled={!v2Enabled || Boolean(photoBusyPage)} onSelect={(action) => { close(); if (action === 'Photo') setTimeout(() => openCapture(activeContentPageId, action), 350); else openCapture(activeContentPageId, action); }} /></>}</FloatingContentAdd> : null}
+    <FloatingStructuralAdd accessibilityLabel="Add Page" disabled={offline} onPress={() => void addPage()} />
 
-  const keepMyVersion = async () => {
-    const retry = retryConflictRef.current;
-    if (!retry || !notebookId) return;
-    setActionError(null);
-    try {
-      await retryNotebookConflict(
-        () => loadNotebook(notebookId, true),
-        async () => {
-          setConflict(false);
-          retryConflictRef.current = null;
-          await retry();
-        }
-      );
-    } catch (error) {
-      handleMutationError(error, undefined, retry);
-    }
-  };
-
-  return (
-    <SafeAreaView edges={['bottom']} style={{ flex: 1, backgroundColor: Palette.background }}>
-      <Stack.Screen
-        options={{
-          headerLeft: () => <HeaderBackButton color={Palette.trip} onPress={handleBack} />,
-        }}
-      />
-      <Modal animationType="fade" onRequestClose={() => setTemporalEditor(null)} transparent visible={temporalEditor !== null}>
-        <View style={{ alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.35)', flex: 1, justifyContent: 'center', padding: Screen.gutter }}>
-          {temporalEditor ? <View style={{ backgroundColor: Palette.surface, borderRadius: Radius.card, gap: Space.md, padding: Space.xl, width: '100%' }}>
-            <AppText variant="section">Date and time</AppText>
-            <View style={{ flexDirection: 'row', gap: Space.sm }}>
-              <AppButton label="Date only" onPress={() => setTemporalEditor((current) => current ? { ...current, precision: 'DATE' } : null)} size="compact" variant={temporalEditor.precision === 'DATE' ? 'primary' : 'secondary'} />
-              <AppButton label="Date + time" onPress={() => setTemporalEditor((current) => current ? { ...current, precision: 'DATETIME' } : null)} size="compact" variant={temporalEditor.precision === 'DATETIME' ? 'primary' : 'secondary'} />
-            </View>
-            <AppTextInput accessibilityLabel="Event date" autoCapitalize="none" onChangeText={(date) => setTemporalEditor((current) => current ? { ...current, date } : null)} placeholder="YYYY-MM-DD" value={temporalEditor.date} />
-            {temporalEditor.precision === 'DATETIME' ? <AppTextInput accessibilityLabel="Event time" autoCapitalize="none" onChangeText={(time) => setTemporalEditor((current) => current ? { ...current, time } : null)} placeholder="HH:MM" value={temporalEditor.time} /> : null}
-            <View style={{ flexDirection: 'row', gap: Space.sm, justifyContent: 'flex-end' }}>
-              <AppButton label="Cancel" onPress={() => setTemporalEditor(null)} size="compact" variant="secondary" />
-              <AppButton label="Apply" onPress={() => {
-                const editor = temporalEditor;
-                if (!/^\d{4}-\d{2}-\d{2}$/.test(editor.date) || (editor.precision === 'DATETIME' && !/^\d{2}:\d{2}$/.test(editor.time))) {
-                  setActionError('Enter the date as YYYY-MM-DD and time as HH:MM.'); return;
-                }
-                const event = editor.precision === 'DATE'
-                  ? { precision: 'DATE' as const, date: editor.date }
-                  : { precision: 'DATETIME' as const, dateTime: new Date(`${editor.date}T${editor.time}:00`).toISOString(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone };
-                setTemporalEditor(null);
-                void runImmediateMutation(() => mutate.updateRichBlock(detail.id, editor.blockId, { event }));
-              }} size="compact" />
-            </View>
-          </View> : null}
-        </View>
-      </Modal>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={88}
-        style={{ flex: 1 }}>
-        <ScrollView
-          ref={scrollRef}
-          contentContainerStyle={{
-            gap: Space.xl,
-            paddingBottom: Screen.bottom,
-            paddingHorizontal: Screen.gutter,
-            paddingTop: Screen.top,
-          }}
-          keyboardShouldPersistTaps="handled"
-          onContentSizeChange={() => requestAnimationFrame(finishPendingScroll)}
-          >
-          <View style={{ gap: Space.xl }}>
-            {isOffline ? (
-              <Notice text="Offline: showing saved content. Editing is unavailable." />
-            ) : null}
-            {conflict ? (
-              <View style={{ gap: Space.md }}>
-                <Notice text="This Notebook changed elsewhere. Your unsaved text is still here." />
-                <View style={{ flexDirection: 'row', gap: Space.sm }}>
-                  <AppButton
-                    label="Reload latest"
-                    onPress={() => reload(true)}
-                    style={{ flex: 1 }}
-                  />
-                  {retryConflictRef.current ? (
-                    <AppButton
-                      label="Keep my version"
-                      onPress={keepMyVersion}
-                      style={{ flex: 1 }}
-                      variant="secondary"
-                    />
-                  ) : null}
-                </View>
-              </View>
-            ) : null}
-            {actionError ? <AppText color={Palette.danger}>{actionError}</AppText> : null}
-            {pendingPhotoRetries > 0 ? (
-              <AppButton
-                label="Retry Photo Uploads"
-                onPress={() => void retryPhotos()}
-                size="compact"
-                variant="secondary"
-              />
-            ) : null}
-
-            <View style={{ gap: Space.md }}>
-            <View
-              style={{
-                alignItems: 'center',
-                flexDirection: 'row',
-                gap: Space.sm,
-              }}>
-              <AutoExpandingTextInput
-                accessibilityLabel="Notebook title"
-                editable={!mutationDisabled}
-                maxLength={200}
-                onChangeText={(value) => {
-                  titleRef.current = value;
-                  setTitle(value);
-                  metadataRevisionRef.current += 1;
-                  setMetadataState('idle');
-                  scheduleMetadataSave();
-                }}
-                style={{
-                  backgroundColor: 'transparent',
-                  borderWidth: 0,
-                  flex: 1,
-                  fontSize: 28,
-                  fontWeight: '700',
-                  lineHeight: 34,
-                  minHeight: 44,
-                  paddingHorizontal: 0,
-                  paddingVertical: 0,
-                }}
-                value={title}
-              />
-              <IconAction
-                accessibilityLabel="Add Page"
-                disabled={mutationDisabled}
-                icon="add"
-                onPress={() => void addPage()}
-              />
-              <IconAction
-                accessibilityLabel="Share this Notebook"
-                disabled={!session}
-                icon="share"
-                onPress={() =>
-                  router.push({
-                    pathname: '/notebooks/[notebookId]/sharing',
-                    params: { notebookId: detail.id },
-                  })
-                }
-              />
-            </View>
-            {descriptionEditing ? (
-              <AppTextInput
-                accessibilityLabel="Notebook description"
-                autoFocus
-                editable={!mutationDisabled}
-                maxLength={10_000}
-                multiline
-                onBlur={() => setDescriptionEditing(false)}
-                onChangeText={(value) => {
-                  descriptionRef.current = value;
-                  setDescription(value);
-                  metadataRevisionRef.current += 1;
-                  setMetadataState('idle');
-                  scheduleMetadataSave();
-                }}
-                placeholder="Optional description"
-                style={{ minHeight: 112, textAlignVertical: 'top' }}
-                value={description}
-              />
-            ) : (
-              <ExpandableText
-                accessibilityLabel="Notebook description"
-                disabled={mutationDisabled}
-                onPress={() => setDescriptionEditing(true)}
-                placeholder="Add a description"
-                value={description}
-              />
-            )}
-              <SaveLabel
-                accessibilityLabel="Notebook title and description"
-                onRetry={() => void saveMetadata(metadataRevisionRef.current)}
-                state={metadataState}
-              />
-            </View>
-          </View>
-
-          <View
-            onLayout={(event: LayoutChangeEvent) => {
-              blockSectionOffset.current = event.nativeEvent.layout.y;
-            }}
-            style={{ gap: Space.md }}>
-            {pages.length === 0 ? (
-              <AppText color={Palette.textMuted}>
-                No pages yet. Add one to start writing.
-              </AppText>
-            ) : (
-              pages.map((page, pageIndex) =>
-                renderContentBlock(page.blocks[0], pageIndex, {
-                  text: (item, index) => (
-                <View
-                  key={item.id}
-                  onLayout={(event: LayoutChangeEvent) => {
-                    const y = event.nativeEvent.layout.y;
-                    blockOffsets.current[item.id] = y;
-                    blockOffsets.current[page.id] = y;
-                    requestAnimationFrame(finishPendingScroll);
-                  }}
-                  style={{
-                    backgroundColor: Palette.background,
-                    borderColor:
-                      highlightedPageId === item.id ||
-                      highlightedPageId === page.id
-                        ? Palette.trip
-                        : Palette.border,
-                    borderRadius: Radius.card,
-                    borderWidth: 1,
-                    gap: Space.md,
-                    padding: Space.lg,
-                  }}>
-                  <View
-                    style={{
-                      alignItems: 'center',
-                      flexDirection: 'row',
-                      gap: Space.xs,
-                    }}>
-                    <AutoExpandingTextInput
-                      ref={(input) => {
-                        pageTitleRefs.current[item.id] = input;
-                      }}
-                      accessibilityLabel={`Page ${index + 1} title`}
-                      editable={!mutationDisabled}
-                      maxLength={200}
-                      onChangeText={(value) => {
-                        titleDraftsRef.current = {
-                          ...titleDraftsRef.current,
-                          [item.id]: value,
-                        };
-                        setTitleDrafts((current) => ({ ...current, [item.id]: value }));
-                        itemRevisionsRef.current[item.id] =
-                          (itemRevisionsRef.current[item.id] ?? 0) + 1;
-                        setItemStates((current) => ({ ...current, [item.id]: 'idle' }));
-                        scheduleTextSave(item.id);
-                      }}
-                      placeholder="Page title"
-                      style={{
-                        backgroundColor: 'transparent',
-                        borderWidth: 0,
-                        flex: 1,
-                        fontWeight: '700',
-                        paddingHorizontal: 0,
-                        paddingVertical: 0,
-                      }}
-                      value={titleDrafts[item.id] ?? item.title ?? ''}
-                    />
-                    <PageNavigationButton
-                      accessibilityLabel="Go to previous page"
-                      disabled={index === 0}
-                      icon="arrow-up"
-                      onPress={() => {
-                        const target = adjacentContentPageId(pages, page.id, -1);
-                        if (target) navigateToPage(target);
-                      }}
-                    />
-                    <PageNavigationButton
-                      accessibilityLabel="Go to next page"
-                      disabled={index === pages.length - 1}
-                      icon="arrow-down"
-                      onPress={() => {
-                        const target = adjacentContentPageId(pages, page.id, 1);
-                        if (target) navigateToPage(target);
-                      }}
-                    />
-                    <IconAction
-                      accessibilityLabel={`Edit details for page ${index + 1}`}
-                      disabled={mutationDisabled}
-                      icon="more-horiz"
-                      onPress={() => showMetadataActions(item)}
-                      size="compact"
-                    />
-                    <IconAction
-                      accessibilityLabel={`Delete page ${index + 1}`}
-                      destructive
-                      disabled={mutationDisabled}
-                      icon="delete-outline"
-                      onPress={() => confirmDeletePage(item.id)}
-                      size="compact"
-                    />
-                  </View>
-                  {editingPageIds.has(item.id) ? (
-                    <AppTextInput
-                      accessibilityLabel={`Page ${index + 1} body`}
-                      autoFocus
-                      editable={!mutationDisabled}
-                      maxLength={100_000}
-                      multiline
-                      onBlur={() => setEditingPageIds((current) => {
-                        const next = new Set(current);
-                        next.delete(item.id);
-                        return next;
-                      })}
-                      onChangeText={(value) => {
-                        textDraftsRef.current = {
-                          ...textDraftsRef.current,
-                          [item.id]: value,
-                        };
-                        setTextDrafts((current) => ({ ...current, [item.id]: value }));
-                        itemRevisionsRef.current[item.id] =
-                          (itemRevisionsRef.current[item.id] ?? 0) + 1;
-                        setItemStates((current) => ({ ...current, [item.id]: 'idle' }));
-                        scheduleTextSave(item.id);
-                      }}
-                      placeholder="Write something…"
-                      style={{ minHeight: 100, textAlignVertical: 'top' }}
-                      value={textDrafts[item.id] ?? item.text}
-                    />
-                  ) : (
-                    <ExpandableText
-                      accessibilityLabel={`Page ${index + 1} body`}
-                      disabled={mutationDisabled}
-                      onPress={() => setEditingPageIds((current) => new Set(current).add(item.id))}
-                      placeholder="Write something…"
-                      value={textDrafts[item.id] ?? item.text}
-                    />
-                  )}
-                  <MetadataSummary block={item} />
-                  <PlacePhotoGrid
-                    horizontalInset={Space.lg}
-                    images={page.blocks.slice(1).flatMap((block) =>
-                      block.type === 'photo' && photoUrls[block.photoAssetId]
-                        ? [{
-                            _key: block.id,
-                            alt: 'Notebook photo',
-                            url: photoUrls[block.photoAssetId],
-                          }]
-                        : []
-                    )}
-                    onImageError={(image) => {
-                      const block = page.blocks.find((candidate) => candidate.id === image._key);
-                      if (!block || block.type !== 'photo') return;
-                      const attempts = photoRefreshAttemptsRef.current[block.photoAssetId] ?? 0;
-                      if (attempts >= 2) return;
-                      photoRefreshAttemptsRef.current[block.photoAssetId] = attempts + 1;
-                      void refreshPhotoUrl(block.photoAssetId);
-                    }}
-                    onRemoveImage={mutationDisabled ? undefined : (image) => {
-                      if (!image._key) return;
-                      void runImmediateMutation(() =>
-                        mutate.deletePhotoBlock(detail.id, image._key!)
-                      );
-                    }}
-                    placeTitle={item.title ?? `Notebook page ${index + 1}`}
-                  />
-                  {page.blocks.filter((block) => block.type === 'link').map((block) =>
-                    block.type === 'link' ? (
-                      <View key={block.id} style={{ borderColor: Palette.border, borderRadius: Radius.control, borderWidth: 1, gap: Space.xs, padding: Space.md }}>
-                        <View style={{ alignItems: 'center', flexDirection: 'row', gap: Space.sm }}>
-                          <View style={{ flex: 1 }}>
-                            <AppText variant="bodyStrong">{block.title || block.url}</AppText>
-                            {block.title ? <AppText color={Palette.textMuted} variant="caption">{block.url}</AppText> : null}
-                            {block.text ? <AppText>{block.text}</AppText> : null}
-                          </View>
-                          <IconAction accessibilityLabel="Edit link details" icon="more-horiz" onPress={() => showMetadataActions(block)} size="compact" />
-                          <IconAction accessibilityLabel="Delete link" destructive icon="delete-outline" onPress={() => void runImmediateMutation(() => mutate.deletePhotoBlock(detail.id, block.id))} size="compact" />
-                        </View>
-                        <AppTextInput accessibilityLabel="Link title" defaultValue={block.title ?? ''}
-                          key={`${block.id}-title-${block.updatedAt}`} maxLength={200} placeholder="Optional title"
-                          onEndEditing={(event) => void runImmediateMutation(() => mutate.updateRichBlock(detail.id, block.id, { title: event.nativeEvent.text || null }))} />
-                        <AppTextInput accessibilityLabel="Link note" defaultValue={block.text ?? ''}
-                          key={`${block.id}-note-${block.updatedAt}`} maxLength={100000} multiline placeholder="Optional note"
-                          onEndEditing={(event) => void runImmediateMutation(() => mutate.updateRichBlock(detail.id, block.id, { text: event.nativeEvent.text || null }))} />
-                        <MetadataSummary block={block} />
-                      </View>
-                    ) : null
-                  )}
-                  {localPhotoPreviews[page.id]?.length ? (
-                    <View style={{ gap: Space.sm }}>
-                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm }}>
-                        {localPhotoPreviews[page.id].map((uri, previewIndex) => (
-                          <Image
-                            accessibilityLabel={`Pending Notebook photo ${previewIndex + 1}`}
-                            contentFit="cover"
-                            key={`${uri}-${previewIndex}`}
-                            source={{ uri }}
-                            style={{
-                              aspectRatio: 1,
-                              backgroundColor: Palette.surfaceMuted,
-                              borderRadius: Radius.control,
-                              opacity: 0.65,
-                              width: '48%',
-                            }}
-                          />
-                        ))}
-                      </View>
-                      <AppText color={Palette.textMuted} variant="caption">
-                        {localPhotoPreviews[page.id].length === 1
-                          ? 'Photo upload pending'
-                          : `${localPhotoPreviews[page.id].length} photo uploads pending`}
-                      </AppText>
-                    </View>
-                  ) : null}
-                  <AppButton
-                    accessibilityLabel={`Add photo to page ${index + 1}`}
-                    disabled={mutationDisabled || photoBusyPage === page.id}
-                    label={
-                      photoBusyPage === page.id ? 'Uploading…' : 'Add photos'
-                    }
-                    onPress={() => void addPhoto(page.id)}
-                    size="compact"
-                    style={{ alignSelf: 'flex-end' }}
-                    variant="secondary"
-                  />
-                  {linkPageId === page.id ? (
-                    <View style={{ gap: Space.sm }}>
-                      <AppTextInput accessibilityLabel="Link URL" autoCapitalize="none" autoCorrect={false}
-                        keyboardType="url" onChangeText={setLinkUrl} placeholder="https://…" value={linkUrl} />
-                      <View style={{ flexDirection: 'row', gap: Space.sm, justifyContent: 'flex-end' }}>
-                        <AppButton label="Cancel" onPress={() => { setLinkPageId(null); setLinkUrl(''); }} size="compact" variant="secondary" />
-                        <AppButton label="Add link" onPress={() => void addLink()} size="compact" />
-                      </View>
-                    </View>
-                  ) : (
-                    <AppButton accessibilityLabel={`Add link to page ${index + 1}`} label="Add link"
-                      onPress={() => { setLinkPageId(page.id); setLinkUrl(''); }} size="compact"
-                      style={{ alignSelf: 'flex-end' }} variant="secondary" />
-                  )}
-                  <SaveLabel
-                    accessibilityLabel={`Page ${index + 1} text`}
-                    onRetry={() => void saveText(
-                      item.id,
-                      itemRevisionsRef.current[item.id] ?? 0
-                    )}
-                    state={itemStates[item.id] ?? 'idle'}
-                  />
-                </View>
-                  ),
-                  photo: () => <View />,
-                  link: () => <View />,
-                })
-              )
-            )}
-          </View>
-
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
-  );
+    <Modal animationType="slide" onRequestClose={() => setCapture(null)} transparent visible={Boolean(capture)}><View style={{ backgroundColor: 'rgba(0,0,0,0.28)', flex: 1, justifyContent: 'flex-end' }}><View style={{ backgroundColor: Palette.surface, borderTopLeftRadius: Radius.sheet, borderTopRightRadius: Radius.sheet, gap: Space.md, maxHeight: '82%', padding: Screen.gutter }}>
+      {capture?.action === 'Link' ? <SavedLinkCapture onCancel={() => setCapture(null)} onSave={async ({ title, url }) => { const saved = await run(() => mutate.addLinkBlock({ id: detail.id, pageId: capture.pageId, url, title, text: null, clientRequestId: capture.clientRequestId })); if (saved) setCapture(null); }} /> : null}
+      {capture?.action === 'Place' ? <SavedPlaceSelector cards={cards} onCancel={() => setCapture(null)} onConfirm={confirmPlace} /> : null}
+      {capture?.action === 'Pin' ? <><AppText variant="section">Choose a Pin location</AppText><AppButton label="Locate now" onPress={() => void pinNow(capture.pageId)} /><AppButton label="Locate on map" variant="secondary" onPress={() => { const pageId = capture.pageId; setCapture(null); router.push({ pathname: '/notebooks/location-picker', params: { notebookId: detail.id, pageId } }); }} /><AppButton label="Cancel" variant="secondary" onPress={() => setCapture(null)} /></> : null}
+    </View></View></Modal>
+  </SafeAreaView>;
 }
 
-function Notice({ text }: { text: string }) {
-  return (
-    <View
-      accessibilityRole="alert"
-      style={{
-        backgroundColor: Palette.surfaceMuted,
-        borderRadius: Radius.control,
-        padding: Space.lg,
-      }}>
-      <AppText>{text}</AppText>
+function NotebookPage({ notebookId, page, pageIndex, editing, v2Enabled, photoUrls, pendingPreviews, photoBusy, cards, editingBlocks, register, onEdit, onFinish, onDelete, onToolbar, onRemove, onMove, onMovePhotoRun, onSaveBlock, onExpand, onCollapse, onPhotoError }: {
+  notebookId: string; page: ContentPage; pageIndex: number; editing: boolean; v2Enabled: boolean;
+  photoUrls: Record<string, string>; pendingPreviews: string[]; photoBusy: boolean; cards: ReturnType<typeof usePersonalPlaceCards>['cards'];
+  editingBlocks: Set<string>;
+  register: (key: string) => (handle: NotebookAutosaveFieldHandle | null) => void;
+  onEdit: () => void; onFinish: () => Promise<void>; onDelete: () => void;
+  onToolbar: (action: NotebookObjectAction) => void; onRemove: (block: ContentBlock) => void; onMove: (block: ContentBlock, offset: -1 | 1) => void;
+  onMovePhotoRun: (blocks: PhotoContentBlock[], offset: -1 | 1) => void;
+  onSaveBlock: (block: ContentBlock, input: { title?: string | null; text?: string | null; url?: string }) => Promise<unknown>;
+  onExpand: (id: string) => void; onCollapse: (id: string) => void; onPhotoError: (block: Extract<ContentBlock, { type: 'photo' }>) => void;
+}) {
+  const blocks = orderedContentBlocks(page.blocks);
+  const body = blocks.find((block): block is TextContentBlock => block.type === 'text' && block.role === 'pageBody');
+  const presentedBlocks = groupContiguousNotebookPhotos(blocks.filter((block) => block.id !== body?.id));
+  return <View style={{ borderColor: Palette.border, borderRadius: Radius.card, borderWidth: 1, gap: Space.md, padding: Space.lg }}>
+    <View style={{ alignItems: 'flex-start', flexDirection: 'row', gap: Space.xs }}><View style={{ flex: 1 }}>
+      {editing && body ? <NotebookAutosaveField ref={register(`${page.id}:${body.id}:title`)} accessibilityLabel={`Page ${pageIndex + 1} title`} maxLength={200} placeholder="Page title" textVariant="section" value={body.title ?? ''} onSave={(title) => onSaveBlock(body, { title: title.trim() || null }).then(() => title)} /> : <AppText variant="section">{body?.title || `Page ${pageIndex + 1}`}</AppText>}
     </View>
-  );
+      {editing ? <FinishEditAction accessibilityLabel={`Finish editing Page ${pageIndex + 1}`} onPress={() => void onFinish().catch(() => undefined)} /> : <IconAction accessibilityLabel={`Edit Page ${pageIndex + 1}`} icon="edit" semantic="edit" onPress={onEdit} size="compact" />}
+      <IconAction accessibilityLabel={`Delete Page ${pageIndex + 1}`} destructive icon="delete-outline" onPress={onDelete} size="compact" />
+    </View>
+    {editing && body ? <NotebookAutosaveField ref={register(`${page.id}:${body.id}:body`)} accessibilityLabel={`Page ${pageIndex + 1} body`} maxLength={100_000} multiline placeholder="Write something…" value={body.text} onSave={(text) => onSaveBlock(body, { text }).then(() => text)} /> : body?.text ? <ShowMoreText accessibilityLabel={`Page ${pageIndex + 1} body`} value={body.text} /> : null}
+    {presentedBlocks.map((item, index) => item.kind === 'photos'
+      ? <NotebookPhotoRun key={item.blocks.map(({ id }) => id).join(':')} blocks={item.blocks} canMoveDown={index < presentedBlocks.length - 1} canMoveUp={index > 0} editingPage={editing} photoUrls={photoUrls} onMove={(offset) => onMovePhotoRun(item.blocks, offset)} onPhotoError={onPhotoError} onRemove={onRemove} />
+      : <NotebookObject key={item.block.id} notebookId={notebookId} block={item.block} index={index} count={presentedBlocks.length} editingPage={editing} expanded={editingBlocks.has(item.block.id)} cards={cards}
+        register={register} onSaveBlock={onSaveBlock} onRemove={() => onRemove(item.block)} onMove={(offset) => onMove(item.block, offset)} onExpand={() => onExpand(item.block.id)} onCollapse={() => onCollapse(item.block.id)} />)}
+    {pendingPreviews.length ? <SavedObjectReveal revealKey={`${page.id}:photos`}><View style={{ gap: Space.sm }}><View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm }}>{pendingPreviews.map((uri, index) => <Image key={`${uri}-${index}`} accessibilityLabel={`Pending Notebook photo ${index + 1}`} source={{ uri }} style={{ aspectRatio: 1, borderRadius: Radius.control, opacity: 0.65, width: '47%' }} />)}</View><AppText color={Palette.textMuted} variant="caption">{pendingPreviews.length} photo {pendingPreviews.length === 1 ? 'upload' : 'uploads'} pending</AppText></View></SavedObjectReveal> : null}
+  </View>;
 }
 
-function MetadataSummary({ block }: { block: ContentBlock }) {
-  const labels: string[] = [];
-  if (block.isImportant) labels.push('Important');
-  if (block.event?.precision === 'DATE') labels.push(block.event.date);
-  if (block.event?.precision === 'DATETIME') labels.push(new Date(block.event.dateTime).toLocaleString());
-  if (block.location) labels.push('Location saved');
-  if (labels.length === 0) return null;
-  return <AppText color={Palette.textMuted} variant="caption">{labels.join(' · ')}</AppText>;
-}
-
-function PageNavigationButton({
-  accessibilityLabel,
-  disabled,
-  icon,
-  onPress,
-}: {
-  accessibilityLabel: string;
-  disabled: boolean;
-  icon: 'arrow-down' | 'arrow-up';
-  onPress: () => void;
+function NotebookObject({ notebookId, block, index, count, editingPage, expanded, cards, register, onSaveBlock, onRemove, onMove, onExpand, onCollapse }: {
+  notebookId: string; block: Exclude<ContentBlock, PhotoContentBlock>; index: number; count: number; editingPage: boolean; expanded: boolean;
+  cards: ReturnType<typeof usePersonalPlaceCards>['cards']; register: (key: string) => (handle: NotebookAutosaveFieldHandle | null) => void;
+  onSaveBlock: (block: ContentBlock, input: { title?: string | null; text?: string | null; url?: string }) => Promise<unknown>;
+  onRemove: () => void; onMove: (offset: -1 | 1) => void; onExpand: () => void; onCollapse: () => void;
 }) {
-  return <IconAction
-    accessibilityLabel={accessibilityLabel}
-    disabled={disabled}
-    icon={icon === 'arrow-up' ? 'arrow-upward' : 'arrow-downward'}
-    onPress={onPress}
-    size="compact"
-  />;
+  const router = useRouter();
+  const content = <View style={{ gap: Space.sm }}>
+    {block.type === 'text' ? expanded ? <><NotebookAutosaveField ref={register(`${block.id}:title`)} accessibilityLabel="Text title" maxLength={200} placeholder="Optional title" textVariant="cardTitle" value={block.title ?? ''} onSave={(title) => onSaveBlock(block, { title: title.trim() || null }).then(() => title)} /><NotebookAutosaveField ref={register(`${block.id}:body`)} accessibilityLabel="Text body" maxLength={10_000} multiline placeholder="Write something…" value={block.text} onSave={(text) => onSaveBlock(block, { text }).then(() => text)} /></> : <View>{block.title ? <AppText variant="bodyStrong">{block.title}</AppText> : null}<ShowMoreText accessibilityLabel="Text body" value={block.text || 'Empty content'} /></View> : null}
+    {block.type === 'link' ? <>{<SavedLinkObject note={block.text} title={block.title} url={block.url} />}{expanded ? <><NotebookAutosaveField ref={register(`${block.id}:title`)} accessibilityLabel="Link title" maxLength={200} placeholder="Optional title" value={block.title ?? ''} onSave={(title) => onSaveBlock(block, { title: title.trim() || null }).then(() => title)} /><NotebookAutosaveField ref={register(`${block.id}:url`)} accessibilityLabel="Link URL" placeholder="https://…" value={block.url} onSave={(url) => isHttpUrl(url) ? onSaveBlock(block, { url: url.trim() }).then(() => url.trim()) : Promise.reject(new Error('invalid_url'))} /><NotebookAutosaveField ref={register(`${block.id}:note`)} accessibilityLabel="Link note" maxLength={10_000} multiline placeholder="Optional note" value={block.text ?? ''} onSave={(text) => onSaveBlock(block, { text: text.trim() || null }).then(() => text)} /></> : null}</> : null}
+    {block.type === 'place' ? <SavedPlaceObject available={block.availability === 'available'} kind={block.reference.kind === 'personal' ? 'personal' : 'editorial'} onPress={block.availability === 'available' ? () => openCanonicalPlace(router, notebookId, block) : undefined} showLabel={false} title={placeTitle(block, cards)} /> : null}
+    {block.type === 'pin' ? <><SavedPinObject detail={`${block.location.latitude.toFixed(5)}, ${block.location.longitude.toFixed(5)}`} onShowMap={() => router.push({ pathname: '/map', params: { lat: String(block.location.latitude), lng: String(block.location.longitude), title: block.title || 'Saved Pin', origin: 'notebook', notebookId } })} title={block.title} />{expanded ? <><NotebookAutosaveField ref={register(`${block.id}:title`)} accessibilityLabel="Pin label" maxLength={200} placeholder="Optional label" value={block.title ?? ''} onSave={(title) => onSaveBlock(block, { title: title.trim() || null }).then(() => title)} /><AppButton label="Change location" variant="secondary" onPress={() => router.push({ pathname: '/notebooks/location-picker', params: { notebookId, blockId: block.id, latitude: String(block.location.latitude), longitude: String(block.location.longitude) } })} /></> : null}</> : null}
+  </View>;
+  return editingPage ? <SavedObjectEditorShell canMoveDown={index < count - 1} canMoveUp={index > 0} collapsed={content} editable={block.type !== 'place'} expanded={expanded} label={objectName(block).toUpperCase()} onCollapse={onCollapse} onExpand={onExpand} onMove={onMove} onRemove={onRemove}>{content}</SavedObjectEditorShell> : <View style={{ backgroundColor: Palette.surfaceMuted, borderRadius: Radius.control, padding: Space.md }}><AppText color={Palette.textMuted} variant="label">{objectName(block).toUpperCase()}</AppText>{content}</View>;
 }
 
-function SaveLabel({
-  accessibilityLabel,
-  onRetry,
-  state,
-}: {
-  accessibilityLabel: string;
-  onRetry: () => void;
-  state: SaveState;
+function NotebookPhotoRun({ blocks, canMoveDown, canMoveUp, editingPage, photoUrls, onMove, onPhotoError, onRemove }: {
+  blocks: PhotoContentBlock[]; canMoveDown: boolean; canMoveUp: boolean; editingPage: boolean; photoUrls: Record<string, string>;
+  onMove: (offset: -1 | 1) => void; onPhotoError: (block: PhotoContentBlock) => void; onRemove: (block: ContentBlock) => void;
 }) {
-  return <AutosaveStatus
-    accessibilityLabel={accessibilityLabel}
-    onRetry={onRetry}
-    state={state}
-  />;
+  const images = blocks.flatMap((block) => { const url = photoUrls[block.photoAssetId]; return url ? [{ _key: block.id, alt: 'Notebook photo', url }] : []; });
+  const grid = images.length ? <PlacePhotoGrid bottomMargin={0} images={images} onImageError={(image) => { const block = blocks.find(({ id }) => id === image._key); if (block) onPhotoError(block); }} onRemoveImage={editingPage ? (image) => { const block = blocks.find(({ id }) => id === image._key); if (block) onRemove(block); } : undefined} placeTitle="Notebook" /> : <AppText color={Palette.textMuted}>Photos loading…</AppText>;
+  return editingPage ? <DragReorderRow canMoveDown={canMoveDown} canMoveUp={canMoveUp} header={<AppText color={Palette.textMuted} variant="label">PHOTOS</AppText>} label={blocks.length === 1 ? 'Photo' : 'Photo group'} onMove={onMove}>{grid}</DragReorderRow> : <View style={{ backgroundColor: Palette.surfaceMuted, borderRadius: Radius.control, gap: Space.sm, padding: Space.md }}><AppText color={Palette.textMuted} variant="label">PHOTOS</AppText>{grid}</View>;
 }
+
+function openCanonicalPlace(router: ReturnType<typeof useRouter>, notebookId: string, block: PlaceContentBlock) {
+  if (block.reference.kind === 'personal') {
+    router.push({ pathname: '/personal-place-cards/[cardId]', params: { cardId: block.reference.personalPlaceCardId, mode: 'view', notebookId, origin: 'notebook' } });
+    return;
+  }
+  router.push({ pathname: '/place/[slug]', params: { slug: block.reference.editorialPlaceId, editorialPlaceId: block.reference.editorialPlaceId, notebookId, origin: 'notebook' } });
+}
+
+function objectName(block: ContentBlock) { return block.type === 'text' ? 'Text' : block.type === 'photo' ? 'Photo' : block.type === 'link' ? 'Link' : block.type === 'place' ? savedPlaceLabel(block.reference.kind === 'personal' ? 'personal' : 'editorial') : 'Pin'; }
+function placeTitle(block: Extract<ContentBlock, { type: 'place' }>, cards: ReturnType<typeof usePersonalPlaceCards>['cards']) {
+  if (block.reference.kind === 'personal') {
+    const personalPlaceCardId = block.reference.personalPlaceCardId;
+    return cards.find(({ id }) => id === personalPlaceCardId)?.title || block.titleSnapshot || 'Personal Place';
+  }
+  return block.titleSnapshot || 'TripIdeas Place';
+}
+function Notice({ text }: { text: string }) { return <View accessibilityRole="alert" style={{ backgroundColor: Palette.surfaceMuted, borderRadius: Radius.control, padding: Space.lg }}><AppText>{text}</AppText></View>; }

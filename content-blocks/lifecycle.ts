@@ -26,6 +26,8 @@ export function createContentBlock(
         position,
         input.title ?? null
       );
+    default:
+      throw new Error('objects_v2_page_block_required');
   }
 }
 

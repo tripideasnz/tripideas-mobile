@@ -3,6 +3,8 @@ import type {
   TextContentBlock,
   PhotoContentBlock,
   LinkContentBlock,
+  PlaceContentBlock,
+  PinContentBlock,
 } from '@/content-blocks/types';
 
 export type ContentBlockReaders = {
@@ -34,6 +36,7 @@ const textBlockDefinition: ContentBlockDefinition<TextContentBlock> = {
     position: readers.integer(block.position),
     title: readers.nullableString(block.title),
     text: readers.string(block.text),
+    role: block.role === 'pageBody' ? 'pageBody' : 'content',
     createdAt: readers.string(block.createdAt),
     updatedAt: readers.string(block.updatedAt),
     ...metadata(block, readers),
@@ -65,10 +68,46 @@ const linkBlockDefinition: ContentBlockDefinition<LinkContentBlock> = {
   }),
 };
 
+const placeBlockDefinition: ContentBlockDefinition<PlaceContentBlock> = {
+  type: 'place',
+  parse: (block, readers) => {
+    const reference = readers.object(block.reference);
+    const parsedReference = reference.kind === 'editorial'
+      ? { kind: 'editorial' as const, editorialPlaceId: readers.string(reference.editorialPlaceId) }
+      : reference.kind === 'personal'
+        ? { kind: 'personal' as const, personalPlaceCardId: readers.string(reference.personalPlaceCardId) }
+        : null;
+    if (!parsedReference || (block.availability !== 'available' && block.availability !== 'unavailable')) {
+      throw new Error('unsupported_place_reference');
+    }
+    return {
+      id: readers.string(block.id), type: 'place', position: readers.integer(block.position),
+      titleSnapshot: readers.nullableString(block.titleSnapshot), reference: parsedReference,
+      availability: block.availability, locationSnapshot: block.locationSnapshot == null
+        ? null : block.locationSnapshot as PlaceContentBlock['locationSnapshot'],
+      clientRequestId: readers.string(block.clientRequestId), createdAt: readers.string(block.createdAt),
+      updatedAt: readers.string(block.updatedAt), ...metadata(block, readers),
+    };
+  },
+};
+
+const pinBlockDefinition: ContentBlockDefinition<PinContentBlock> = {
+  type: 'pin',
+  parse: (block, readers) => ({
+    id: readers.string(block.id), type: 'pin', position: readers.integer(block.position),
+    title: readers.nullableString(block.title), ...metadata(block, readers),
+    location: readers.object(block.location) as PinContentBlock['location'],
+    clientRequestId: readers.string(block.clientRequestId), createdAt: readers.string(block.createdAt),
+    updatedAt: readers.string(block.updatedAt),
+  }),
+};
+
 const definitions = {
   text: textBlockDefinition,
   photo: photoBlockDefinition,
   link: linkBlockDefinition,
+  place: placeBlockDefinition,
+  pin: pinBlockDefinition,
 } satisfies Record<ContentBlock['type'], ContentBlockDefinition<ContentBlock>>;
 
 export function contentBlockDefinition(
@@ -82,8 +121,8 @@ export function parseContentBlock(
   readers: ContentBlockReaders
 ): ContentBlock {
   const block = readers.object(value);
-  if (block.type !== 'text' && block.type !== 'photo' && block.type !== 'link') {
+  if (!['text', 'photo', 'link', 'place', 'pin'].includes(String(block.type))) {
     throw new Error('unsupported_content_block');
   }
-  return contentBlockDefinition(block.type).parse(block, readers);
+  return contentBlockDefinition(block.type as ContentBlock['type']).parse(block, readers);
 }

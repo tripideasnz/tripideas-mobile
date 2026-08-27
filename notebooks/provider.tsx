@@ -33,8 +33,12 @@ import {
   readNotebookContent,
   addNotebookPhotoBlock,
   addNotebookLinkBlock,
+  addNotebookTextBlock,
+  addNotebookPlaceBlock,
+  addNotebookPinBlock,
+  reorderNotebookBlocks,
   updateNotebookBlock,
-  deleteNotebookPhotoBlock,
+  deleteNotebookBlock,
   updateNotebook as updateNotebookRequest,
 } from '@/notebooks/api';
 import { notebookStorage } from '@/notebooks/storage';
@@ -82,7 +86,12 @@ type NotebookContextValue = {
       clientRequestId: string;
     }) => Promise<NotebookDetail>;
     deletePhotoBlock: (id: string, blockId: string) => Promise<NotebookDetail>;
-    addLinkBlock: (input: { id: string; pageId: string; url: string; clientRequestId: string }) => Promise<NotebookDetail>;
+    deleteObjectBlock: (id: string, blockId: string) => Promise<NotebookDetail>;
+    addLinkBlock: (input: { id: string; pageId: string; url: string; title?: string | null; text?: string | null; clientRequestId: string }) => Promise<NotebookDetail>;
+    addTextBlock: (input: { id: string; pageId: string; title?: string | null; text?: string; clientRequestId: string }) => Promise<NotebookDetail>;
+    addPlaceBlock: (input: { id: string; pageId: string; titleSnapshot: string; reference: { kind: 'editorial'; editorialPlaceId: string } | { kind: 'personal'; personalPlaceCardId: string }; locationSnapshot?: { latitude: number; longitude: number; accuracyMeters?: number | null } | null; clientRequestId: string }) => Promise<NotebookDetail>;
+    addPinBlock: (input: { id: string; pageId: string; title?: string | null; location: { latitude: number; longitude: number; source: 'PIN_NOW' | 'MAP_SELECTED'; accuracyMeters?: number | null }; clientRequestId: string }) => Promise<NotebookDetail>;
+    reorderPageBlocks: (id: string, pageId: string, blockIds: string[]) => Promise<NotebookDetail>;
     updateRichBlock: (id: string, blockId: string, input: RichBlockMetadataInput & { title?: string | null; text?: string | null; url?: string }) => Promise<NotebookDetail>;
   };
   notebooks: NotebookSummary[];
@@ -300,20 +309,68 @@ export function NotebookProvider({ children }: PropsWithChildren) {
             position: page.blocks.length,
           });
         }),
-      addLinkBlock: (input: { id: string; pageId: string; url: string; clientRequestId: string }) =>
+      addLinkBlock: (input: { id: string; pageId: string; url: string; title?: string | null; text?: string | null; clientRequestId: string }) => {
+        const ownerId = activeUserIdRef.current;
+        if (!ownerId) return Promise.reject(new ApiError(401, 'unauthenticated'));
+        const matchesRequest = (detail: NotebookDetail) => detail.pages
+          ?.some((page) => page.id === input.pageId && page.blocks.some((block) =>
+            block.type === 'link' && block.clientRequestId === input.clientRequestId &&
+            block.url === input.url && block.title === (input.title ?? null) &&
+            block.text === (input.text ?? null)));
+        return enqueueMutation(input.id, async () => {
+          const detail = await currentDetail(ownerId, input.id);
+          if (matchesRequest(detail)) return detail;
+          const page = detail.pages?.find((candidate) => candidate.id === input.pageId);
+          if (!page) throw new ApiError(404, 'not_found');
+          try {
+            await addNotebookLinkBlock({ notebookId: input.id, pageId: input.pageId,
+              url: input.url, title: input.title ?? null, text: input.text ?? null,
+              clientRequestId: input.clientRequestId,
+              expectedVersion: detail.version, position: page.blocks.length });
+          } catch (error) {
+            try {
+              const refreshed = await storeDetail(ownerId, await readNotebookContent(input.id));
+              if (matchesRequest(refreshed)) return refreshed;
+            } catch { /* preserve the original create failure */ }
+            throw error;
+          }
+          return storeDetail(ownerId, await readNotebookContent(input.id));
+        });
+      },
+      addTextBlock: (input: { id: string; pageId: string; title?: string | null; text?: string; clientRequestId: string }) =>
         authoritativeMutation(input.id, (detail) => {
           const page = detail.pages?.find((candidate) => candidate.id === input.pageId);
           if (!page) throw new ApiError(404, 'not_found');
-          return addNotebookLinkBlock({ notebookId: input.id, pageId: input.pageId,
-            url: input.url, clientRequestId: input.clientRequestId,
-            expectedVersion: detail.version, position: page.blocks.length });
+          return addNotebookTextBlock({ notebookId: input.id, pageId: input.pageId,
+            clientRequestId: input.clientRequestId, title: input.title ?? null,
+            text: input.text ?? '', expectedVersion: detail.version, position: page.blocks.length });
+        }),
+      addPlaceBlock: (input: { id: string; pageId: string; titleSnapshot: string; reference: { kind: 'editorial'; editorialPlaceId: string } | { kind: 'personal'; personalPlaceCardId: string }; locationSnapshot?: { latitude: number; longitude: number; accuracyMeters?: number | null } | null; clientRequestId: string }) =>
+        authoritativeMutation(input.id, (detail) => {
+          const page = detail.pages?.find((candidate) => candidate.id === input.pageId);
+          if (!page) throw new ApiError(404, 'not_found');
+          return addNotebookPlaceBlock({ notebookId: input.id, pageId: input.pageId,
+            expectedVersion: detail.version, position: page.blocks.length,
+            clientRequestId: input.clientRequestId, titleSnapshot: input.titleSnapshot,
+            reference: input.reference, locationSnapshot: input.locationSnapshot });
+        }),
+      addPinBlock: (input: { id: string; pageId: string; title?: string | null; location: { latitude: number; longitude: number; source: 'PIN_NOW' | 'MAP_SELECTED'; accuracyMeters?: number | null }; clientRequestId: string }) =>
+        authoritativeMutation(input.id, (detail) => {
+          const page = detail.pages?.find((candidate) => candidate.id === input.pageId);
+          if (!page) throw new ApiError(404, 'not_found');
+          return addNotebookPinBlock({ notebookId: input.id, pageId: input.pageId,
+            expectedVersion: detail.version, position: page.blocks.length,
+            clientRequestId: input.clientRequestId, title: input.title,
+            location: input.location });
         }),
       updateRichBlock: (id: string, blockId: string, input: RichBlockMetadataInput & { title?: string | null; text?: string | null; url?: string }) =>
         authoritativeMutation(id, (detail) => updateNotebookBlock(id, blockId, detail.version, input)),
       deletePhotoBlock: (id: string, blockId: string) =>
         authoritativeMutation(id, (detail) =>
-          deleteNotebookPhotoBlock(id, blockId, detail.version)
+          deleteNotebookBlock(id, blockId, detail.version)
         ),
+      deleteObjectBlock: (id: string, blockId: string) =>
+        authoritativeMutation(id, (detail) => deleteNotebookBlock(id, blockId, detail.version)),
       updateBlock: (
         id: string,
         blockId: string,
@@ -330,8 +387,12 @@ export function NotebookProvider({ children }: PropsWithChildren) {
         authoritativeMutation(id, (detail) =>
           reorderContentBlocks(id, detail.version, blockIds)
         ),
+      reorderPageBlocks: (id: string, pageId: string, blockIds: string[]) =>
+        authoritativeMutation(id, (detail) =>
+          reorderNotebookBlocks(id, pageId, detail.version, blockIds)
+        ),
     }),
-    [authoritativeMutation]
+    [authoritativeMutation, currentDetail, enqueueMutation, storeDetail]
   );
 
   const value = useMemo(

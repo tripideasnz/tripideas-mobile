@@ -1,23 +1,27 @@
 import type { Href } from 'expo-router';
 
 type NotebookRouter = {
-  dismissTo: (href: Href) => void;
+  back: () => void;
+  canGoBack: () => boolean;
   push: (href: Href) => void;
+  replace: (href: Href) => void;
 };
 
 const NOTEBOOK_LIST_HREF = '/notebooks' as Href;
 const SAVED_HREF = '/saved' as Href;
 
 export function backFromNotebookDetail(
-  router: Pick<NotebookRouter, 'dismissTo'>
+  router: Pick<NotebookRouter, 'back' | 'canGoBack' | 'replace'>
 ): void {
-  router.dismissTo(NOTEBOOK_LIST_HREF);
+  if (router.canGoBack()) router.back();
+  else router.replace(NOTEBOOK_LIST_HREF);
 }
 
 export function backFromNotebookList(
-  router: Pick<NotebookRouter, 'dismissTo'>
+  router: Pick<NotebookRouter, 'back' | 'canGoBack' | 'replace'>
 ): void {
-  router.dismissTo(SAVED_HREF);
+  if (router.canGoBack()) router.back();
+  else router.replace(SAVED_HREF);
 }
 
 export function openNotebook(

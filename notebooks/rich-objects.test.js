@@ -2,10 +2,11 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 require('typescript');
 
-test('rich object source keeps backwards-compatible defaults and supported link parser', () => {
+test('objects-v2 parser keeps rich defaults and supports the canonical vocabulary', () => {
   const fs = require('node:fs');
   const registry = fs.readFileSync(require.resolve('../content-blocks/registry.ts'), 'utf8');
-  assert.match(registry, /block\.type !== 'link'/);
+  assert.match(registry, /'text', 'photo', 'link', 'place', 'pin'/);
+  assert.match(registry, /role: block\.role === 'pageBody'/);
   assert.match(registry, /isImportant: block\.isImportant === true/);
   assert.match(registry, /location: block\.location == null \? null/);
 });

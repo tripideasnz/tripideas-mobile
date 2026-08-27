@@ -76,22 +76,16 @@ export function parseNotebookContent(value: unknown): NotebookDetail {
           throw new ApiError(500, 'malformed_response');
         }
         const title = nullableString(page.title);
-        const blocks = page.blocks.map((block) => {
-          const raw = object(block);
-          return parseContentBlock(
-            raw.type === 'text' ? { ...raw, title } : raw,
-            { integer, nullableString, object, string }
-          );
-        }).sort((a, b) => a.position - b.position);
+        const blocks = page.blocks.map((block) => parseContentBlock(
+          block, { integer, nullableString, object, string }
+        )).sort((a, b) => a.position - b.position);
         return {
           id: string(page.id),
           position: integer(page.position),
           title,
           createdAt: string(page.createdAt),
           updatedAt: string(page.updatedAt),
-          blocks: blocks.map((block) =>
-            block.type === 'text' ? { ...block, title } : block
-          ),
+          blocks,
         };
       })
       .sort((a, b) => a.position - b.position),
@@ -116,6 +110,14 @@ const json = (body: unknown): RequestInit => ({
   headers: { 'Content-Type': 'application/json' },
 });
 
+const objectsV2 = (body?: unknown): RequestInit => ({
+  ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  headers: {
+    ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+    'X-TripIdeas-Notebook-Contract': 'objects-v2',
+  },
+});
+
 export async function listNotebooks(): Promise<NotebookSummary[]> {
   const response = object(await apiFetch<unknown>('/notebooks'));
   if (!Array.isArray(response.notebooks)) {
@@ -138,7 +140,7 @@ export async function readNotebook(id: string): Promise<NotebookDetail> {
 
 export async function readNotebookContent(id: string): Promise<NotebookDetail> {
   return parseNotebookContent(
-    await apiFetch(`/notebooks/${encodeURIComponent(id)}/content`)
+    await apiFetch(`/notebooks/${encodeURIComponent(id)}/content`, objectsV2())
   );
 }
 
@@ -163,7 +165,7 @@ export async function addNotebookPhotoBlock(input: {
       `/notebooks/${encodeURIComponent(notebookId)}/blocks/photo`,
       {
         method: 'POST',
-        ...json({
+        ...objectsV2({
           pageId,
           photoAssetId,
           clientRequestId,
@@ -177,12 +179,57 @@ export async function addNotebookPhotoBlock(input: {
 
 export async function addNotebookLinkBlock(input: {
   notebookId: string; pageId: string; url: string; clientRequestId: string;
-  expectedVersion: number; position: number;
+  expectedVersion: number; position: number; title?: string | null; text?: string | null;
 }): Promise<NotebookDetail> {
   const { notebookId, ...body } = input;
   return parseNotebookContent(await apiFetch(
     `/notebooks/${encodeURIComponent(notebookId)}/blocks/link`,
-    { method: 'POST', ...json(body) }
+    { method: 'POST', ...objectsV2(body) }
+  ));
+}
+
+export async function addNotebookTextBlock(input: {
+  notebookId: string; pageId: string; clientRequestId: string; expectedVersion: number;
+  position: number; title?: string | null; text: string;
+}): Promise<NotebookDetail> {
+  const { notebookId, ...body } = input;
+  return parseNotebookContent(await apiFetch(
+    `/notebooks/${encodeURIComponent(notebookId)}/blocks/text`,
+    { method: 'POST', ...objectsV2(body) }
+  ));
+}
+
+export async function addNotebookPlaceBlock(input: {
+  notebookId: string; pageId: string; clientRequestId: string; expectedVersion: number;
+  position: number; titleSnapshot: string;
+  reference: { kind: 'editorial'; editorialPlaceId: string } | { kind: 'personal'; personalPlaceCardId: string };
+  locationSnapshot?: { latitude: number; longitude: number; accuracyMeters?: number | null } | null;
+}): Promise<NotebookDetail> {
+  const { notebookId, ...body } = input;
+  return parseNotebookContent(await apiFetch(
+    `/notebooks/${encodeURIComponent(notebookId)}/blocks/place`,
+    { method: 'POST', ...objectsV2(body) }
+  ));
+}
+
+export async function addNotebookPinBlock(input: {
+  notebookId: string; pageId: string; clientRequestId: string; expectedVersion: number;
+  position: number; title?: string | null;
+  location: { latitude: number; longitude: number; source: 'PIN_NOW' | 'MAP_SELECTED'; accuracyMeters?: number | null };
+}): Promise<NotebookDetail> {
+  const { notebookId, ...body } = input;
+  return parseNotebookContent(await apiFetch(
+    `/notebooks/${encodeURIComponent(notebookId)}/blocks/pin`,
+    { method: 'POST', ...objectsV2(body) }
+  ));
+}
+
+export async function reorderNotebookBlocks(
+  notebookId: string, pageId: string, expectedVersion: number, blockIds: string[]
+): Promise<NotebookDetail> {
+  return parseNotebookContent(await apiFetch(
+    `/notebooks/${encodeURIComponent(notebookId)}/pages/${encodeURIComponent(pageId)}/blocks/order`,
+    { method: 'PUT', ...objectsV2({ expectedVersion, blockIds }) }
   ));
 }
 
@@ -194,11 +241,11 @@ export async function updateNotebookBlock(
 ): Promise<NotebookDetail> {
   return parseNotebookContent(await apiFetch(
     `/notebooks/${encodeURIComponent(notebookId)}/blocks/${encodeURIComponent(blockId)}`,
-    { method: 'PATCH', ...json({ expectedVersion, ...input }) }
+    { method: 'PATCH', ...objectsV2({ expectedVersion, ...input }) }
   ));
 }
 
-export async function deleteNotebookPhotoBlock(
+export async function deleteNotebookBlock(
   notebookId: string,
   blockId: string,
   expectedVersion: number
@@ -206,7 +253,7 @@ export async function deleteNotebookPhotoBlock(
   return parseNotebookContent(
     await apiFetch(
       `/notebooks/${encodeURIComponent(notebookId)}/blocks/${encodeURIComponent(blockId)}`,
-      { method: 'DELETE', ...json({ expectedVersion }) }
+      { method: 'DELETE', ...objectsV2({ expectedVersion }) }
     )
   );
 }

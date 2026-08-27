@@ -25,10 +25,7 @@ import { pagesFromContentBlocks } from '@/content-blocks/pages';
 import { authorizePhotoRead } from '@/notebooks/api';
 import { classifyNotebookError } from '@/notebooks/errors';
 import { validateNotebookMetadata } from '@/notebooks/model';
-import {
-  backFromNotebookList,
-  openNotebook,
-} from '@/notebooks/navigation';
+import { openNotebook } from '@/notebooks/navigation';
 import { useNotebooks } from '@/notebooks/provider';
 import type { NotebookSummary } from '@/notebooks/types';
 import type { TripImage } from '@/trips/images';
@@ -64,9 +61,6 @@ export default function NotebookListScreen() {
   const [coverImages, setCoverImages] = useState<Record<string, TripImage[]>>({});
   const coverUrlCacheRef = useRef(new Map<string, string>());
   const createInFlightRef = useRef(false);
-  const handleBack = useCallback(() => {
-    backFromNotebookList(router);
-  }, [router]);
 
   const resetCreateForm = () => {
     setTitle('');
@@ -169,7 +163,7 @@ export default function NotebookListScreen() {
     <SafeAreaView edges={['bottom']} style={{ flex: 1, backgroundColor: Palette.background }}>
       <Stack.Screen
         options={{
-          headerLeft: () => <HeaderBackButton color={Palette.trip} onPress={handleBack} />,
+          headerLeft: () => <HeaderBackButton color={Palette.trip} fallbackHref="/saved" />,
           headerRight: () => session ? (
             <Pressable
               accessibilityLabel="Add Notebook"

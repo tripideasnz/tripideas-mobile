@@ -23,6 +23,7 @@ export type NotebookBlockLocation = {
 export type TextContentBlock = ContentBlockBase<'text'> & {
   title: string | null;
   text: string;
+  role: 'pageBody' | 'content';
 };
 
 export type PhotoContentBlock = ContentBlockBase<'photo'> & {
@@ -37,7 +38,28 @@ export type LinkContentBlock = ContentBlockBase<'link'> & {
   clientRequestId: string;
 };
 
-export type ContentBlock = TextContentBlock | PhotoContentBlock | LinkContentBlock;
+export type PlaceContentBlock = ContentBlockBase<'place'> & {
+  titleSnapshot: string | null;
+  reference:
+    | { kind: 'editorial'; editorialPlaceId: string }
+    | { kind: 'personal'; personalPlaceCardId: string };
+  availability: 'available' | 'unavailable';
+  locationSnapshot: NotebookBlockLocation | null;
+  clientRequestId: string;
+};
+
+export type PinContentBlock = ContentBlockBase<'pin'> & {
+  title: string | null;
+  location: NotebookBlockLocation;
+  clientRequestId: string;
+};
+
+export type ContentBlock =
+  | TextContentBlock
+  | PhotoContentBlock
+  | LinkContentBlock
+  | PlaceContentBlock
+  | PinContentBlock;
 
 export type ContentPage = {
   id: string;
@@ -53,6 +75,19 @@ export type CreateContentBlockInput =
       type: 'text';
       title?: string | null;
       text?: string;
+    }
+  | {
+      type: 'place';
+      titleSnapshot: string;
+      reference: PlaceContentBlock['reference'];
+      locationSnapshot?: Omit<NotebookBlockLocation, 'source'> | null;
+    }
+  | {
+      type: 'pin';
+      title?: string | null;
+      location: Omit<NotebookBlockLocation, 'source'> & {
+        source: 'PIN_NOW' | 'MAP_SELECTED';
+      };
     };
 
 export type UpdateContentBlockInput =

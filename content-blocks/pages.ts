@@ -13,7 +13,7 @@ export function pagesFromContentBlocks(blocks: ContentBlock[]): ContentPage[] {
     id: block.id,
     position: block.position,
     title: block.type === 'text' ? block.title : null,
-    blocks: [{ ...block, position: 0 }],
+    blocks: [{ ...block, position: 0, ...(block.type === 'text' ? { role: 'pageBody' as const } : {}) }],
     createdAt: block.createdAt,
     updatedAt: block.updatedAt,
   }));

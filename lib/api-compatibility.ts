@@ -23,6 +23,28 @@ type ApiIdentity = {
   environment?: unknown;
 };
 
+export type ApiCapabilityStatus = 'supported' | 'unsupported' | 'unreachable';
+
+export async function checkApiCapability(
+  capability: string,
+  fetcher: typeof fetch = fetch
+): Promise<ApiCapabilityStatus> {
+  let response: Response;
+  try {
+    response = await fetcher(`${API_BASE_URL}/version`);
+  } catch {
+    return 'unreachable';
+  }
+  if (!response.ok) return response.status === 404 ? 'unsupported' : 'unreachable';
+  try {
+    const identity = await response.json() as ApiIdentity;
+    return identity.apiVersion === 1 && Array.isArray(identity.capabilities) &&
+      identity.capabilities.includes(capability) ? 'supported' : 'unsupported';
+  } catch {
+    return 'unsupported';
+  }
+}
+
 export async function checkApiCompatibility(
   fetcher: typeof fetch = fetch
 ): Promise<ApiCompatibility> {

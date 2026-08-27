@@ -40,12 +40,16 @@ const textBlock = (id, position, text = '') => ({
   position,
   title: null,
   text,
+  role: 'content',
   createdAt: '2026-07-27T00:00:00.000Z',
   updatedAt: '2026-07-27T00:00:00.000Z',
 });
 
 assert.deepEqual(parseContentBlock(textBlock('text-1', 0, 'Milford'), readers), {
   ...textBlock('text-1', 0, 'Milford'),
+  event: null,
+  isImportant: false,
+  location: null,
 });
 const photoBlock = {
   id: 'photo-1',
@@ -56,7 +60,7 @@ const photoBlock = {
   createdAt: '2026-07-27T00:00:00.000Z',
   updatedAt: '2026-07-27T00:00:00.000Z',
 };
-assert.deepEqual(parseContentBlock(photoBlock, readers), photoBlock);
+assert.deepEqual(parseContentBlock(photoBlock, readers), { ...photoBlock, event: null, isImportant: false, location: null });
 assert.throws(
   () => parseContentBlock({ ...photoBlock, type: 'map' }, readers),
   /unsupported_content_block/
@@ -100,6 +104,9 @@ const rendered = renderContentBlock(textBlock('text-2', 4), 3, {
   photo() {
     return createElement('PhotoBlock');
   },
+  link() { return createElement('LinkBlock'); },
+  place() { return createElement('PlaceBlock'); },
+  pin() { return createElement('PinBlock'); },
 });
 assert.equal(renderedBlock.id, 'text-2');
 assert.equal(renderedIndex, 3);
@@ -114,6 +121,9 @@ const renderedPhoto = renderContentBlock(photoBlock, 1, {
   photo(block) {
     return createElement('PhotoBlock', { assetId: block.photoAssetId });
   },
+  link() { return createElement('LinkBlock'); },
+  place() { return createElement('PlaceBlock'); },
+  pin() { return createElement('PinBlock'); },
 });
 assert.equal(renderedPhoto.type, 'PhotoBlock');
 assert.equal(renderedPhoto.props.assetId, 'asset-1');

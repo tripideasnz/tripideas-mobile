@@ -10,6 +10,12 @@ import {
 import {
   addNotebookTextItem,
   addNotebookPhotoBlock,
+  addNotebookLinkBlock,
+  addNotebookTextBlock,
+  addNotebookPlaceBlock,
+  addNotebookPinBlock,
+  reorderNotebookBlocks,
+  deleteNotebookBlock,
   authorizePhotoRead,
   createNotebook,
   deleteNotebook,
@@ -108,7 +114,9 @@ test('owner Photo Block requests preserve page ordering and hide delivery detail
           id: 'text-1',
           type: 'text',
           position: 0,
+          title: 'Arrival',
           text: 'Notes',
+          role: 'pageBody',
           createdAt: detail.createdAt,
           updatedAt: detail.updatedAt,
         },
@@ -155,6 +163,49 @@ test('owner Photo Block requests preserve page ordering and hide delivery detail
     clientRequestId: 'photo-block:request-1',
     expectedVersion: 2,
     position: 1,
+  });
+});
+
+test('objects-v2 requests and five-object parser preserve page identity and ordering', async () => {
+  const calls = [];
+  setActiveToken('mobile-token');
+  const base = { createdAt: detail.createdAt, updatedAt: detail.updatedAt };
+  const content = { ...detail, pages: [{ id: 'page-1', position: 0, title: 'Page', ...base, blocks: [
+    { id: 'text-body', type: 'text', position: 3, title: 'Page', text: 'Body', role: 'pageBody', ...base },
+    { id: 'text-child', type: 'text', position: 0, title: null, text: 'Child', role: 'content', ...base },
+    { id: 'place-1', type: 'place', position: 1, titleSnapshot: 'Private place', reference: { kind: 'personal', personalPlaceCardId: 'card-1' }, availability: 'unavailable', locationSnapshot: null, clientRequestId: 'place-request', ...base },
+    { id: 'pin-1', type: 'pin', position: 2, title: null, location: { latitude: -41, longitude: 174, source: 'MAP_SELECTED', accuracyMeters: null }, clientRequestId: 'pin-request', ...base },
+  ] }] };
+  globalThis.fetch = async (input, init) => { calls.push([String(input), init]); return Response.json(content); };
+  const parsed = await readNotebookContent('notebook-1');
+  assert.deepEqual(parsed.pages[0].blocks.map(({ id }) => id), ['text-child', 'place-1', 'pin-1', 'text-body']);
+  assert.equal(parsed.pages[0].blocks[3].role, 'pageBody');
+  assert.equal(parsed.pages[0].blocks[0].title, null);
+  await addNotebookTextBlock({ notebookId: 'notebook-1', pageId: 'page-1', clientRequestId: 'text', expectedVersion: 2, position: 4, title: null, text: '' });
+  await addNotebookPlaceBlock({ notebookId: 'notebook-1', pageId: 'page-1', clientRequestId: 'place', expectedVersion: 2, position: 4, titleSnapshot: 'Place', reference: { kind: 'editorial', editorialPlaceId: 'place-1' } });
+  await addNotebookPinBlock({ notebookId: 'notebook-1', pageId: 'page-1', clientRequestId: 'pin', expectedVersion: 2, position: 4, title: null, location: { latitude: -41, longitude: 174, source: 'PIN_NOW' } });
+  await reorderNotebookBlocks('notebook-1', 'page-1', 2, ['pin-1', 'place-1']);
+  await deleteNotebookBlock('notebook-1', 'pin-1', 2);
+  assert.ok(calls.every(([, init]) => new Headers(init?.headers).get('X-TripIdeas-Notebook-Contract') === 'objects-v2'));
+  assert.deepEqual(calls.slice(1).map(([url]) => new URL(url).pathname), [
+    '/notebooks/notebook-1/blocks/text', '/notebooks/notebook-1/blocks/place',
+    '/notebooks/notebook-1/blocks/pin', '/notebooks/notebook-1/pages/page-1/blocks/order',
+    '/notebooks/notebook-1/blocks/pin-1',
+  ]);
+});
+
+test('Link create sends the complete atomic payload in one request', async () => {
+  const calls = [];
+  setActiveToken('mobile-token');
+  const content = { ...detail, pages: [] };
+  globalThis.fetch = async (input, init) => { calls.push([String(input), init]); return Response.json(content); };
+  await addNotebookLinkBlock({ notebookId: 'notebook-1', pageId: 'page-1',
+    url: 'https://example.com', title: 'Example', text: 'Note',
+    clientRequestId: 'retained-link-request', expectedVersion: 2, position: 3 });
+  assert.equal(calls.length, 1);
+  assert.deepEqual(JSON.parse(String(calls[0][1]?.body)), {
+    pageId: 'page-1', url: 'https://example.com', title: 'Example', text: 'Note',
+    clientRequestId: 'retained-link-request', expectedVersion: 2, position: 3,
   });
 });
 

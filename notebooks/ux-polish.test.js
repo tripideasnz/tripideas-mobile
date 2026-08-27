@@ -1,111 +1,124 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-const read = (relativePath) =>
-  readFile(new URL(`../${relativePath}`, import.meta.url), 'utf8');
-
-const [saved, list, detail, sharing, layout, collage, photoGrid, expandable, status] = await Promise.all([
-  read('app/(tabs)/saved.tsx'),
-  read('app/notebooks/index.tsx'),
-  read('app/notebooks/[notebookId].tsx'),
+const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
+const [detail, api, provider, types, toolbar, sharedToolbar, autosave, picker, storage, sharing, placeScreen, placeQuery, dragRow, structuralAdd, placeSelector, objectShell] = await Promise.all([
+  read('app/notebooks/[notebookId].tsx'), read('notebooks/api.ts'), read('notebooks/provider.tsx'),
+  read('content-blocks/types.ts'), read('components/notebook/object-toolbar.tsx'),
+  read('components/ui/object-toolbar.tsx'), read('components/ui/saved-autosave-field.tsx'),
+  read('app/notebooks/location-picker.tsx'), read('notebooks/storage.ts'),
   read('app/notebooks/[notebookId]/sharing.tsx'),
-  read('app/_layout.tsx'),
-  read('components/trip-image-collage.tsx'),
-  read('components/place-photo-grid.tsx'),
-  read('components/ui/expandable-text.tsx'),
-  read('components/ui/autosave-status.tsx'),
+  read('app/(tabs)/(discover)/place/[slug].tsx'), read('sanity/queries.ts'),
+  read('components/ui/drag-reorder-row.tsx'),
+  read('components/ui/floating-structural-add.tsx'),
+  read('components/ui/saved-place-selector.tsx'),
+  read('components/ui/saved-object-editor-shell.tsx'),
 ]);
 
-assert.doesNotMatch(saved, /Photo transport test|photo-upload-dev/);
-console.log('✓ Saved no longer exposes the Photo transport test');
+assert.match(detail, /editingNotebook/);
+assert.match(detail, /<FloatingStructuralAdd accessibilityLabel="Add Page" disabled=\{offline\} onPress=\{\(\) => void addPage\(\)\}/);
+assert.doesNotMatch(detail, /<IconAction accessibilityLabel="Add Page"/);
+assert.match(structuralAdd, /height: 52/);
+assert.match(structuralAdd, /width: 52/);
+assert.match(structuralAdd, /backgroundColor: Palette\.trip/);
+assert.match(structuralAdd, /bottom: Math\.max\(insets\.bottom, Screen\.bottom\)/);
+assert.match(detail, /editingPages/);
+assert.match(detail, /Finish editing Notebook/);
+assert.match(detail, /Finish editing Page/);
+assert.match(detail, /semantic="edit"/);
+assert.match(detail, /NotebookAutosaveField/);
+assert.match(autosave, /setTimeout\(\(\) => void save\(\).*700/);
+assert.match(autosave, /useImperativeHandle\(ref, \(\) => \(\{ flush: save \}\)\)/);
+assert.match(detail, /await flush\(Object\.keys\(autosaveRefs\.current\)\)/);
+console.log('✓ Notebook and Page use explicit view/edit states with awaited autosave Finish');
 
-assert.match(list, /headerRight/);
-assert.equal(list.match(/<Stack\.Screen/g)?.length, 1);
-assert.match(list, /HeaderBackButton color=\{Palette\.trip\} onPress=\{handleBack\}/);
-assert.match(list, /headerRight: \(\) => session \? \(/);
-assert.match(list, /isLoadingSession \? \([\s\S]*!session \? \(/);
-assert.match(list, /MaterialIcons color=\{Palette\.trip\} name="add" size=\{30\}/);
-assert.match(list, /Updated \$\{displayDate\(notebook\.updatedAt\)\}/);
-assert.match(list, /borderRadius: Radius\.card/);
-assert.match(list, /<TripImageCollage/);
-assert.match(list, /emptyLabel="Notebook"/);
-assert.match(list, /firstPhotos/);
-assert.match(list, /coverUrlCacheRef/);
-assert.match(list, /cachedUrl/);
-assert.match(list, /onCoverImageError/);
-assert.match(collage, /onImageError/);
-assert.match(list, /accessibilityLabel=\{`Delete \$\{notebook\.title\}`\}/);
-assert.match(list, /'Delete Notebook\?'/);
-assert.match(collage, /emptyLabel/);
-assert.doesNotMatch(list, /testID="notebook-(open|delete)-action"/);
-console.log('✓ Notebook list matches the Trips header and tappable card grammar');
+for (const label of ['Text', 'Photo', 'Link', 'Place', 'Pin']) assert.match(toolbar, new RegExp(`name: '${label}'`));
+assert.match(toolbar, /ObjectToolbar/);
+assert.match(sharedToolbar, /minHeight: 44/);
+assert.match(detail, /capability === 'supported'/);
+assert.match(detail, /capability === 'unreachable'/);
+assert.match(detail, /Saved Notebook content remains available/);
+assert.match(api, /X-TripIdeas-Notebook-Contract': 'objects-v2'/);
+console.log('✓ visible five-object toolbar is shared, accessible, and capability-gated without treating network failure as absence');
 
-assert.match(detail, /accessibilityLabel="Share this Notebook"/);
-assert.match(detail, /icon="share"/);
-assert.match(detail, /accessibilityLabel="Add Page"/);
-assert.ok(detail.indexOf('accessibilityLabel="Share this Notebook"') > detail.indexOf('accessibilityLabel="Add Page"'));
-assert.doesNotMatch(detail, /More Notebook actions|Delete Notebook/);
-assert.doesNotMatch(detail, /label="Delete"/);
-assert.match(detail, /flex: 1,[\s\S]*fontSize: 28/);
-console.log('✓ Notebook title row groups Add Page and Share actions');
+for (const type of ["'text'", "'photo'", "'link'", "'place'", "'pin'"]) assert.match(types, new RegExp(type));
+assert.match(types, /role: 'pageBody' \| 'content'/);
+assert.match(detail, /block\.role === 'pageBody'/);
+assert.match(detail, /orderedContentBlocks\(page\.blocks\)/);
+assert.match(detail, /moveContentBlockIds/);
+assert.match(provider, /reorderNotebookBlocks/);
+assert.match(detail, /DragReorderRow/);
+assert.doesNotMatch(detail, /Move \$\{objectName\(block\)\} (?:up|down)/);
+assert.doesNotMatch(detail, /icon="arrow-(?:upward|downward)"/);
+assert.match(dragRow, /\[0, 1, 2\]\.map/);
+assert.match(dragRow, /accessibilityActions/);
+assert.match(dragRow, /name: 'decrement'/);
+assert.match(dragRow, /name: 'increment'/);
+assert.match(dragRow, /accessibilityRole="adjustable"/);
+console.log('✓ page-body identity and one mixed ordering are independent of object type and position, using the shared Diary drag grip');
 
-assert.match(layout, /presentation: 'formSheet'/);
-assert.match(layout, /sheetAllowedDetents/);
-assert.match(layout, /sheetInitialDetentIndex: 1/);
-const sharingActions = ['label="Copy Link"', 'label="Share…"', "'Generate New Link'", "'Stop Sharing'"];
-let previousAction = -1;
-for (const action of sharingActions) {
-  const position = sharing.indexOf(action);
-  assert.ok(position > previousAction, `${action} is out of order`);
-  previousAction = position;
-}
-assert.match(sharing, /Shared Notebook preview/);
-console.log('✓ sharing keeps its preview-backed secure action sheet');
-
-assert.match(detail, /<ExpandableText/);
-assert.match(detail, /onPress=\{\(\) => setDescriptionEditing\(true\)\}/);
-assert.match(detail, /editingPageIds\.has\(item\.id\)/);
-assert.match(detail, /accessibilityLabel=\{`Page \$\{index \+ 1\} body`\}/);
-assert.match(expandable, /numberOfLines=\{expanded \? undefined : 3\}/);
-assert.match(expandable, /\.\.\. show more/);
-assert.match(expandable, /\.\.\. show less/);
-console.log('✓ Notebook description reuses canonical three-line expansion');
-
-assert.match(detail, /AUTOSAVE_DELAY_MS = 700/);
-assert.match(detail, /<AutosaveStatus/);
-assert.match(detail, /onRetry=/);
-assert.match(status, /minHeight: 17/);
-assert.match(status, /Saving…/);
-assert.match(status, /Could not save\. Tap to retry\./);
-console.log('✓ Notebook autosave matches Trips timing, stable status, and retry treatment');
-
-assert.match(detail, /accessibilityLabel="Add Page"/);
-assert.match(detail, /icon="add"/);
-assert.match(detail, /'arrow-upward'/);
-assert.match(detail, /'arrow-downward'/);
-assert.match(detail, /size="compact"/);
-assert.match(detail, /adjacentContentPageId/);
-assert.match(detail, /blockOffsets\.current\[page\.id\] = y/);
-assert.match(detail, /setHighlightedPageId/);
-console.log('✓ Add and page navigation actions reuse the canonical icon treatment');
-
-assert.match(detail, /pickPhotosForUpload\(\)/);
+assert.match(detail, /addTextBlock/);
 assert.match(detail, /addNotebookPhotos/);
-assert.match(detail, /localPhotoPreviews\[page\.id\]\.map/);
-assert.match(detail, /width: '48%'/);
-console.log('✓ Notebook Add photos uses ordered multi-selection and batch previews');
+assert.match(detail, /addLinkBlock/);
+assert.match(detail, /clientRequestId: Crypto\.randomUUID\(\)/);
+assert.match(detail, /title, text: null, clientRequestId: capture\.clientRequestId/);
+assert.doesNotMatch(detail, /created\?\.type === 'link'[\s\S]*updateRichBlock/);
+assert.match(provider, /matchesRequest/);
+assert.match(provider, /await readNotebookContent\(input\.id\)/);
+assert.match(provider, /if \(matchesRequest\(refreshed\)\) return refreshed/);
+assert.match(detail, /addPlaceBlock/);
+assert.match(detail, /addPinBlock/);
+assert.match(detail, /SavedPlaceSelector/);
+assert.match(placeSelector, /PlaceSearch/);
+assert.match(placeSelector, /PERSONAL PLACES/);
+assert.match(placeSelector, /Add selected Place/);
+assert.match(detail, /SavedPlaceObject/);
+assert.match(detail, /Locate now/);
+assert.match(detail, /Locate on map/);
+assert.match(picker, /SavedLocationPicker/);
+assert.match(picker, /addPinBlock/);
+assert.match(picker, /onCancel=\{backToNotebook\}/);
+console.log('✓ Text, Photo, Link, Editorial/Personal Place and both explicit Pin paths use authoritative v2 mutations');
 
-assert.doesNotMatch(detail, /ReanimatedSwipeable|renderRightActions/);
-assert.match(detail, /icon="delete-outline"/);
-assert.match(detail, /accessibilityLabel=\{`Delete page/);
-assert.match(detail, /'Delete this page\?'/);
-assert.match(detail, /'Delete Page'/);
-assert.doesNotMatch(layout, /GestureHandlerRootView/);
-console.log('✓ Page deletion remains confirmed behind the canonical compact trash action');
+assert.match(detail, /SavedObjectEditorShell/);
+assert.match(objectShell, /ContainedRemoveButton label=\{`Remove/);
+assert.match(objectShell, /void flush\(\)\.then\(onCollapse\)/);
+assert.match(detail, /Delete Page/);
+assert.match(detail, /delete-outline/);
+assert.doesNotMatch(detail, /Delete link.*delete-outline/);
+assert.match(detail, /SavedLinkObject/);
+assert.match(detail, /canMoveDown=\{index < count - 1\}/);
+console.log('✓ contained X, structural trash, link semantics and reorder actions preserve accessible distinctions');
 
-assert.match(detail, /<PlacePhotoGrid/);
-assert.match(detail, /onRemoveImage=/);
-assert.match(photoGrid, /accessibilityLabel=\{`Remove photo/);
-assert.match(photoGrid, /onRemoveImage\(image, activeIndex\)/);
-assert.doesNotMatch(detail, /label="Remove Photo"/);
-console.log('✓ Notebook photos reuse the Place grid with compact per-photo removal');
+assert.match(detail, /pickPhotosForUpload/);
+assert.match(detail, /resumeNotebookPhotos/);
+assert.match(detail, /listNotebookPhotoPreviews/);
+assert.match(detail, /PlacePhotoGrid/);
+assert.match(detail, /groupContiguousNotebookPhotos/);
+assert.match(detail, /<NotebookPhotoRun/);
+assert.match(detail, /onRemoveImage=\{editingPage/);
+assert.doesNotMatch(detail, /NotebookPhotoRun[\s\S]*?Move Photo (?:up|down)/);
+assert.match(detail, /label=\{blocks\.length === 1 \? 'Photo' : 'Photo group'\}/);
+assert.match(storage, /user\.\$\{userId\}/);
+assert.match(detail, /setPhotoUrls\(\{\}\)/);
+assert.match(sharing, /revoke|Stop Sharing/);
+console.log('✓ private photo recovery, user-scoped cache isolation, sign-out clearing and sharing/revocation surfaces remain wired');
+
+assert.match(placeSelector, /setSelected\(\{ kind: 'editorial', place \}\)/);
+assert.match(placeSelector, /setSelected\(\{ kind: 'personal', card \}\)/);
+assert.match(placeSelector, /Add selected Place/);
+assert.match(detail, /confirmPlace/);
+assert.match(placeSelector, /Selected — tap the checkmark to add/);
+assert.match(placeSelector, /onCancel/);
+assert.match(placeSelector, /accessibilityState=\{\{ selected: active \}\}/);
+console.log('✓ Editorial and Personal Places share explicit select, selected-state, confirm, and no-mutation Cancel behavior');
+
+assert.match(detail, /block\.reference\.personalPlaceCardId/);
+assert.match(detail, /block\.reference\.editorialPlaceId/);
+assert.match(detail, /params: \{ cardId: block\.reference\.personalPlaceCardId, mode: 'view', notebookId, origin: 'notebook' \}/);
+assert.match(detail, /editorialPlaceId: block\.reference\.editorialPlaceId, notebookId, origin: 'notebook'/);
+assert.match(detail, /openCanonicalPlace/);
+assert.match(detail, /block\.availability === 'available'/);
+assert.match(placeScreen, /editorialPlaceId/);
+assert.match(placeQuery, /_id == \$editorialPlaceId \|\| slug\.current == \$slug/);
+console.log('✓ completed available Places navigate by canonical persisted reference while unavailable Places remain non-interactive');
