@@ -67,7 +67,14 @@ export default function PersonalPlaceCardsScreen() {
               disabled={isCreating}
               hitSlop={12}
               onPress={() => void createPlace()}
-              style={({ pressed }) => ({ opacity: isCreating ? 0.35 : pressed ? 0.55 : 1 })}>
+              style={({ pressed }) => ({
+                alignItems: 'center',
+                alignSelf: 'flex-end',
+                height: 44,
+                justifyContent: 'center',
+                opacity: isCreating ? 0.35 : pressed ? 0.55 : 1,
+                width: 44,
+              })}>
               <MaterialIcons color={Palette.trip} name="add" size={30} />
             </Pressable>
           ),

@@ -3,17 +3,21 @@ import { Image } from 'expo-image';
 import * as Linking from 'expo-linking';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Keyboard, Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-native';
 
 import { useSession } from '@/auth/provider';
 import { PlaceDetailContent } from '@/components/place-detail-content';
 import { PlaceMapPreview } from '@/components/place-map-preview';
+import { PlacePhotoGrid } from '@/components/place-photo-grid';
 import { SignedOutFeature } from '@/components/signed-out-feature';
 import { AppButton } from '@/components/ui/app-button';
 import { AppText } from '@/components/ui/app-text';
 import { AppTextInput, AutoExpandingTextInput } from '@/components/ui/app-text-input';
 import { AutosaveStatus } from '@/components/ui/autosave-status';
 import { IconAction } from '@/components/ui/icon-action';
+import { FinishEditAction } from '@/components/ui/finish-edit-action';
+import { ContainedRemoveButton } from '@/components/ui/contained-remove-button';
+import { backOrFallback, HeaderBackButton } from '@/components/ui/header-back-button';
 import { ShowMoreText } from '@/components/ui/show-more-text';
 import { StatusText } from '@/components/ui/status-text';
 import { LoadingView } from '@/components/ui/loading-view';
@@ -28,7 +32,6 @@ import {
   personalPlaceCardError,
   readinessMessage,
 } from '@/personal-place-cards/errors';
-import { parsePersonalPlaceCardCoordinates } from '@/personal-place-cards/location';
 import {
   addPersonalPlaceCardPhoto,
   replacePersonalPlaceCardPhoto,
@@ -44,17 +47,36 @@ import {
   pickPhotosForUpload,
 } from '@/photo-uploads/picker';
 import { useMyTrips } from '@/trips/provider';
+import { getOneForegroundLocation } from '@/location/foreground';
 
 type SaveState = 'failed' | 'idle' | 'saving';
 
 export default function PersonalPlaceCardScreen() {
   const params = useLocalSearchParams<{
     cardId?: string | string[];
+    date?: string | string[];
+    diaryId?: string | string[];
     mode?: string | string[];
+    origin?: string | string[];
+    notebookId?: string | string[];
+    tripId?: string | string[];
   }>();
   const cardId = Array.isArray(params.cardId) ? params.cardId[0] : params.cardId;
+  const originDate = Array.isArray(params.date) ? params.date[0] : params.date;
+  const originDiaryId = Array.isArray(params.diaryId) ? params.diaryId[0] : params.diaryId;
   const initialMode = Array.isArray(params.mode) ? params.mode[0] : params.mode;
+  const origin = Array.isArray(params.origin) ? params.origin[0] : params.origin;
+  const originNotebookId = Array.isArray(params.notebookId) ? params.notebookId[0] : params.notebookId;
+  const originTripId = Array.isArray(params.tripId) ? params.tripId[0] : params.tripId;
   const router = useRouter();
+  const personalPlaceFallback = origin === 'trip-map' && originTripId
+    ? { pathname: '/trips/[tripId]/map' as const, params: { tripId: originTripId } }
+    : origin === 'notebook' && originNotebookId
+      ? { pathname: '/notebooks/[notebookId]' as const, params: { notebookId: originNotebookId } }
+      : origin === 'diary' && originDiaryId && originDate
+        ? { pathname: '/diaries/[diaryId]/day' as const, params: { diaryId: originDiaryId, date: originDate } }
+        : '/personal-place-cards' as const;
+  const backFromPersonalPlace = () => backOrFallback(router, personalPlaceFallback);
   const { isLoading: isLoadingSession, session, signIn } = useSession();
   const { get, load, mutate } = usePersonalPlaceCards();
   const { addPersonalCardToTrip, trips } = useMyTrips();
@@ -64,8 +86,6 @@ export default function PersonalPlaceCardScreen() {
   const [isEditingBody, setIsEditingBody] = useState(false);
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
-  const [latitude, setLatitude] = useState('');
-  const [longitude, setLongitude] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>('idle');
@@ -78,6 +98,16 @@ export default function PersonalPlaceCardScreen() {
   const revisionRef = useRef(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const scrollRef = useRef<ScrollView>(null);
+  const bodyYRef = useRef(0);
+  const photosYRef = useRef(0);
+  const { height: viewportHeight } = useWindowDimensions();
+
+  const revealEditorObject = (contentY: number) => {
+    const keyboardHeight = Keyboard.metrics()?.height ?? 0;
+    const visibleHeight = Math.max(280, viewportHeight - keyboardHeight - 120);
+    setTimeout(() => scrollRef.current?.scrollTo({ animated: true, y: Math.max(0, contentY - visibleHeight * 0.38) }), 120);
+  };
 
   useEffect(() => {
     setIsEditing(initialMode === 'edit');
@@ -103,8 +133,6 @@ export default function PersonalPlaceCardScreen() {
     }
     if (isNewCard) {
       initializedCardRef.current = card.id;
-      setLatitude(card.location ? String(card.location.latitude) : '');
-      setLongitude(card.location ? String(card.location.longitude) : '');
     }
   }, [card]);
 
@@ -165,7 +193,6 @@ export default function PersonalPlaceCardScreen() {
         entry.personalPlaceCard.id === card.id
     ))
     .map((trip) => trip.id);
-  const coordinates = parsePersonalPlaceCardCoordinates(latitude, longitude);
   const mainMedia = card.media.find((item) => item.role === 'main');
   const bodyMedia = card.media.filter((item) => item.role === 'body');
 
@@ -301,12 +328,13 @@ export default function PersonalPlaceCardScreen() {
     });
     return (
       <ScrollView style={{ flex: 1, backgroundColor: Palette.background }}>
-        <Stack.Screen options={{ title: card.title || 'Personal Place' }} />
+        <Stack.Screen options={{ headerLeft: () => <HeaderBackButton color={Palette.trip} onPress={backFromPersonalPlace} />, title: card.title || 'Personal Place' }} />
         <PlaceDetailContent
           body={card.body ? (
             <ShowMoreText accessibilityLabel="Personal Place description" value={card.body} />
           ) : undefined}
           galleryImages={galleryImages}
+          galleryPosition="before-location"
           hero={heroUrl ? {
             alt: card.title ?? 'Personal Place main photo',
             url: heroUrl,
@@ -334,6 +362,12 @@ export default function PersonalPlaceCardScreen() {
                     lat: String(card.location!.latitude),
                     lng: String(card.location!.longitude),
                     title: card.title ?? 'Personal Place',
+                    cardId: card.id,
+                    origin: origin ?? 'personal-place',
+                    notebookId: originNotebookId,
+                    diaryId: originDiaryId,
+                    date: originDate,
+                    tripId: originTripId,
                   },
                 })}
                 style={{ marginTop: Space.md }}
@@ -346,6 +380,7 @@ export default function PersonalPlaceCardScreen() {
             <IconAction
               accessibilityLabel="Edit Personal Place"
               icon="edit"
+              semantic="edit"
               onPress={() => setIsEditing(true)}
             />
           )}>
@@ -365,6 +400,7 @@ export default function PersonalPlaceCardScreen() {
   const remainingBodySlots = 10 - bodyMedia.length;
   return (
     <ScrollView
+      ref={scrollRef}
       keyboardShouldPersistTaps="handled"
       style={{ flex: 1, backgroundColor: Palette.background }}
       contentContainerStyle={{
@@ -372,10 +408,10 @@ export default function PersonalPlaceCardScreen() {
         padding: Screen.gutter,
         paddingBottom: Screen.bottom,
       }}>
-      <Stack.Screen options={{ title: 'Edit Personal Place' }} />
+      <Stack.Screen options={{ headerLeft: () => <HeaderBackButton color={Palette.trip} onPress={backFromPersonalPlace} />, title: 'Edit Personal Place' }} />
       <View style={{ alignItems: 'center', flexDirection: 'row' }}>
         <AppText style={{ flex: 1 }} variant="title">Edit Personal Place</AppText>
-        <AppButton label="Done" onPress={() => void finishEditing()} size="compact" />
+        <FinishEditAction accessibilityLabel="Finish editing Personal Place" size="default" onPress={() => void finishEditing()} />
       </View>
 
       <AutoExpandingTextInput
@@ -383,9 +419,10 @@ export default function PersonalPlaceCardScreen() {
         maxLength={200}
         onChangeText={(value) => updateDraft('title', value)}
         placeholder="Title"
-        style={{ fontSize: 18, fontWeight: '700', lineHeight: 23 }}
+        textVariant="title"
         value={title}
       />
+      <View onLayout={(event) => { bodyYRef.current = event.nativeEvent.layout.y; }}>
       {isEditingBody ? (
         <AppTextInput
           accessibilityLabel="Personal Place description"
@@ -403,7 +440,7 @@ export default function PersonalPlaceCardScreen() {
           accessibilityHint="Enters text editing mode."
           accessibilityLabel="Edit Personal Place description"
           accessibilityRole="button"
-          onPress={() => setIsEditingBody(true)}
+          onPress={() => { setIsEditingBody(true); revealEditorObject(bodyYRef.current); }}
           style={{ borderColor: Palette.border, borderRadius: Radius.control, borderWidth: 1, padding: Space.md }}>
           <ShowMoreText accessibilityLabel="Personal Place description" value={body} />
         </Pressable>
@@ -411,11 +448,12 @@ export default function PersonalPlaceCardScreen() {
         <Pressable
           accessibilityLabel="Add Personal Place description"
           accessibilityRole="button"
-          onPress={() => setIsEditingBody(true)}
+          onPress={() => { setIsEditingBody(true); revealEditorObject(bodyYRef.current); }}
           style={{ borderColor: Palette.border, borderRadius: Radius.control, borderWidth: 1, padding: Space.md }}>
           <AppText color={Palette.textMuted}>Description</AppText>
         </Pressable>
       )}
+      </View>
       <AutosaveStatus
         accessibilityLabel="Personal Place text"
         onRetry={() => void queueMetadataSave(revisionRef.current)}
@@ -424,42 +462,36 @@ export default function PersonalPlaceCardScreen() {
 
       <AppText variant="section">Location</AppText>
       <View style={{ flexDirection: 'row', gap: Space.sm }}>
-        <AppTextInput
-          accessibilityLabel="Latitude"
-          keyboardType="numbers-and-punctuation"
-          onChangeText={setLatitude}
-          placeholder="Latitude"
-          style={{ flex: 1 }}
-          value={latitude}
-        />
-        <AppTextInput
-          accessibilityLabel="Longitude"
-          keyboardType="numbers-and-punctuation"
-          onChangeText={setLongitude}
-          placeholder="Longitude"
-          style={{ flex: 1 }}
-          value={longitude}
-        />
+        <AppButton label="Locate now" onPress={() => void getOneForegroundLocation().then((result) => {
+          if (result.status !== 'granted') {
+            setMessage('Location is unavailable. You can still locate this Place on the map.');
+            return;
+          }
+          void act(() => mutate.update(card.id, {
+            latitude: result.point.latitude,
+            longitude: result.point.longitude,
+            locationConfirmed: true,
+            locationSource: 'USER_SELECTED',
+          }));
+        })} style={{ flex: 1 }} />
+        <AppButton label="Locate on map" onPress={() => router.push({ pathname: '/personal-place-cards/location-picker', params: {
+          cardId: card.id,
+          latitude: card.location ? String(card.location.latitude) : undefined,
+          longitude: card.location ? String(card.location.longitude) : undefined,
+          origin,
+          notebookId: originNotebookId,
+          tripId: originTripId,
+        } })} style={{ flex: 1 }} variant="secondary" />
       </View>
-      {coordinates ? (
+      {card.location ? (
         <PlaceMapPreview
-          latitude={coordinates.latitude}
-          longitude={coordinates.longitude}
+          latitude={card.location.latitude}
+          longitude={card.location.longitude}
           title={title || 'Personal Place'}
         />
       ) : null}
-      <AppButton
-        disabled={!coordinates || busy}
-        label={card.location?.confirmed ? 'Update and confirm location' : 'Confirm location'}
-        onPress={() => void act(() => mutate.update(card.id, {
-          latitude: coordinates!.latitude,
-          longitude: coordinates!.longitude,
-          locationConfirmed: true,
-          locationSource: 'USER_SELECTED',
-        }))}
-      />
 
-      <AppText variant="section">Main photo</AppText>
+      <View onLayout={(event) => { photosYRef.current = event.nativeEvent.layout.y; }}><AppText variant="section">Main photo</AppText>
       {mainMedia ? (
         mainPreviewUrl ? (
           <PhotoEditorTile
@@ -473,12 +505,15 @@ export default function PersonalPlaceCardScreen() {
           <StatusText>Loading main photo…</StatusText>
         )
       ) : pendingMainPreview ? (
-        <Image
-          accessibilityLabel="Uploading main photo"
-          contentFit="cover"
-          source={{ uri: pendingMainPreview }}
-          style={{ aspectRatio: 16 / 9, borderRadius: Radius.card, width: '100%' }}
-        />
+        <View style={{ gap: Space.sm }}>
+          <Image
+            accessibilityLabel="Uploading main photo"
+            contentFit="cover"
+            source={{ uri: pendingMainPreview }}
+            style={{ aspectRatio: 16 / 9, borderRadius: Radius.card, width: '100%' }}
+          />
+          <StatusText>Uploading main photo…</StatusText>
+        </View>
       ) : (
         <AppButton
           disabled={busy}
@@ -486,6 +521,7 @@ export default function PersonalPlaceCardScreen() {
           onPress={() => void act(async () => {
             const selected = await pickPhotoForUpload();
             if (!selected || !session?.userId) return;
+            revealEditorObject(photosYRef.current);
             setPendingMainPreview(selected.uri);
             try {
               await addPersonalPlaceCardPhoto(
@@ -501,7 +537,7 @@ export default function PersonalPlaceCardScreen() {
             }
           })}
         />
-      )}
+      )}</View>
 
       <View style={{ alignItems: 'center', flexDirection: 'row' }}>
         <AppText style={{ flex: 1 }} variant="section">Body photos</AppText>
@@ -513,6 +549,7 @@ export default function PersonalPlaceCardScreen() {
           onPress={() => void act(async () => {
             if (!session?.userId) return;
             const selected = await pickPhotosForUpload(remainingBodySlots);
+            if (selected.length) revealEditorObject(photosYRef.current);
             setPendingBodyPreviews(selected.map((item) => item.uri));
             try {
               for (const photo of selected) {
@@ -533,18 +570,6 @@ export default function PersonalPlaceCardScreen() {
         />
       </View>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm }}>
-        {bodyMedia.map((media) => {
-          const imageUrl = photoUrls[media.id];
-          return imageUrl ? (
-            <View key={media.id} style={{ width: '48%' }}>
-              <PhotoEditorTile
-                accessibilityLabel={`Body photo ${(media.position ?? 0) + 1}`}
-                imageUrl={imageUrl}
-                onRemove={() => void removePhoto(media)}
-              />
-            </View>
-          ) : null;
-        })}
         {pendingBodyPreviews.map((uri) => (
           <View key={uri} style={{ opacity: 0.65, width: '48%' }}>
             <Image
@@ -556,11 +581,24 @@ export default function PersonalPlaceCardScreen() {
           </View>
         ))}
       </View>
+      <PlacePhotoGrid
+        bottomMargin={0}
+        images={bodyMedia.flatMap((media) => photoUrls[media.id] ? [{
+          _key: media.id,
+          alt: `Body photo ${(media.position ?? 0) + 1}`,
+          url: photoUrls[media.id],
+        }] : [])}
+        onRemoveImage={(image) => {
+          const media = bodyMedia.find((item) => item.id === image._key);
+          if (media) void removePhoto(media);
+        }}
+        placeTitle={title || 'Personal Place'}
+      />
       <AppText color={Palette.textMuted} variant="caption">
         {bodyMedia.length} of 10 body photos
       </AppText>
 
-      <AppText style={{ fontSize: 18, fontWeight: '700', lineHeight: 23 }}>
+      <AppText color={Palette.textMuted}>
         {card.readiness.isTripIdeaReady
           ? 'Ready to add to Trips.'
           : readinessMessage(card.readiness.readinessIssues)}
@@ -617,30 +655,9 @@ function PhotoEditorTile({
         }}
         transition={150}
       />
-      <Pressable
-        accessibilityLabel={`Remove ${accessibilityLabel.toLowerCase()}`}
-        accessibilityRole="button"
-        hitSlop={8}
-        onPress={(event) => {
-          event.stopPropagation();
-          onRemove();
-        }}
-        style={({ pressed }) => ({
-          alignItems: 'center',
-          backgroundColor: Palette.surface,
-          borderColor: Palette.border,
-          borderRadius: Radius.pill,
-          borderWidth: 1,
-          bottom: Space.sm,
-          height: 32,
-          justifyContent: 'center',
-          opacity: pressed ? 0.65 : 1,
-          position: 'absolute',
-          right: Space.sm,
-          width: 32,
-        })}>
-        <MaterialIcons color={Palette.text} name="close" size={19} />
-      </Pressable>
+      <View style={{ bottom: Space.sm, position: 'absolute', right: Space.sm }}>
+        <ContainedRemoveButton label={`Remove ${accessibilityLabel.toLowerCase()}`} onPress={onRemove} />
+      </View>
     </Pressable>
   );
 }

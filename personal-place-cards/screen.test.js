@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 const read = (relativePath) =>
   readFile(new URL(`../${relativePath}`, import.meta.url), 'utf8');
 
-const [editor, list, tripDetail, tripEntry, personalCard, placeDetail, editorial, picker, autosaveStatus, showMore] = await Promise.all([
+const [editor, list, tripDetail, tripEntry, personalCard, placeDetail, editorial, picker, autosaveStatus, showMore, sharedRemove] = await Promise.all([
   read('app/personal-place-cards/[cardId].tsx'),
   read('app/personal-place-cards/index.tsx'),
   read('app/trips/[tripId].tsx'),
@@ -15,9 +15,12 @@ const [editor, list, tripDetail, tripEntry, personalCard, placeDetail, editorial
   read('photo-uploads/picker.ts'),
   read('components/ui/autosave-status.tsx'),
   read('components/ui/show-more-text.tsx'),
+  read('components/ui/contained-remove-button.tsx'),
 ]);
 
-assert.match(editor, /parsePersonalPlaceCardCoordinates\(latitude, longitude\)/);
+assert.doesNotMatch(editor, /accessibilityLabel="Latitude"|accessibilityLabel="Longitude"|Confirm location/);
+assert.match(editor, /label="Locate now"/);
+assert.match(editor, /label="Locate on map"/);
 assert.match(list, /activeAttachmentCount > 0/);
 assert.match(list, /Remove this Place Card from/);
 assert.match(list, /Delete Personal Place/);
@@ -32,7 +35,6 @@ const hierarchy = [
   '{title}',
   '{body ?',
   '{location ?',
-  '<PlacePhotoGrid',
 ];
 let previous = -1;
 for (const marker of hierarchy) {
@@ -42,10 +44,13 @@ for (const marker of hierarchy) {
 }
 assert.match(editor, /<PlaceDetailContent/);
 assert.match(editor, /galleryImages=\{galleryImages\}/);
+assert.match(editor, /galleryPosition="before-location"/);
+assert.match(placeDetail, /galleryPosition === 'before-location'[\s\S]*\{location \?/);
 assert.match(editor, /titleActions=\{/);
 assert.match(editor, /icon="edit"/);
 assert.match(editor, /if \(!isEditing\)/);
 assert.match(placeDetail, /PlacePhotoGrid/);
+assert.match(placeDetail, /\{location \?[\s\S]*galleryPosition === 'after-location'/);
 assert.match(editor, /Show on TripIdeas\.nz Map/);
 assert.match(editorial, /<PlaceDetailContent/);
 console.log('✓ editorial and Personal Place views share the finished Place hierarchy');
@@ -59,7 +64,7 @@ assert.match(editor, /maxLength=\{10_000\}/);
 assert.match(editor, /pickPhotosForUpload\(remainingBodySlots\)/);
 assert.match(editor, /pendingBodyPreviews/);
 assert.match(editor, /replacePersonalPlaceCardPhoto/);
-assert.match(editor, /borderRadius: Radius\.pill/);
+assert.match(sharedRemove, /borderRadius: Radius\.pill/);
 assert.match(picker, /allowsMultipleSelection: true/);
 assert.match(picker, /orderedSelection: true/);
 assert.match(picker, /selectionLimit/);
@@ -79,6 +84,8 @@ console.log('✓ Personal Place presentation omits readiness controls and Trip d
 
 assert.match(list, /accessibilityLabel="Add Personal Place"/);
 assert.match(list, /name="add" size=\{30\}/);
+assert.match(list, /alignSelf: 'flex-end'/);
+assert.match(list, /height: 44[\s\S]{0,180}width: 44/);
 assert.match(list, /<PersonalPlaceCardView card=\{card\} compact/);
 assert.match(list, /icon="delete-outline"/);
 assert.match(personalCard, /<TripImageCollage/);
@@ -94,7 +101,12 @@ assert.match(editorial, /const collapsedText = fullText \|\| displayText/);
 assert.match(editorial, /place\.textBlocks\?\.filter\(\(block\) => block\.style !== 'h3'\)/);
 assert.match(editorial, /value=\{collapsedText \?\? ''\}/);
 assert.doesNotMatch(editorial, /read more|EXCERPT_LENGTH/i);
-assert.match(editor, /fontSize: 18, fontWeight: '700'/);
+assert.match(editor, /textVariant="title"/);
+assert.match(editor, /<FinishEditAction accessibilityLabel="Finish editing Personal Place"/);
+assert.doesNotMatch(editor, /check-circle|color=\{Palette\.success\}/);
+assert.match(editor, /semantic="edit"/);
+assert.match(editor, /<ContainedRemoveButton/);
+assert.match(editor, /<PlacePhotoGrid[\s\S]*onRemoveImage=/);
 assert.doesNotMatch(editor, />Trip readiness</);
 assert.match(editor, /Ready to add to Trips\./);
 console.log('✓ index and finished view use the canonical Saved interaction grammar');
