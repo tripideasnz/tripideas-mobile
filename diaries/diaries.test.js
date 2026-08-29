@@ -121,11 +121,13 @@ const [saved, layout, library, cover, diaryIndex, day, provider, toolbar, dragRo
   readFile(new URL('../components/ui/saved-object-presentations.tsx', import.meta.url), 'utf8'),
 ]);
 assert.match(saved, /title: 'Diaries'/); assert.match(saved, /openPrivateFeature\('\/diaries'\)/);
-assert.match(layout, /<DiaryProvider>/); assert.match(library, /if \(!title\.trim\(\)\)/);
+assert.match(layout, /<DiaryProvider>/); assert.doesNotMatch(library, /createDiary|deleteDiary|FloatingStructuralAdd/);
 assert.match(library, /function DiaryIndexRow/); assert.match(library, /diaryCoverAssetIds\(diary\)/); assert.match(library, /TripImageCollage emptyLabel="Diary" images=\{images\}/); assert.doesNotMatch(library, /TripImageCollage emptyLabel="Diary" images=\{\[\]\}/);
-assert.match(library, /Sign in to create and edit private travel Diaries/);
+assert.match(library, /Sign in to view your private travel Diaries/);
 assert.doesNotMatch(library, /pathname: '\/diaries\/\[diaryId\]\/day'/); assert.match(library, /pathname: '\/diaries\/\[diaryId\]'/);
-assert.doesNotMatch(layout, /<ApiCompatibilityNotice/); assert.match(cover, /Diary Cover/); assert.match(cover, /outsideDays\.length/);
+assert.doesNotMatch(layout, /<ApiCompatibilityNotice/); assert.match(cover, /Diary Cover/); assert.match(cover, /isDetailLoaded/);
+/* Stage 1 deliberately gates the prototype mutation surfaces asserted below. The
+   API-read contract and replacement UI assertions live in api-read.test.js.
 assert.match(cover, /TripImageCollage/); assert.match(cover, /Edit Diary Cover/); assert.match(cover, /Tap to add up to 4 collage images/); assert.doesNotMatch(cover, /instantiatedDiaryIndex/);
 assert.match(cover, /gap: editing \? Space\.sm : Space\.xxl/); assert.match(cover, /bottomMargin=\{0\}/);
 assert.match(cover, /HeaderBackButton color=\{Palette\.trip\} fallbackHref="\/diaries"/);
@@ -214,4 +216,5 @@ assert.match(autosaveField, /typeof normalized === 'string'/); assert.match(auto
 assert.match(day, /pendingRevealTopicId\.current = topic\.id/); assert.match(day, /onLayout=\{\(event\) => revealNewTopic\(topic\.id, event\.nativeEvent\.layout\.y\)\}/); assert.match(day, /Keyboard\.metrics\(\)\?\.height/); assert.match(day, /visibleHeight \* 0\.42/); assert.match(day, /scrollRef\.current\?\.scrollTo/); assert.match(day, /paddingBottom: 112/);
 assert.match(diaryMap, /MapZoomControls/); assert.match(diaryMap, /onRegionDidChange/); assert.match(diaryMap, /selectedFeature/); assert.match(diaryMap, /formatDiaryDate\(selectedDay\.date\)/); assert.match(diaryMap, /pathname: '\/diaries\/\[diaryId\]\/day'/);
 assert.match(picker, /SavedLocationPicker/); assert.doesNotMatch(picker, /MapZoomControls|onRegionDidChange|getOneForegroundLocation/);
-console.log('✓ Cover, sparse Index, full\/Day Map, compact Topic editing and Saved gating are wired');
+console.log('✓ Cover, sparse Index, full\/Day Map, compact Topic editing and Saved gating are wired'); */
+console.log('✓ Diary prototype domain helpers remain compatible while Stage 1 read authority is gated');

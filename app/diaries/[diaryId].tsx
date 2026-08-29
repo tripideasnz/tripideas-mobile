@@ -1,6 +1,6 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { type Href, Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -32,19 +32,25 @@ function CoverModeTile({ icon, label, onPress }: { icon: 'map' | 'menu-book'; la
 export default function DiaryCoverScreen() {
   const router = useRouter(); const { isLoading: sessionLoading, session, signIn } = useSession();
   const { diaryId, editCover } = useLocalSearchParams<{ diaryId: string; editCover?: string }>();
-  const { deleteDiary, diaries, updateDateRange, updateDiaryMetadata } = useDiaries();
+  const { canEdit, deleteDiary, diaries, isDetailLoaded, loadDiary, loadError, updateDateRange, updateDiaryMetadata } = useDiaries();
   const diary = diaries.find(({ id }) => id === diaryId);
   const opensInEditMode = editCover === '1';
-  const [editing, setEditing] = useState(opensInEditMode);
+  const [editing, setEditing] = useState<boolean>(opensInEditMode && canEdit);
+  const [detailError, setDetailError] = useState<string | null>(null);
   const [start, setStart] = useState(() => formatDiaryDateInput(diary?.startDate ?? null));
   const [end, setEnd] = useState(() => formatDiaryDateInput(diary?.endDate ?? null));
   const [error, setError] = useState<string | null>(null);
   const selectedCoverIds = diary ? diaryCoverAssetIds(diary) : [];
   const { images: coverImages } = useOrderedDiaryPhotoImages(selectedCoverIds, diary?.title || 'Diary cover');
   const [coverBusy, setCoverBusy] = useState(false);
+  useEffect(() => {
+    if (!diaryId || isDetailLoaded(diaryId)) return;
+    void loadDiary(diaryId).catch(() => setDetailError('This Diary could not be loaded. Check your connection and try again.'));
+  }, [diaryId, isDetailLoaded, loadDiary]);
   if (sessionLoading) return <LoadingView />;
   if (!session) return <SignedOutFeature message="Sign in to view and edit your private Diaries" onSignIn={signIn} />;
   if (!diary) return <View style={{ padding: Screen.gutter }}><AppText>This Diary is not available on this device.</AppText></View>;
+  if (!isDetailLoaded(diary.id)) return detailError ? <View style={{ padding: Screen.gutter }}><AppText color={Palette.danger}>{detailError}</AppText></View> : <LoadingView />;
   const setCoverIds = (assetIds: string[]) => updateDiaryMetadata(diary.id, { coverPhotoAssetId: assetIds[0] ?? null, coverPhotoAssetIds: assetIds });
   const chooseCoverPhotos = async () => {
     if (!session?.userId || coverBusy) return;
@@ -80,14 +86,14 @@ export default function DiaryCoverScreen() {
   const resumeDiary = async () => {
     const instantiated = [...diary.days].sort((a, b) => a.date.localeCompare(b.date));
     const saved = session?.userId ? await getLastViewedDiaryDay(session.userId, diary.id) : null;
-    const date = saved && instantiated.some((day) => day.date === saved) ? saved : instantiated[0]?.date ?? diary.startDate;
+    const date = saved && instantiated.some((day) => day.date === saved) ? saved : instantiated[0]?.date ?? (canEdit ? diary.startDate : null);
     if (date) router.push({ pathname: '/diaries/[diaryId]/day', params: { diaryId: diary.id, date } });
     else router.navigate(`/diaries/${diary.id}/contents` as Href);
   };
   return <SafeAreaView edges={['bottom']} style={{ backgroundColor: Palette.background, flex: 1 }}><KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}><ScrollView contentContainerStyle={{ gap: editing ? Space.sm : Space.xxl, paddingBottom: Screen.bottom }} keyboardDismissMode="interactive" keyboardShouldPersistTaps="handled">
     <Stack.Screen options={{ headerLeft: () => <HeaderBackButton color={Palette.trip} fallbackHref="/diaries" />, headerRight: () => null, title: 'Diary Cover' }} />
-    {editing && selectedCoverIds.length ? <View style={{ position: 'relative', paddingHorizontal: Screen.gutter }}><DiaryPhotoGrid assetIds={selectedCoverIds} bottomMargin={0} label={`${diary.title} cover`} onRemoveAsset={(assetId) => void setCoverIds(selectedCoverIds.filter((id) => id !== assetId))} /><Pressable accessibilityLabel={selectedCoverIds.length < 4 ? 'Add Diary cover photos' : 'Replace Diary cover photos'} accessibilityRole="button" disabled={coverBusy} onPress={() => void chooseCoverPhotos()} style={({ pressed }) => ({ alignItems: 'center', backgroundColor: Palette.surface, borderColor: Palette.trip, borderRadius: Radius.pill, borderWidth: 1, height: 44, justifyContent: 'center', opacity: coverBusy ? 0.55 : pressed ? 0.65 : 1, position: 'absolute', right: Screen.gutter + Space.sm, top: Space.sm, width: 44 })}><MaterialIcons color={Palette.trip} name={selectedCoverIds.length < 4 ? 'add-photo-alternate' : 'photo-library'} size={24} /></Pressable></View> : <Pressable accessibilityLabel={coverBusy ? 'Uploading Diary cover photos' : coverImages.length ? 'Edit Diary cover photos' : 'Add Diary cover photos'} accessibilityRole="button" disabled={coverBusy} onPress={() => coverImages.length ? beginEdit() : void chooseCoverPhotos()} style={({ pressed }) => ({ opacity: coverBusy ? 0.55 : pressed ? 0.75 : 1 })}>
-      {coverImages.length ? <TripImageCollage emptyLabel="Diary cover" images={coverImages} style={{ aspectRatio: 1.45, width: '100%' }} /> : <View style={{ alignItems: 'center', aspectRatio: 1.45, backgroundColor: Palette.surfaceMuted, gap: Space.sm, justifyContent: 'center', width: '100%' }}><MaterialIcons color={Palette.trip} name="add-photo-alternate" size={38} /><AppText color={Palette.textMuted} variant="bodyStrong">{coverBusy ? 'Uploading…' : 'Tap to add up to 4 collage images'}</AppText></View>}
+    {editing && selectedCoverIds.length ? <View style={{ position: 'relative', paddingHorizontal: Screen.gutter }}><DiaryPhotoGrid assetIds={selectedCoverIds} bottomMargin={0} label={`${diary.title} cover`} onRemoveAsset={(assetId) => void setCoverIds(selectedCoverIds.filter((id) => id !== assetId))} /><Pressable accessibilityLabel={selectedCoverIds.length < 4 ? 'Add Diary cover photos' : 'Replace Diary cover photos'} accessibilityRole="button" disabled={coverBusy} onPress={() => void chooseCoverPhotos()} style={({ pressed }) => ({ alignItems: 'center', backgroundColor: Palette.surface, borderColor: Palette.trip, borderRadius: Radius.pill, borderWidth: 1, height: 44, justifyContent: 'center', opacity: coverBusy ? 0.55 : pressed ? 0.65 : 1, position: 'absolute', right: Screen.gutter + Space.sm, top: Space.sm, width: 44 })}><MaterialIcons color={Palette.trip} name={selectedCoverIds.length < 4 ? 'add-photo-alternate' : 'photo-library'} size={24} /></Pressable></View> : <Pressable accessibilityLabel={coverImages.length ? 'Diary cover photos' : 'Diary has no cover photos'} accessibilityRole="image" disabled={!canEdit || coverBusy} onPress={() => coverImages.length ? beginEdit() : void chooseCoverPhotos()} style={({ pressed }) => ({ opacity: canEdit && pressed ? 0.75 : 1 })}>
+      {coverImages.length ? <TripImageCollage emptyLabel="Diary cover" images={coverImages} style={{ aspectRatio: 1.45, width: '100%' }} /> : <View style={{ alignItems: 'center', aspectRatio: 1.45, backgroundColor: Palette.surfaceMuted, gap: Space.sm, justifyContent: 'center', width: '100%' }}><MaterialIcons color={Palette.textMuted} name="photo-library" size={38} /><AppText color={Palette.textMuted} variant="bodyStrong">No cover photos</AppText></View>}
     </Pressable>}
     <View style={{ gap: Space.lg, paddingHorizontal: Screen.gutter }}>
       {editing ? <SavedAutosaveScope>{(flush) => <View style={{ backgroundColor: Palette.surfaceMuted, borderRadius: Radius.card, gap: Space.sm, padding: Space.lg }}>
@@ -97,7 +103,7 @@ export default function DiaryCoverScreen() {
         <AppTextInput accessibilityLabel="Diary start date" placeholder="Start date DD/MM/YYYY" value={start} onChangeText={setStart} />
         <AppTextInput accessibilityLabel="Diary end date" placeholder="End date DD/MM/YYYY" value={end} onChangeText={setEnd} />
         {error ? <AppText color={Palette.danger}>{error}</AppText> : null}
-      </View>}</SavedAutosaveScope> : <><View style={{ gap: Space.md }}><View style={{ alignItems: 'center', flexDirection: 'row' }}><AppText style={{ flex: 1 }} variant="title">{diary.title}</AppText><IconAction accessibilityLabel="Edit Diary Cover" icon="edit" size="compact" trip onPress={beginEdit} /></View>{diary.description ? <AppText>{diary.description}</AppText> : null}<AppText color={Palette.textMuted}>{diary.startDate || diary.endDate ? [formatDiaryDate(diary.startDate), formatDiaryDate(diary.endDate)].filter(Boolean).join(' – ') : 'No date range yet'}</AppText></View><View accessibilityLabel="Diary modes" style={{ flexDirection: 'row', gap: Space.md }}><CoverModeTile icon="menu-book" label="Diary" onPress={() => void resumeDiary()} /><CoverModeTile icon="map" label="Map" onPress={() => router.push({ pathname: '/diaries/[diaryId]/map', params: { diaryId: diary.id } })} /></View></>}
+      </View>}</SavedAutosaveScope> : <><View style={{ gap: Space.md }}><View style={{ alignItems: 'center', flexDirection: 'row' }}><AppText style={{ flex: 1 }} variant="title">{diary.title}</AppText>{canEdit ? <IconAction accessibilityLabel="Edit Diary Cover" icon="edit" size="compact" trip onPress={beginEdit} /> : null}</View>{diary.description ? <AppText>{diary.description}</AppText> : null}<AppText color={Palette.textMuted}>{diary.startDate || diary.endDate ? [formatDiaryDate(diary.startDate), formatDiaryDate(diary.endDate)].filter(Boolean).join(' – ') : 'No date range yet'}</AppText>{loadError ? <AppText color={Palette.textMuted} variant="caption">{loadError}</AppText> : null}{!canEdit ? <AppText color={Palette.textMuted} variant="caption">Diary editing will be enabled in the next update.</AppText> : null}</View><View accessibilityLabel="Diary modes" style={{ flexDirection: 'row', gap: Space.md }}><CoverModeTile icon="menu-book" label="Diary" onPress={() => void resumeDiary()} /><CoverModeTile icon="map" label="Map" onPress={() => router.push({ pathname: '/diaries/[diaryId]/map', params: { diaryId: diary.id } })} /></View></>}
     </View>
   </ScrollView></KeyboardAvoidingView></SafeAreaView>;
 }

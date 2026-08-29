@@ -1,77 +1,55 @@
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Stack, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Pressable, ScrollView, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSession } from '@/auth/provider';
 import { AppButton } from '@/components/ui/app-button';
 import { AppText } from '@/components/ui/app-text';
-import { AppTextInput, AutoExpandingTextInput } from '@/components/ui/app-text-input';
 import { HeaderBackButton } from '@/components/ui/header-back-button';
-import { IconAction } from '@/components/ui/icon-action';
 import { LoadingView } from '@/components/ui/loading-view';
 import { TripImageCollage } from '@/components/trip-image-collage';
 import { useOrderedDiaryPhotoImages } from '@/components/diary/photo-assets';
 import { Palette, Radius, Screen, Space } from '@/constants/design';
 import { useDiaries } from '@/diaries/provider';
-import { diaryCoverAssetIds, validateDiaryDates } from '@/diaries/model';
-import { formatDiaryDate, parseDiaryDate } from '@/diaries/dates';
+import { diaryCoverAssetIds } from '@/diaries/model';
+import { formatDiaryDate } from '@/diaries/dates';
 import type { Diary } from '@/diaries/types';
 
-function DiaryIndexRow({ diary, onDelete, onOpen }: { diary: Diary; onDelete: () => void; onOpen: () => void }) {
+function DiaryIndexRow({ diary, onOpen }: { diary: Diary; onOpen: () => void }) {
   const { images, refresh } = useOrderedDiaryPhotoImages(diaryCoverAssetIds(diary), `${diary.title} cover`);
   return <View style={{ position: 'relative' }}><Pressable accessibilityLabel={`Open ${diary.title}`} accessibilityRole="button" onPress={onOpen}
     style={({ pressed }) => ({ borderColor: Palette.border, borderRadius: Radius.card, borderWidth: 1, flexDirection: 'row', overflow: 'hidden', opacity: pressed ? 0.65 : 1 })}>
     <TripImageCollage emptyLabel="Diary" images={images} onImageError={refresh} style={{ height: 92, width: 112 }} />
     <View style={{ flex: 1, justifyContent: 'center', padding: Space.lg, paddingRight: 64 }}><AppText numberOfLines={2} variant="cardTitle">{diary.title}</AppText><AppText color={Palette.textMuted} variant="label">{diary.startDate || diary.endDate ? [formatDiaryDate(diary.startDate), formatDiaryDate(diary.endDate)].filter(Boolean).join(' – ') : `${diary.days.length} ${diary.days.length === 1 ? 'day' : 'days'}`}</AppText></View>
-  </Pressable><View style={{ position: 'absolute', right: Space.md, top: 24 }}><IconAction accessibilityLabel={`Delete ${diary.title}`} destructive icon="delete-outline" onPress={onDelete} /></View></View>;
+  </Pressable></View>;
 }
 
 export default function DiaryLibraryScreen() {
   const router = useRouter();
   const { session, signIn, isLoading: sessionLoading } = useSession();
-  const { diaries, createDiary, deleteDiary, isLoading } = useDiaries();
-  const [creating, setCreating] = useState(false);
-  const [title, setTitle] = useState('');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  const { capability, diaries, isLoading, loadDiary, loadError } = useDiaries();
   const [error, setError] = useState<string | null>(null);
-  const submit = async () => {
-    if (!title.trim()) return setError('Add a title for your Diary.');
-    const normalizedStart = startDate.trim() ? parseDiaryDate(startDate) : null;
-    const normalizedEnd = endDate.trim() ? parseDiaryDate(endDate) : null;
-    if ((startDate.trim() && !normalizedStart) || (endDate.trim() && !normalizedEnd)) return setError('Enter dates in DD/MM/YYYY format, for example 05/09/2026.');
-    const dateError = validateDiaryDates(normalizedStart ?? '', normalizedEnd ?? '');
-    if (dateError) return setError(dateError);
-    const diary = await createDiary({ title, startDate: normalizedStart, endDate: normalizedEnd });
-    setCreating(false); setTitle(''); setStartDate(''); setEndDate(''); setError(null);
-    router.push({ pathname: '/diaries/[diaryId]', params: { diaryId: diary.id, editCover: '1' } });
-  };
-  const openDiary = (diary: (typeof diaries)[number]) => {
-    router.push({ pathname: '/diaries/[diaryId]', params: { diaryId: diary.id } });
+  const openDiary = async (diary: (typeof diaries)[number]) => {
+    setError(null);
+    try {
+      await loadDiary(diary.id);
+      router.push({ pathname: '/diaries/[diaryId]', params: { diaryId: diary.id } });
+    } catch {
+      setError('This Diary could not be opened. Check your connection and try again.');
+    }
   };
   return <SafeAreaView edges={['bottom']} style={{ flex: 1, backgroundColor: Palette.background }}>
     <Stack.Screen options={{
       headerLeft: () => <HeaderBackButton color={Palette.trip} fallbackHref="/saved" />,
-      headerRight: () => session ? <Pressable accessibilityLabel="Add Diary" accessibilityRole="button"
-        hitSlop={12} onPress={() => setCreating(true)} style={({ pressed }) => ({ opacity: pressed ? 0.55 : 1 })}>
-        <MaterialIcons color={Palette.trip} name="add" size={30} />
-      </Pressable> : null,
+      headerRight: () => null,
     }} />
     {sessionLoading || isLoading ? <LoadingView /> : !session ?
-      <View style={{ gap: Space.lg, padding: Screen.gutter }}><AppText color={Palette.textBody}>Sign in to create and edit private travel Diaries.</AppText><AppButton label="Sign in" onPress={signIn} /></View> :
+      <View style={{ gap: Space.lg, padding: Screen.gutter }}><AppText color={Palette.textBody}>Sign in to view your private travel Diaries.</AppText><AppButton label="Sign in" onPress={signIn} /></View> :
       <ScrollView contentContainerStyle={{ gap: Space.lg, padding: Screen.gutter }} keyboardShouldPersistTaps="handled">
-        {creating ? <View style={{ backgroundColor: Palette.surfaceMuted, borderRadius: Radius.card, gap: Space.md, padding: Space.lg }}>
-          <AppText variant="section">New Diary</AppText>
-          <AutoExpandingTextInput accessibilityLabel="Diary title" autoFocus maxLength={200} placeholder="e.g. South Island journey" value={title} onChangeText={(value) => { setTitle(value); setError(null); }} />
-          <AppTextInput accessibilityLabel="Diary start date" autoCapitalize="none" placeholder="Start date DD/MM/YYYY (optional)" value={startDate} onChangeText={setStartDate} />
-          <AppTextInput accessibilityLabel="Diary end date" autoCapitalize="none" placeholder="End date DD/MM/YYYY (optional)" value={endDate} onChangeText={setEndDate} />
-          {error ? <AppText color={Palette.danger}>{error}</AppText> : null}
-          <View style={{ flexDirection: 'row', gap: Space.md }}><View style={{ flex: 1 }}><AppButton label="Create Diary" onPress={() => void submit()} /></View><View style={{ flex: 1 }}><AppButton label="Cancel" onPress={() => { setCreating(false); setError(null); }} variant="secondary" /></View></View>
-        </View> : null}
-        {!creating && diaries.length === 0 ? <AppText color={Palette.textMuted}>No Diaries yet. Add one to compose your travel story.</AppText> : null}
-        {diaries.map((diary) => <DiaryIndexRow diary={diary} key={diary.id} onOpen={() => openDiary(diary)} onDelete={() => Alert.alert('Delete Diary', `This removes “${diary.title}” from this device.`, [{ text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: () => void deleteDiary(diary.id) }])} />)}
-        <AppText color={Palette.textMuted} variant="caption">Diary drafts in this preview are stored only on this device for the signed-in account.</AppText>
+        {loadError || error ? <AppText color={capability === 'unsupported' ? Palette.danger : Palette.textMuted}>{error ?? loadError}</AppText> : null}
+        {diaries.length === 0 && capability === 'supported' ? <AppText color={Palette.textMuted}>No server Diaries yet.</AppText> : null}
+        {diaries.map((diary) => <DiaryIndexRow diary={diary} key={diary.id} onOpen={() => void openDiary(diary)} />)}
+        <AppText color={Palette.textMuted} variant="caption">Diary viewing is synced with your account. Editing will be enabled in the next update.</AppText>
       </ScrollView>}
   </SafeAreaView>;
 }

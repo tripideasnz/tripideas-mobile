@@ -1,5 +1,5 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 
 import { DiaryViewMenu } from '@/components/diary/view-menu';
@@ -13,12 +13,15 @@ import { LoadingView } from '@/components/ui/loading-view';
 import { SignedOutFeature } from '@/components/signed-out-feature';
 
 export default function DiaryIndexScreen() {
-  const router = useRouter(); const { diaryId } = useLocalSearchParams<{ diaryId: string }>(); const { diaries } = useDiaries();
+  const router = useRouter(); const { diaryId } = useLocalSearchParams<{ diaryId: string }>(); const { diaries, isDetailLoaded, loadDiary } = useDiaries();
   const { isLoading: sessionLoading, session, signIn } = useSession();
+  const [detailError, setDetailError] = useState(false);
   const diary = diaries.find(({ id }) => id === diaryId); const days = useMemo(() => diary ? instantiatedDiaryIndex(diary.days) : [], [diary]);
+  useEffect(() => { if (diaryId && !isDetailLoaded(diaryId)) void loadDiary(diaryId).catch(() => setDetailError(true)); }, [diaryId, isDetailLoaded, loadDiary]);
   if (sessionLoading) return <LoadingView />;
   if (!session) return <SignedOutFeature message="Sign in to view and edit your private Diaries" onSignIn={signIn} />;
   if (!diary) return <View style={{ padding: Screen.gutter }}><AppText>This Diary is not available on this device.</AppText></View>;
+  if (!isDetailLoaded(diary.id)) return detailError ? <View style={{ padding: Screen.gutter }}><AppText color={Palette.danger}>This Diary could not be loaded.</AppText></View> : <LoadingView />;
   const openDay = (date: string) => router.push({ pathname: '/diaries/[diaryId]/day', params: { diaryId: diary.id, date } });
   return <ScrollView contentContainerStyle={{ gap: Space.xl, padding: Screen.gutter }}>
     <Stack.Screen options={{ headerLeft: () => <HeaderBackButton color={Palette.trip} fallbackHref={{ pathname: '/diaries/[diaryId]', params: { diaryId: diary.id } }} />, headerRight: () => <DiaryViewMenu diaryId={diary.id} />, title: 'Diary Index' }} />
