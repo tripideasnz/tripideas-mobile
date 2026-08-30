@@ -121,7 +121,7 @@ const [saved, layout, library, cover, diaryIndex, day, provider, toolbar, dragRo
   readFile(new URL('../components/ui/saved-object-presentations.tsx', import.meta.url), 'utf8'),
 ]);
 assert.match(saved, /title: 'Diaries'/); assert.match(saved, /openPrivateFeature\('\/diaries'\)/);
-assert.match(layout, /<DiaryProvider>/); assert.doesNotMatch(library, /createDiary|deleteDiary|FloatingStructuralAdd/);
+assert.match(layout, /<DiaryProvider>/); assert.match(library, /createDiary/);
 assert.match(library, /function DiaryIndexRow/); assert.match(library, /diaryCoverAssetIds\(diary\)/); assert.match(library, /TripImageCollage emptyLabel="Diary" images=\{images\}/); assert.doesNotMatch(library, /TripImageCollage emptyLabel="Diary" images=\{\[\]\}/);
 assert.match(library, /Sign in to view your private travel Diaries/);
 assert.doesNotMatch(library, /pathname: '\/diaries\/\[diaryId\]\/day'/); assert.match(library, /pathname: '\/diaries\/\[diaryId\]'/);

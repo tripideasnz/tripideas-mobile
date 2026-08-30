@@ -10,10 +10,9 @@ const [day, cover, photos, grid, assets, storage] = await Promise.all([
   readFile(new URL('./storage.ts', import.meta.url), 'utf8'),
 ]);
 
-assert.match(day, /pickPhotosForUpload\(\)/);
-assert.match(day, /uploadDiaryPhotos\(session\.userId, selected\)/);
-assert.match(day, /for \(const photoAssetId of result\.assetIds\)/);
-assert.match(day, /type: 'PHOTO', photoAssetId/);
+assert.match(day, /action === 'Photo' \|\| action === 'Place'/);
+assert.match(day, /photo and Place integration stage/);
+assert.doesNotMatch(day, /pickPhotosForUpload\(\)/);
 assert.match(photos, /for \(const photo of selected\)/);
 assert.match(photos, /prepareNativePhotoUpload/);
 assert.match(photos, /startNativePhotoUpload/);
@@ -37,7 +36,7 @@ assert.match(cover, /pickPhotosForUpload\(availableSlots \|\| 4\)/);
 assert.match(cover, /uploadDiaryPhotos\(session\.userId, selected\)/);
 assert.match(cover, /result\.assetIds\.slice\(0, 4\)/);
 assert.match(cover, /No cover photos/);
-assert.match(cover, /disabled=\{!canEdit \|\| coverBusy\}/);
+assert.match(cover, /disabled=\{!canEditMedia \|\| coverBusy\}/);
 assert.match(cover, /const opensInEditMode = editCover === '1'/);
 assert.match(cover, /useState<boolean>\(opensInEditMode && canEdit\)/);
 assert.match(cover, /autoFocus=\{!opensInEditMode\}/);
@@ -49,5 +48,4 @@ assert.match(cover, /selectedCoverIds\.length < 4 \? 'Add Diary cover photos' : 
 assert.doesNotMatch(cover, /label=\{coverBusy \? 'Uploading…'|Clear cover photos|Choose cover photos|Replace cover photos/);
 assert.match(storage, /coverPhotoAssetIds:/);
 assert.match(storage, /diaryStorageKey\(userId\)/);
-assert.match(day, /if \(!session\?\.userId/);
 console.log('✓ Diary photos use ordered PhotoAsset references, Notebook grid UI, user-scoped restart storage and real cover collage selection');

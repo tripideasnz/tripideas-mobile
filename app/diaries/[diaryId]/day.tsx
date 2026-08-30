@@ -32,11 +32,9 @@ import { diaryMapFeatures } from '@/diaries/model';
 import { setLastViewedDiaryDay } from '@/diaries/last-viewed';
 import { useDiaries } from '@/diaries/provider';
 import { formatDiaryTopicTime, parseDiaryTopicTime } from '@/diaries/times';
-import { uploadDiaryPhotos } from '@/diaries/photos';
 import type { DiaryItem, DiaryTopic } from '@/diaries/types';
 import { getOneForegroundLocation } from '@/location/foreground';
 import { isHttpUrl } from '@/lib/url';
-import { pickPhotosForUpload } from '@/photo-uploads/picker';
 import { usePersonalPlaceCards } from '@/personal-place-cards/provider';
 
 type Capture = { action: Exclude<DiaryObjectAction, 'Narrative' | 'Photo'>; topicId: string } | null;
@@ -83,7 +81,7 @@ export default function DiaryDayScreen() {
   const { height: viewportHeight } = useWindowDimensions(); const scrollRef = useRef<ScrollView>(null); const scrollContentRef = useRef<View>(null!);
   const pendingRevealTopicId = useRef<string | null>(null); const revealTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { isLoading: sessionLoading, session, signIn } = useSession();
-  const actions = useDiaries(); const { canEdit, isDetailLoaded, loadDiary } = actions; const { cards } = usePersonalPlaceCards();
+  const actions = useDiaries(); const { canEdit, canRetryPending, isDetailLoaded, loadDiary, mutationError, retryPending } = actions; const { cards } = usePersonalPlaceCards();
   const diary = actions.diaries.find(({ id }) => id === params.diaryId); const date = params.date; const day = diary?.days.find((value) => value.date === date);
   const ensuredDate = useRef<string | null>(null); const actionsRef = useRef(actions); actionsRef.current = actions;
   const [activeTopicId, setActiveTopicId] = useState<string | null>(null); const [expandedItemId, setExpandedItemId] = useState<string | null>(null); const [focusTopicId, setFocusTopicId] = useState<string | null>(null); const [focusItemId, setFocusItemId] = useState<string | null>(null);
@@ -91,7 +89,6 @@ export default function DiaryDayScreen() {
   const [editingDay, setEditingDay] = useState(false); const [capture, setCapture] = useState<Capture>(null);
   const [structuralError, setStructuralError] = useState<string | null>(null);
   const [detailError, setDetailError] = useState(false);
-  const [photoBusyTopicId, setPhotoBusyTopicId] = useState<string | null>(null);
   useEffect(() => { if (params.diaryId && !isDetailLoaded(params.diaryId)) void loadDiary(params.diaryId).catch(() => setDetailError(true)); }, [isDetailLoaded, loadDiary, params.diaryId]);
   useEffect(() => { setActiveTopicId(null); setExpandedItemId(null); setCapture(null); if (canEdit && diary?.id && date && ensuredDate.current !== date) { ensuredDate.current = date; void actionsRef.current.ensureDay(diary.id, date); } }, [canEdit, date, diary?.id]);
   useEffect(() => () => { if (revealTimer.current) clearTimeout(revealTimer.current); }, []);
@@ -123,21 +120,8 @@ export default function DiaryDayScreen() {
     }, 320);
   };
   const openCapture = (topicId: string, action: DiaryObjectAction) => {
+    if (action === 'Photo' || action === 'Place') { setStructuralError(`${action} editing will be enabled in the photo and Place integration stage.`); return; }
     setPendingMapPin(null);
-    if (action === 'Photo') {
-      if (!session?.userId || !day || photoBusyTopicId) return;
-      setPhotoBusyTopicId(topicId);
-      void pickPhotosForUpload().then(async (selected) => {
-        if (!selected.length) return;
-        const result = await uploadDiaryPhotos(session.userId, selected);
-        for (const photoAssetId of result.assetIds) {
-          await actions.addItem(diary.id, day.id, topicId, { type: 'PHOTO', photoAssetId, caption: null, contentOrigin: 'USER_OWNED', includeOnMap: false });
-          pendingRevealTopicId.current = topicId;
-        }
-        if (result.errors.length) Alert.alert('Some photos were not added', `${result.errors.length} ${result.errors.length === 1 ? 'photo' : 'photos'} could not be uploaded. You can try again.`);
-      }).catch(() => Alert.alert('Could not add photos', 'Please check your connection and try again.')).finally(() => setPhotoBusyTopicId(null));
-      return;
-    }
     if (action === 'Narrative') { if (!day) return; void actions.addItem(diary.id, day.id, topicId, { type: 'NARRATIVE', title: null, text: '', contentOrigin: 'USER_OWNED', includeOnMap: false }).then((item) => { setExpandedItemId(item.id); setFocusItemId(item.id); }); return; }
     setCapture({ topicId, action });
   };
@@ -155,6 +139,7 @@ export default function DiaryDayScreen() {
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}><SavedObjectFocusScope contentRef={scrollContentRef} scrollRef={scrollRef}><ScrollView ref={scrollRef} innerViewRef={scrollContentRef} contentContainerStyle={{ gap: Space.xxl, padding: Screen.gutter, paddingBottom: 112 }} keyboardDismissMode="interactive" keyboardShouldPersistTaps="handled">
       <View style={{ alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' }}><View accessibilityLabel="Day navigation" style={{ alignItems: 'center', flexDirection: 'row', gap: 0 }}><PlainIconAction accessibilityLabel="Previous day" disabled={!previous} icon="chevron-left" onPress={() => navigate(-1)} /><AppText variant="section">{formatDiaryDate(date)}</AppText><PlainIconAction accessibilityLabel="Next day" disabled={!next} icon="chevron-right" onPress={() => navigate(1)} /></View>{canEdit ? <View style={{ alignItems: 'center', flexDirection: 'row', gap: Space.sm }}><IconAction accessibilityLabel="Edit Day heading and summary" icon="edit" trip onPress={() => setEditingDay(true)} />{day ? <IconAction accessibilityLabel={`Delete ${formatDiaryDate(date)}`} destructive icon="delete-outline" onPress={() => Alert.alert('Delete Day', 'This removes the stored Day and its Topics. The date range is unchanged.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: () => void actions.deleteDay(diary.id, day.id) }])} /> : null}</View> : null}</View>
       {structuralError ? <AppText color={Palette.danger}>{structuralError}</AppText> : null}
+      {mutationError ? <View style={{ gap: Space.sm }}><AppText color={Palette.danger}>{mutationError}</AppText>{canRetryPending ? <AppButton label="Retry pending Diary changes" onPress={() => void retryPending()} variant="secondary" /> : null}</View> : null}
       {editingDay ? <SavedAutosaveScope>{(flush) => <View style={{ backgroundColor: Palette.surfaceMuted, borderRadius: Radius.card, gap: Space.md, padding: Space.lg }}><View style={{ alignItems: 'flex-start', flexDirection: 'row', gap: Space.sm }}><View style={{ flex: 1 }}><DiaryAutosaveField accessibilityLabel="Day heading" inputStyle={Type.title} placeholder="Day heading (optional)" value={day?.heading ?? ''} onSave={(heading) => requireDay().then((target) => actions.updateDay(diary.id, target.id, { heading: heading.trim() || null }))} /></View><FinishEditAction accessibilityLabel="Finish editing Day" size="default" onPress={() => void finishDay(flush)} /></View><DiaryAutosaveField accessibilityLabel="Day summary" multiline placeholder="Day summary (optional)" value={day?.summary ?? ''} onSave={(summary) => requireDay().then((target) => actions.updateDay(diary.id, target.id, { summary: summary.trim() || null }))} /></View>}</SavedAutosaveScope> : <View style={{ gap: Space.sm }}>{day?.heading ? <AppText variant="title">{day.heading}</AppText> : null}{day?.summary ? <AppText>{day.summary}</AppText> : null}</View>}
       {!day?.topics.length ? canEdit ? <View accessibilityLabel="This Day is empty. Use the edit button to add a title and the plus button to add a Topic." style={{ alignItems: 'center', flexDirection: 'row', flexWrap: 'wrap', gap: Space.xs }}><AppText color={Palette.textMuted}>This Day is empty. Use the</AppText><MaterialIcons color={Palette.trip} name="edit" size={18} /><AppText color={Palette.textMuted}>to add a title and the</AppText><MaterialIcons color={Palette.trip} name="add" size={20} /><AppText color={Palette.textMuted}>to add a Topic.</AppText></View> : <AppText color={Palette.textMuted}>This Day has no saved Topics.</AppText> : null}
       {[...(day?.topics ?? [])].sort((a, b) => a.position - b.position).map((topic) => activeTopicId !== topic.id ? <CompletedTopic date={date} diaryId={diary.id} key={topic.id} onEdit={canEdit ? () => { setCapture(null); setExpandedItemId(null); setFocusTopicId(null); setStructuralError(null); setActiveTopicId(topic.id); } : undefined} topic={topic} /> : <SavedAutosaveScope key={topic.id}>{(flush) => <View onLayout={(event) => revealNewTopic(topic.id, event.nativeEvent.layout.y)} style={{ backgroundColor: Palette.surfaceMuted, borderRadius: Radius.card, gap: Space.sm, padding: Space.md }}>

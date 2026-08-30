@@ -61,16 +61,16 @@ const [api, apiStorage, provider, index, cover, contents, day, map, prototypeSto
 ]);
 assert.match(api, /authenticatedApiFetch\('\/diaries'\)/);
 assert.match(api, /authenticatedApiFetch\(`\/diaries\/\$\{encodeURIComponent\(id\)\}`\)/);
-assert.doesNotMatch(api, /method:\s*['"](?:POST|PATCH|PUT|DELETE)/);
+assert.match(api, /diaryMutationApi/);
 assert.match(provider, /checkApiCapability\('diaries-v1'\)/);
-assert.match(provider, /canEdit: false/);
+assert.match(provider, /canEdit: capability !== 'unsupported'/);
 assert.doesNotMatch(provider, /from '@\/diaries\/storage'/);
 assert.match(apiStorage, /tripideas\.diaries\.api\.user\.\$\{userId\}\.v1/);
 assert.match(prototypeStorage, /tripideas\.diaries\.user\.\$\{userId\}\.\$\{VERSION\}/);
 assert.match(prototypeStorage, /const VERSION = 'prototype-v1'/);
 assert.doesNotMatch(apiStorage, /tripideas\.diaries\.user\./);
 for (const surface of [cover, contents, day, map]) { assert.match(surface, /isDetailLoaded/); assert.match(surface, /loadDiary/); }
-assert.doesNotMatch(index, /createDiary|deleteDiary|FloatingStructuralAdd/);
+assert.match(index, /createDiary/);
 assert.match(cover, /\{canEdit \? <IconAction accessibilityLabel="Edit Diary Cover"/);
 assert.match(day, /canEdit \? <FloatingStructuralAdd/);
 assert.match(day, /if \(!canEdit\) \{ router\.replace/);
