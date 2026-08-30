@@ -19,6 +19,14 @@
         "EXPO_PUBLIC_API_URL": "https://tripideas-api-integration-staging.up.railway.app"
       }
     },
+    "testflight-staging": {
+      "distribution": "store",
+      "channel": "preview",
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://tripideas-api-integration-staging.up.railway.app"
+      }
+    },
     "production": {
       "distribution": "store",
       "channel": "production",
