@@ -1,13 +1,13 @@
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Stack, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Pressable, ScrollView, View } from 'react-native';
+import { Alert, ScrollView, View } from 'react-native';
 
 import { PersonalPlaceCardView } from '@/components/personal-place-card-view';
 import { SignedOutFeature } from '@/components/signed-out-feature';
 import { useSession } from '@/auth/provider';
 import { AppText } from '@/components/ui/app-text';
 import { IconAction } from '@/components/ui/icon-action';
+import { headerAddAction } from '@/components/ui/header-actions';
 import { LoadingView } from '@/components/ui/loading-view';
 import { Palette, Screen, Space } from '@/constants/design';
 import { personalPlaceCardError } from '@/personal-place-cards/errors';
@@ -60,24 +60,7 @@ export default function PersonalPlaceCardsScreen() {
       }}>
       <Stack.Screen
         options={{
-          headerRight: () => (
-            <Pressable
-              accessibilityLabel="Add Personal Place"
-              accessibilityRole="button"
-              disabled={isCreating}
-              hitSlop={12}
-              onPress={() => void createPlace()}
-              style={({ pressed }) => ({
-                alignItems: 'center',
-                alignSelf: 'flex-end',
-                height: 44,
-                justifyContent: 'center',
-                opacity: isCreating ? 0.35 : pressed ? 0.55 : 1,
-                width: 44,
-              })}>
-              <MaterialIcons color={Palette.trip} name="add" size={30} />
-            </Pressable>
-          ),
+          ...headerAddAction({ accessibilityLabel: 'Add Personal Place', disabled: isCreating, onPress: () => void createPlace() }),
         }}
       />
       {message ? <AppText color={Palette.danger}>{message}</AppText> : null}

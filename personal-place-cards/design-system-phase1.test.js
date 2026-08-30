@@ -18,7 +18,9 @@ assert.match(editor, /icon="edit"[\s\S]{0,100}semantic="edit"/);
 assert.match(list, /destructive[\s\S]{0,80}icon="delete-outline"/);
 assert.match(list, /Alert\.alert\([\s\S]*Delete Personal Place/);
 
-assert.match(editor, /<ContainedRemoveButton/); assert.match(editor, /<PlacePhotoGrid/);
+assert.match(editor, /<ContainedRemoveButton/);
+assert.match(editor, /bodyMedia\.map/);
+assert.match(editor, /pendingBodyPreviews\.map/);
 assert.match(photoGrid, /ContainedRemoveButton/); assert.match(remove, />×<\/Text>/);
 assert.match(diaryRemove, /export \{ ContainedRemoveButton \} from '@\/components\/ui\/contained-remove-button'/);
 assert.equal((editor.match(/'main'/g) ?? []).length > 0, true);

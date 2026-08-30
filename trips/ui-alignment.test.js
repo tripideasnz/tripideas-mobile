@@ -15,8 +15,8 @@ const [list, detail, entry, autosave, autosaveStatus, expandable, api, provider]
   read('trips/provider.tsx'),
 ]);
 
-assert.match(list, /accessibilityLabel="Add Trip"/);
-assert.match(list, /accessibilityLabel="Add Trip"[\s\S]*MaterialIcons color=\{Palette\.trip\} name="add" size=\{30\}/);
+assert.match(list, /headerAddAction\(\{/);
+assert.match(list, /accessibilityLabel: 'Add Trip'/);
 assert.match(list, /accessibilityLabel=\{`Open \$\{trip\.name\}`\}/);
 assert.match(list, /accessibilityLabel=\{`Delete \$\{trip\.name\}`\}/);
 assert.doesNotMatch(list, /icon="delete-outline"[\s\S]{0,160}size="compact"/);
@@ -30,11 +30,11 @@ assert.match(detail, /accessibilityLabel="Show Trip on map"/);
 assert.match(detail, /HeaderBackButton color=\{Palette\.trip\} fallbackHref="\/trips"/);
 assert.doesNotMatch(detail, /router\.canGoBack\(\)|router\.back\(\)/);
 assert.doesNotMatch(detail, /HeaderBackButton onPress=\{\(\) => router\.replace\('\/trips'\)\}/);
-assert.match(detail, /accessibilityLabel="Share Trip"/);
+assert.match(detail, /accessibilityLabel: 'Share Trip'/);
 assert.match(detail, /<Text style=\{\{ flex: 1, \.\.\.Type\.cardTitle \}\}>Trip note<\/Text>/);
 assert.match(entry, /<Text style=\{\{ \.\.\.Type\.cardTitle, marginBottom: Space\.sm \}\}>Personal Notes<\/Text>/);
 assert.match(entry, /icon="delete-outline"/);
-assert.match(detail, /headerRight: \(\) => trip \? <IconAction[\s\S]{0,180}accessibilityLabel="Share Trip"/);
+assert.match(detail, /trip \? headerShareAction\(\{[\s\S]{0,180}accessibilityLabel: 'Share Trip'/);
 assert.match(detail, /Public sharing unavailable/);
 console.log('✓ Trip detail uses one guarded Map and Share icon cluster without deletion');
 

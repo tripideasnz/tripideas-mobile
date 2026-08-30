@@ -1,12 +1,12 @@
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Stack, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, View } from 'react-native';
+import { Alert, ScrollView, View } from 'react-native';
 
 import { TripIndexCard } from '@/components/trip-index-card';
 import { SignedOutFeature } from '@/components/signed-out-feature';
 import { useSession } from '@/auth/provider';
 import { IconAction } from '@/components/ui/icon-action';
+import { headerAddAction } from '@/components/ui/header-actions';
 import { AppButton } from '@/components/ui/app-button';
 import { AppText } from '@/components/ui/app-text';
 import { AutoExpandingTextInput } from '@/components/ui/app-text-input';
@@ -36,6 +36,7 @@ export default function TripsScreen() {
   } = useMyTrips();
   const [newTripName, setNewTripName] = useState('');
   const [showCreate, setShowCreate] = useState(false);
+  const [isCreatingTrip, setIsCreatingTrip] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [tripPlaces, setTripPlaces] = useState<PlaceCardData[]>([]);
   const [isLoadingPlaces, setIsLoadingPlaces] = useState(false);
@@ -72,7 +73,8 @@ export default function TripsScreen() {
   }, [isLoading, tripPlaceIdsKey]);
 
   const submitCreate = async () => {
-    if (!newTripName.trim()) return;
+    if (!newTripName.trim() || isCreatingTrip) return;
+    setIsCreatingTrip(true);
     setCreateError(null);
     try {
       const trip = await createTrip(newTripName);
@@ -84,6 +86,8 @@ export default function TripsScreen() {
       setCreateError(
         `Could not create the Trip${tripRequestDiagnostic(error)}. Check your connection and try again.`
       );
+    } finally {
+      setIsCreatingTrip(false);
     }
   };
 
@@ -107,17 +111,7 @@ export default function TripsScreen() {
       }}>
       <Stack.Screen
         options={{
-          headerRight: () => (
-            <Pressable
-              accessibilityLabel="Add Trip"
-              accessibilityRole="button"
-              disabled={showCreate}
-              hitSlop={12}
-              onPress={() => setShowCreate(true)}
-              style={({ pressed }) => ({ opacity: showCreate ? 0.35 : pressed ? 0.55 : 1 })}>
-              <MaterialIcons color={Palette.trip} name="add" size={30} />
-            </Pressable>
-          ),
+          ...headerAddAction({ accessibilityLabel: 'Add Trip', disabled: showCreate, onPress: () => setShowCreate(true) }),
         }}
       />
       {importDecision ? (
@@ -179,12 +173,15 @@ export default function TripsScreen() {
           />
           <IconAction
             accessibilityLabel="Create Trip"
-            disabled={!newTripName.trim()}
+            color={Palette.success}
+            disabled={!newTripName.trim() || isCreatingTrip}
             icon="check"
             onPress={submitCreate}
           />
           <IconAction
             accessibilityLabel="Cancel Trip creation"
+            color={Palette.danger}
+            disabled={isCreatingTrip}
             icon="close"
             onPress={() => {
               setNewTripName('');
@@ -194,6 +191,7 @@ export default function TripsScreen() {
           />
         </View>
       ) : null}
+      {isCreatingTrip ? <StatusText>Creating trip…</StatusText> : null}
       {createError ? <AppText color={Palette.danger} style={{ marginBottom: Space.lg }}>{createError}</AppText> : null}
 
       {isLoading || isLoadingPlaces ? (

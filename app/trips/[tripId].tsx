@@ -18,6 +18,7 @@ import { TripEntryCard } from '@/components/trip-entry-card';
 import { PlaceSearch } from '@/components/place-search';
 import { AutosaveNote } from '@/components/ui/autosave-note';
 import { IconAction } from '@/components/ui/icon-action';
+import { clearHeaderRightAction, headerShareAction } from '@/components/ui/header-actions';
 import { LoadingView } from '@/components/ui/loading-view';
 import { TripImageCollage } from '@/components/trip-image-collage';
 import { AutoExpandingTextInput } from '@/components/ui/app-text-input';
@@ -302,16 +303,11 @@ export default function TripDetailScreen() {
           headerLeft: () => (
             <HeaderBackButton color={Palette.trip} fallbackHref="/trips" />
           ),
-          headerRight: () => trip ? <IconAction
-            accessibilityLabel="Share Trip"
-            icon="share"
-            onPress={() => Alert.alert('Share trip', undefined, [
+          ...(trip ? headerShareAction({ accessibilityLabel: 'Share Trip', onPress: () => Alert.alert('Share trip', undefined, [
               { style: 'cancel', text: 'Cancel' },
               { onPress: () => router.push({ pathname: '/trips/[tripId]/shared', params: { tripId: trip.id } }), text: 'Preview' },
               { onPress: () => void createPublicShare(), text: 'Share' },
-            ])}
-            trip
-          /> : null,
+            ]) }) : clearHeaderRightAction()),
           title: '',
         }}
       />

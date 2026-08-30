@@ -4,13 +4,14 @@ import { readFile } from 'node:fs/promises';
 const read = (relativePath) =>
   readFile(new URL(`../${relativePath}`, import.meta.url), 'utf8');
 
-const [saved, savedModule, trips, favourites, layout, tabs] = await Promise.all([
+const [saved, savedModule, trips, favourites, layout, tabs, features] = await Promise.all([
   read('app/(tabs)/saved.tsx'),
   read('components/saved-module.tsx'),
   read('app/trips/index.tsx'),
   read('app/favourites/index.tsx'),
   read('app/_layout.tsx'),
   read('app/(tabs)/_layout.tsx'),
+  read('config/personal-content-features.ts'),
 ]);
 
 const orderedModules = ["title: 'Favourites'", "title: 'Trips'", "title: 'Personal Places'", "title: 'Notebooks'", "title: 'Diaries'"];
@@ -22,13 +23,22 @@ for (const moduleTitle of orderedModules) {
 }
 console.log('✓ Saved modules use the approved ordering');
 
+assert.match(features, /personalPlaces: true/);
+assert.match(features, /notebooks: false/);
+assert.match(features, /diaries: false/);
+assert.match(saved, /personalContentFeatures\.notebooks \? \{/);
+assert.match(saved, /personalContentFeatures\.diaries \? \{/);
+assert.match(layout, /<Stack\.Protected guard=\{personalContentFeatures\.notebooks\}>/);
+assert.match(layout, /<Stack\.Protected guard=\{personalContentFeatures\.diaries\}>/);
+console.log('✓ beta feature flags hide Notebook and Diary and fail their routes closed');
+
 for (const route of ["openPrivateFeature('/favourites')", "openPrivateFeature('/trips')", "openPrivateFeature('/personal-place-cards')", "openPrivateFeature('/notebooks')", "openPrivateFeature('/diaries')"]) {
   assert.match(saved, new RegExp(route.replace(/[()]/g, '\\$&')));
 }
 assert.match(saved, /if \(!session && !\(await signIn\(\)\)\) return/);
 assert.match(layout, /name="favourites\/index"/);
 assert.match(layout, /name="trips\/index"/);
-console.log('✓ every Saved module retains access to its feature destination');
+console.log('✓ retained and gated Saved modules keep their existing destinations in source');
 
 assert.match(savedModule, /accessibilityRole="button"/);
 assert.match(savedModule, /onPress=\{onPress\}/);

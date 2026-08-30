@@ -8,7 +8,6 @@ import { Keyboard, Pressable, ScrollView, Text, useWindowDimensions, View } from
 import { useSession } from '@/auth/provider';
 import { PlaceDetailContent } from '@/components/place-detail-content';
 import { PlaceMapPreview } from '@/components/place-map-preview';
-import { PlacePhotoGrid } from '@/components/place-photo-grid';
 import { SignedOutFeature } from '@/components/signed-out-feature';
 import { AppButton } from '@/components/ui/app-button';
 import { AppText } from '@/components/ui/app-text';
@@ -34,6 +33,7 @@ import {
 } from '@/personal-place-cards/errors';
 import {
   addPersonalPlaceCardPhoto,
+  listPersonalPlaceCardPhotoPreviews,
   replacePersonalPlaceCardPhoto,
   resumePersonalPlaceCardPhotos,
 } from '@/personal-place-cards/photos';
@@ -50,6 +50,11 @@ import { useMyTrips } from '@/trips/provider';
 import { getOneForegroundLocation } from '@/location/foreground';
 
 type SaveState = 'failed' | 'idle' | 'saving';
+type PendingPhotoPreview = {
+  key: string;
+  uri: string | null;
+  state: 'uploading' | 'error';
+};
 
 export default function PersonalPlaceCardScreen() {
   const params = useLocalSearchParams<{
@@ -90,7 +95,7 @@ export default function PersonalPlaceCardScreen() {
   const [busy, setBusy] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
-  const [pendingBodyPreviews, setPendingBodyPreviews] = useState<string[]>([]);
+  const [pendingBodyPreviews, setPendingBodyPreviews] = useState<PendingPhotoPreview[]>([]);
   const [pendingMainPreview, setPendingMainPreview] = useState<string | null>(null);
   const initializedCardRef = useRef<string | null>(null);
   const titleRef = useRef('');
@@ -158,13 +163,26 @@ export default function PersonalPlaceCardScreen() {
 
   useEffect(() => {
     if (session?.userId && cardId) {
+      const loadPendingPreviews = () => listPersonalPlaceCardPhotoPreviews(
+        session.userId,
+        cardId
+      ).then((pending) => setPendingBodyPreviews(
+        pending
+          .filter(({ role }) => role === 'body')
+          .map((item) => ({
+            key: item.uploadId,
+            uri: item.uri,
+            state: item.state.endsWith('ERROR') ? 'error' : 'uploading',
+          }))
+      ));
+      void loadPendingPreviews();
       void resumePersonalPlaceCardPhotos(
         session.userId,
         cardId,
         mutate.attachPhoto,
         load,
         mutate.removePhoto
-      );
+      ).then(loadPendingPreviews);
     }
   }, [cardId, load, mutate.attachPhoto, mutate.removePhoto, session?.userId]);
 
@@ -397,7 +415,7 @@ export default function PersonalPlaceCardScreen() {
   }
 
   const mainPreviewUrl = pendingMainPreview ?? (mainMedia ? photoUrls[mainMedia.id] : null);
-  const remainingBodySlots = 10 - bodyMedia.length;
+  const remainingBodySlots = Math.max(0, 10 - bodyMedia.length - pendingBodyPreviews.length);
   return (
     <ScrollView
       ref={scrollRef}
@@ -491,8 +509,11 @@ export default function PersonalPlaceCardScreen() {
         />
       ) : null}
 
-      <View onLayout={(event) => { photosYRef.current = event.nativeEvent.layout.y; }}><AppText variant="section">Main photo</AppText>
-      {mainMedia ? (
+      <View
+        onLayout={(event) => { photosYRef.current = event.nativeEvent.layout.y; }}
+        style={{ gap: Space.md }}>
+        <AppText variant="section">Photos</AppText>
+        {mainMedia ? (
         mainPreviewUrl ? (
           <PhotoEditorTile
             accessibilityLabel="Replace main photo"
@@ -537,22 +558,28 @@ export default function PersonalPlaceCardScreen() {
             }
           })}
         />
-      )}</View>
+        )}
+      </View>
 
-      <View style={{ alignItems: 'center', flexDirection: 'row' }}>
-        <AppText style={{ flex: 1 }} variant="section">Body photos</AppText>
+      <View style={{ alignItems: 'flex-start' }}>
         <AppButton
           disabled={busy || remainingBodySlots === 0}
-          label="Add photos"
+          label="Add body photos"
           size="compact"
           variant="secondary"
           onPress={() => void act(async () => {
             if (!session?.userId) return;
             const selected = await pickPhotosForUpload(remainingBodySlots);
             if (selected.length) revealEditorObject(photosYRef.current);
-            setPendingBodyPreviews(selected.map((item) => item.uri));
-            try {
-              for (const photo of selected) {
+            const selectedSlots = selected.map((photo, index) => ({
+              key: `selection:${Date.now()}:${index}`,
+              uri: photo.uri,
+              state: 'uploading' as const,
+            }));
+            setPendingBodyPreviews((current) => [...current, ...selectedSlots]);
+            for (const [index, photo] of selected.entries()) {
+              const slot = selectedSlots[index];
+              try {
                 await addPersonalPlaceCardPhoto(
                   session.userId,
                   card.id,
@@ -561,42 +588,114 @@ export default function PersonalPlaceCardScreen() {
                   mutate.attachPhoto,
                   load
                 );
-                setPendingBodyPreviews((current) => current.slice(1));
+                setPendingBodyPreviews((current) => current.filter(
+                  ({ key }) => key !== slot.key
+                ));
+              } catch {
+                setPendingBodyPreviews((current) => current.map((item) => (
+                  item.key === slot.key ? { ...item, state: 'error' } : item
+                )));
               }
-            } finally {
-              setPendingBodyPreviews([]);
             }
           })}
         />
       </View>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm }}>
-        {pendingBodyPreviews.map((uri) => (
-          <View key={uri} style={{ opacity: 0.65, width: '48%' }}>
-            <Image
-              accessibilityLabel="Uploading body photo"
-              contentFit="cover"
-              source={{ uri }}
-              style={{ aspectRatio: 1, borderRadius: Radius.card, width: '100%' }}
-            />
+        {bodyMedia.map((media, index) => (
+          <View
+            key={media.id}
+            style={{
+              aspectRatio: 1,
+              backgroundColor: Palette.surfaceMuted,
+              borderRadius: Radius.card,
+              overflow: 'hidden',
+              width: '48%',
+            }}>
+            {photoUrls[media.id] ? (
+              <Image
+                accessibilityLabel={`Body photo ${index + 1}`}
+                contentFit="cover"
+                source={{ uri: photoUrls[media.id] }}
+                style={{ height: '100%', width: '100%' }}
+              />
+            ) : (
+              <View style={{ alignItems: 'center', flex: 1, justifyContent: 'center', padding: Space.sm }}>
+                <StatusText>Loading photo…</StatusText>
+              </View>
+            )}
+            <View style={{ position: 'absolute', right: Space.sm, top: Space.sm }}>
+              <ContainedRemoveButton
+                label={`Remove body photo ${index + 1}`}
+                onPress={() => void removePhoto(media)}
+              />
+            </View>
+          </View>
+        ))}
+        {pendingBodyPreviews.map((preview, index) => (
+          <View
+            key={preview.key}
+            style={{
+              aspectRatio: 1,
+              backgroundColor: Palette.surfaceMuted,
+              borderRadius: Radius.card,
+              overflow: 'hidden',
+              width: '48%',
+            }}>
+            {preview.uri ? (
+              <Image
+                accessibilityLabel={`Pending body photo ${bodyMedia.length + index + 1}`}
+                contentFit="cover"
+                source={{ uri: preview.uri }}
+                style={{ height: '100%', opacity: 0.62, width: '100%' }}
+              />
+            ) : null}
+            <View style={{
+              alignItems: 'center',
+              backgroundColor: 'rgba(255,255,255,0.72)',
+              bottom: 0,
+              justifyContent: 'center',
+              left: 0,
+              padding: Space.sm,
+              position: 'absolute',
+              right: 0,
+              top: 0,
+            }}>
+              <AppText
+                color={preview.state === 'error' ? Palette.danger : Palette.textMuted}
+                variant="caption">
+                {preview.state === 'error' ? 'Upload paused' : 'Uploading…'}
+              </AppText>
+            </View>
           </View>
         ))}
       </View>
-      <PlacePhotoGrid
-        bottomMargin={0}
-        images={bodyMedia.flatMap((media) => photoUrls[media.id] ? [{
-          _key: media.id,
-          alt: `Body photo ${(media.position ?? 0) + 1}`,
-          url: photoUrls[media.id],
-        }] : [])}
-        onRemoveImage={(image) => {
-          const media = bodyMedia.find((item) => item.id === image._key);
-          if (media) void removePhoto(media);
-        }}
-        placeTitle={title || 'Personal Place'}
-      />
       <AppText color={Palette.textMuted} variant="caption">
-        {bodyMedia.length} of 10 body photos
+        {bodyMedia.length + pendingBodyPreviews.length} of 10 body photos
       </AppText>
+      {pendingBodyPreviews.some(({ state }) => state === 'error') ? (
+        <AppButton
+          label="Retry photo uploads"
+          size="compact"
+          variant="secondary"
+          onPress={() => {
+            if (!session?.userId) return;
+            void resumePersonalPlaceCardPhotos(
+              session.userId,
+              card.id,
+              mutate.attachPhoto,
+              load,
+              mutate.removePhoto
+            ).then(() => listPersonalPlaceCardPhotoPreviews(session.userId!, card.id))
+              .then((pending) => setPendingBodyPreviews(
+                pending.filter(({ role }) => role === 'body').map((item) => ({
+                  key: item.uploadId,
+                  uri: item.uri,
+                  state: item.state.endsWith('ERROR') ? 'error' : 'uploading',
+                }))
+              ));
+          }}
+        />
+      ) : null}
 
       <AppText color={Palette.textMuted}>
         {card.readiness.isTripIdeaReady

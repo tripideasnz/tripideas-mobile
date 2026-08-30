@@ -12,6 +12,7 @@ import { useSavedPlaces } from '@/saved/provider';
 import { useMyTrips } from '@/trips/provider';
 import { useSession } from '@/auth/provider';
 import { useDiaries } from '@/diaries/provider';
+import { personalContentFeatures } from '@/config/personal-content-features';
 
 function countText(count: number, singular: string, plural = `${singular}s`) {
   return `${count} ${count === 1 ? singular : plural}`;
@@ -73,7 +74,7 @@ export default function SavedScreen() {
           : 'No personal places yet',
       title: 'Personal Places',
     },
-    {
+    personalContentFeatures.notebooks ? {
       accessibilityLabel: 'Open Notebooks',
       icon: 'menu-book' as const,
       onPress: () => void openPrivateFeature('/notebooks'),
@@ -85,8 +86,8 @@ export default function SavedScreen() {
           ? countText(notebooks.length, 'notebook')
           : 'No notebooks yet',
       title: 'Notebooks',
-    },
-    {
+    } : null,
+    personalContentFeatures.diaries ? {
       accessibilityLabel: 'Open Diaries',
       icon: 'auto-stories' as const,
       onPress: () => void openPrivateFeature('/diaries'),
@@ -98,8 +99,8 @@ export default function SavedScreen() {
           ? countText(diaries.length, 'diary', 'diaries')
           : 'No diaries yet',
       title: 'Diaries',
-    },
-  ];
+    } : null,
+  ].filter((module): module is NonNullable<typeof module> => module !== null);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: Palette.background }}>
