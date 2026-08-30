@@ -34,9 +34,11 @@ import {
 } from '@/personal-place-cards/errors';
 import {
   addPersonalPlaceCardPhoto,
+  listPersonalPlaceCardPhotoPreviews,
   replacePersonalPlaceCardPhoto,
   resumePersonalPlaceCardPhotos,
 } from '@/personal-place-cards/photos';
+import { failedPhotoUploadMessage } from '@/personal-place-cards/photo-status';
 import { usePersonalPlaceCards } from '@/personal-place-cards/provider';
 import type {
   PersonalPlaceCard,
@@ -50,6 +52,18 @@ import { useMyTrips } from '@/trips/provider';
 import { getOneForegroundLocation } from '@/location/foreground';
 
 type SaveState = 'failed' | 'idle' | 'saving';
+type PendingPhotoPreview = {
+  key: string;
+  uri: string | null;
+  state: 'uploading' | 'retryable-error' | 'error';
+};
+
+const pendingPhotoPreviewState = (state: string): PendingPhotoPreview['state'] =>
+  state === 'RETRYABLE_ERROR'
+    ? 'retryable-error'
+    : state === 'PERMANENT_ERROR'
+      ? 'error'
+      : 'uploading';
 
 export default function PersonalPlaceCardScreen() {
   const params = useLocalSearchParams<{
@@ -90,7 +104,7 @@ export default function PersonalPlaceCardScreen() {
   const [busy, setBusy] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
-  const [pendingBodyPreviews, setPendingBodyPreviews] = useState<string[]>([]);
+  const [pendingBodyPreviews, setPendingBodyPreviews] = useState<PendingPhotoPreview[]>([]);
   const [pendingMainPreview, setPendingMainPreview] = useState<string | null>(null);
   const initializedCardRef = useRef<string | null>(null);
   const titleRef = useRef('');
@@ -158,13 +172,26 @@ export default function PersonalPlaceCardScreen() {
 
   useEffect(() => {
     if (session?.userId && cardId) {
+      const loadPendingPreviews = () => listPersonalPlaceCardPhotoPreviews(
+        session.userId,
+        cardId
+      ).then((pending) => setPendingBodyPreviews(
+        pending
+          .filter(({ role }) => role === 'body')
+          .map((item) => ({
+            key: item.uploadId,
+            uri: item.uri,
+            state: pendingPhotoPreviewState(item.state),
+          }))
+      ));
+      void loadPendingPreviews();
       void resumePersonalPlaceCardPhotos(
         session.userId,
         cardId,
         mutate.attachPhoto,
         load,
         mutate.removePhoto
-      );
+      ).then(loadPendingPreviews);
     }
   }, [cardId, load, mutate.attachPhoto, mutate.removePhoto, session?.userId]);
 
@@ -397,7 +424,17 @@ export default function PersonalPlaceCardScreen() {
   }
 
   const mainPreviewUrl = pendingMainPreview ?? (mainMedia ? photoUrls[mainMedia.id] : null);
-  const remainingBodySlots = 10 - bodyMedia.length;
+  const failedBodyPhotoCount = pendingBodyPreviews.filter(
+    ({ state }) => state !== 'uploading'
+  ).length;
+  const hasRetryableBodyPhotos = pendingBodyPreviews.some(
+    ({ state }) => state === 'retryable-error'
+  );
+  const bodyPhotoFailureMessage = failedPhotoUploadMessage(failedBodyPhotoCount);
+  const remainingBodySlots = Math.max(
+    0,
+    10 - bodyMedia.length - pendingBodyPreviews.length
+  );
   return (
     <ScrollView
       ref={scrollRef}
@@ -550,10 +587,16 @@ export default function PersonalPlaceCardScreen() {
             if (!session?.userId) return;
             const selected = await pickPhotosForUpload(remainingBodySlots);
             if (selected.length) revealEditorObject(photosYRef.current);
-            setPendingBodyPreviews(selected.map((item) => item.uri));
-            try {
-              for (const photo of selected) {
-                await addPersonalPlaceCardPhoto(
+            const selectedSlots = selected.map((photo, index) => ({
+              key: `selection:${Date.now()}:${index}`,
+              uri: photo.uri,
+              state: 'uploading' as const,
+            }));
+            setPendingBodyPreviews((current) => [...current, ...selectedSlots]);
+            for (const [index, photo] of selected.entries()) {
+              const slot = selectedSlots[index];
+              try {
+                const uploaded = await addPersonalPlaceCardPhoto(
                   session.userId,
                   card.id,
                   'body',
@@ -561,23 +604,31 @@ export default function PersonalPlaceCardScreen() {
                   mutate.attachPhoto,
                   load
                 );
-                setPendingBodyPreviews((current) => current.slice(1));
+                if (!uploaded) throw new Error('Photo upload remains incomplete.');
+                setPendingBodyPreviews((current) => current.filter(
+                  ({ key }) => key !== slot.key
+                ));
+              } catch {
+                setPendingBodyPreviews((current) => current.map((item) => (
+                  item.key === slot.key ? { ...item, state: 'retryable-error' } : item
+                )));
               }
-            } finally {
-              setPendingBodyPreviews([]);
             }
           })}
         />
       </View>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm }}>
-        {pendingBodyPreviews.map((uri) => (
-          <View key={uri} style={{ opacity: 0.65, width: '48%' }}>
-            <Image
-              accessibilityLabel="Uploading body photo"
-              contentFit="cover"
-              source={{ uri }}
-              style={{ aspectRatio: 1, borderRadius: Radius.card, width: '100%' }}
-            />
+        {pendingBodyPreviews.map((preview) => (
+          <View key={preview.key} style={{ opacity: 0.65, width: '48%' }}>
+            {preview.uri ? (
+              <Image
+                accessibilityLabel="Pending body photo"
+                contentFit="cover"
+                source={{ uri: preview.uri }}
+                style={{ aspectRatio: 1, borderRadius: Radius.card, width: '100%' }}
+              />
+            ) : null}
+            {preview.state === 'uploading' ? <StatusText>Uploading…</StatusText> : null}
           </View>
         ))}
       </View>
@@ -597,6 +648,33 @@ export default function PersonalPlaceCardScreen() {
       <AppText color={Palette.textMuted} variant="caption">
         {bodyMedia.length} of 10 body photos
       </AppText>
+      {bodyPhotoFailureMessage ? (
+        <View style={{ gap: Space.sm }}>
+          <AppText color={Palette.danger}>{bodyPhotoFailureMessage}</AppText>
+          {hasRetryableBodyPhotos ? <AppButton
+            label="Try again"
+            size="compact"
+            variant="secondary"
+            onPress={() => {
+              if (!session?.userId) return;
+              void resumePersonalPlaceCardPhotos(
+                session.userId,
+                card.id,
+                mutate.attachPhoto,
+                load,
+                mutate.removePhoto
+              ).then(() => listPersonalPlaceCardPhotoPreviews(session.userId!, card.id))
+                .then((pending) => setPendingBodyPreviews(
+                  pending.filter(({ role }) => role === 'body').map((item) => ({
+                    key: item.uploadId,
+                    uri: item.uri,
+                    state: pendingPhotoPreviewState(item.state),
+                  }))
+                ));
+            }}
+          /> : null}
+        </View>
+      ) : null}
 
       <AppText color={Palette.textMuted}>
         {card.readiness.isTripIdeaReady

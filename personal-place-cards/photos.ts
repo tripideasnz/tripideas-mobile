@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
+  listNativePhotoUploads,
   prepareNativePhotoUpload,
   startNativePhotoUpload,
 } from '@/photo-uploads/service';
@@ -7,7 +8,7 @@ import type { SelectedPhoto } from '@/photo-uploads/types';
 import type { PersonalPlaceCard } from './types';
 import { hasAttachedPhoto } from './model';
 
-type Pending = {
+export type PendingPersonalPlacePhoto = {
   cardId: string;
   createdAt: string;
   replaceMediaId?: string;
@@ -18,7 +19,7 @@ type Pending = {
 const key = (userId: string) =>
   `tripideas.personalPlaceCardPhotos.user.${userId}.v1`;
 
-async function list(userId: string): Promise<Pending[]> {
+async function list(userId: string): Promise<PendingPersonalPlacePhoto[]> {
   const raw = await AsyncStorage.getItem(key(userId));
   if (!raw) return [];
   try {
@@ -28,7 +29,7 @@ async function list(userId: string): Promise<Pending[]> {
     return [];
   }
 }
-async function set(userId: string, values: Pending[]) {
+async function set(userId: string, values: PendingPersonalPlacePhoto[]) {
   await AsyncStorage.setItem(key(userId), JSON.stringify(values));
 }
 
@@ -41,7 +42,7 @@ type Read = (id: string) => Promise<PersonalPlaceCard>;
 type Remove = (id: string, mediaId: string) => Promise<PersonalPlaceCard>;
 
 async function finish(
-  pending: Pending,
+  pending: PendingPersonalPlacePhoto,
   attach: Attach,
   read: Read,
   remove?: Remove
@@ -89,7 +90,7 @@ export async function addPersonalPlaceCardPhoto(
   read: Read
 ) {
   const upload = await prepareNativePhotoUpload(userId, selected);
-  const pending: Pending = {
+  const pending: PendingPersonalPlacePhoto = {
     cardId,
     createdAt: new Date().toISOString(),
     role,
@@ -111,7 +112,7 @@ export async function replacePersonalPlaceCardPhoto(
   remove: Remove
 ) {
   const upload = await prepareNativePhotoUpload(userId, selected);
-  const pending: Pending = {
+  const pending: PendingPersonalPlacePhoto = {
     cardId,
     createdAt: new Date().toISOString(),
     replaceMediaId: mediaId,
@@ -140,4 +141,13 @@ export async function resumePersonalPlaceCardPhotos(
     }
   }
   return { completed, pendingCount: pending.length - completed };
+}
+
+export async function listPersonalPlaceCardPhotoPreviews(userId: string, cardId: string) {
+  const [pending, uploads] = await Promise.all([list(userId), listNativePhotoUploads(userId)]);
+  const byId = new Map(uploads.map((upload) => [upload.id, upload]));
+  return pending.filter((item) => item.cardId === cardId).map((item) => {
+    const upload = byId.get(item.uploadId);
+    return { ...item, uri: upload?.localFileUri ?? null, state: upload?.state ?? 'PERMANENT_ERROR' };
+  });
 }
