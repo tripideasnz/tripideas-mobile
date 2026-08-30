@@ -31,6 +31,7 @@ const view = diaryDetailView(parsed);
 assert.equal(view.version, 7);
 assert.deepEqual(view.coverPhotoAssetIds, ['asset-cover']);
 assert.deepEqual(view.days[1].topics[0].items.map(({ type }) => type), ['NARRATIVE', 'PHOTO', 'LINK', 'EDITORIAL_PLACE', 'PERSONAL_PLACE', 'LOCATION']);
+assert.equal(view.days[1].topics[0].items[4].available, false);
 assert.equal(view.days[1].topics[0].items[4].presentationBody, null);
 const withObjects = (objects) => ({ ...detail, days: [{ ...detail.days[0], topics: [{ ...detail.days[0].topics[0], objects }] }] });
 assert.throws(() => parseDiaryDetail(withObjects([detail.days[0].topics[0].objects[0], { ...detail.days[0].topics[0].objects[1], position: 5 }])), DiaryApiParseError);

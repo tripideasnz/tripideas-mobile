@@ -166,7 +166,7 @@ const toItem = (item: DiaryApiObject): DiaryItem => {
   if (item.type === 'PHOTO') return { ...base, type: item.type, photoAssetId: item.photoAssetId, caption: item.caption };
   if (item.type === 'LINK') return { ...base, type: item.type, url: item.url, title: item.title, note: item.note };
   if (item.type === 'EDITORIAL_PLACE') return { ...base, type: item.type, editorialPlaceId: item.reference.editorialPlaceId, presentationTitle: item.titleSnapshot, location: item.locationSnapshot && { latitude: item.locationSnapshot.latitude, longitude: item.locationSnapshot.longitude } };
-  if (item.type === 'PERSONAL_PLACE') return { ...base, type: item.type, personalPlaceCardId: item.reference.personalPlaceCardId, presentationTitle: item.titleSnapshot, presentationBody: null, location: item.locationSnapshot && { latitude: item.locationSnapshot.latitude, longitude: item.locationSnapshot.longitude } };
+  if (item.type === 'PERSONAL_PLACE') return { ...base, type: item.type, personalPlaceCardId: item.reference.personalPlaceCardId, presentationTitle: item.titleSnapshot, presentationBody: null, location: item.locationSnapshot && { latitude: item.locationSnapshot.latitude, longitude: item.locationSnapshot.longitude }, available: item.availability === 'available' };
   return { ...base, type: 'LOCATION', label: item.label, location: { latitude: item.location.latitude, longitude: item.location.longitude } };
 };
 

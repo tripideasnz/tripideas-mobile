@@ -25,7 +25,7 @@ export type DiaryItem =
   | DiaryItemBase & { type: 'PHOTO'; photoAssetId: string; caption: string | null }
   | DiaryItemBase & { type: 'LINK'; url: string; title: string | null; note: string | null }
   | DiaryItemBase & { type: 'EDITORIAL_PLACE'; editorialPlaceId: string; presentationTitle: string; location: DiaryCoordinates | null }
-  | DiaryItemBase & { type: 'PERSONAL_PLACE'; personalPlaceCardId: string; presentationTitle: string; presentationBody: string | null; location: DiaryCoordinates | null }
+  | DiaryItemBase & { type: 'PERSONAL_PLACE'; personalPlaceCardId: string; presentationTitle: string; presentationBody: string | null; location: DiaryCoordinates | null; available?: boolean }
   | DiaryItemBase & { type: 'LOCATION'; label: string | null; location: DiaryCoordinates };
 export type NewDiaryItem = DiaryItem extends infer T
   ? T extends DiaryItem

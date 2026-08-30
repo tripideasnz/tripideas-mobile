@@ -1,6 +1,6 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { type Href, Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -23,7 +23,7 @@ import { formatDiaryDate, formatDiaryDateInput, parseDiaryDate, validateDiaryDat
 import { useDiaries } from '@/diaries/provider';
 import { getLastViewedDiaryDay } from '@/diaries/last-viewed';
 import { diaryCoverAssetIds } from '@/diaries/model';
-import { uploadDiaryPhotos } from '@/diaries/photos';
+import { addDiaryPhotos, resumeDiaryPhotos, type PendingDiaryPhotoAttachment } from '@/diaries/photos';
 import { pickPhotosForUpload } from '@/photo-uploads/picker';
 
 function CoverModeTile({ icon, label, onPress }: { icon: 'map' | 'menu-book'; label: string; onPress: () => void }) {
@@ -33,7 +33,7 @@ function CoverModeTile({ icon, label, onPress }: { icon: 'map' | 'menu-book'; la
 export default function DiaryCoverScreen() {
   const router = useRouter(); const { isLoading: sessionLoading, session, signIn } = useSession();
   const { diaryId, editCover } = useLocalSearchParams<{ diaryId: string; editCover?: string }>();
-  const { canEdit, canEditMedia, canRetryPending, deleteDiary, diaries, isDetailLoaded, loadDiary, loadError, mutationError, retryPending, updateDateRange, updateDiaryMetadata } = useDiaries();
+  const { attachCoverPhoto, canEdit, canEditMedia, canRetryPending, deleteDiary, diaries, isDetailLoaded, loadDiary, loadError, mutationError, retryPending, updateDateRange, updateDiaryMetadata } = useDiaries();
   const diary = diaries.find(({ id }) => id === diaryId);
   const opensInEditMode = editCover === '1';
   const [editing, setEditing] = useState<boolean>(opensInEditMode && canEdit);
@@ -44,10 +44,14 @@ export default function DiaryCoverScreen() {
   const selectedCoverIds = diary ? diaryCoverAssetIds(diary) : [];
   const { images: coverImages } = useOrderedDiaryPhotoImages(selectedCoverIds, diary?.title || 'Diary cover');
   const [coverBusy, setCoverBusy] = useState(false);
+  const [pendingCoverCount, setPendingCoverCount] = useState(0);
+  const resumingCover = useRef(false);
+  const attachPendingCover = useCallback(async (pending: PendingDiaryPhotoAttachment, photoAssetId: string) => { if (pending.target.kind === 'cover') await attachCoverPhoto(pending.target.diaryId, photoAssetId, pending.clientRequestId); }, [attachCoverPhoto]);
   useEffect(() => {
     if (!diaryId || isDetailLoaded(diaryId)) return;
     void loadDiary(diaryId).catch(() => setDetailError('This Diary could not be loaded. Check your connection and try again.'));
   }, [diaryId, isDetailLoaded, loadDiary]);
+  useEffect(() => { if (!session?.userId || !diary?.id || resumingCover.current) return; resumingCover.current = true; void resumeDiaryPhotos(session.userId, diary.id, 'cover', attachPendingCover).then(({ pendingCount }) => setPendingCoverCount(pendingCount)).finally(() => { resumingCover.current = false; }); }, [attachPendingCover, diary?.id, session?.userId]);
   if (sessionLoading) return <LoadingView />;
   if (!session) return <SignedOutFeature message="Sign in to view and edit your private Diaries" onSignIn={signIn} />;
   if (!diary) return <View style={{ padding: Screen.gutter }}><AppText>This Diary is not available on this device.</AppText></View>;
@@ -58,15 +62,11 @@ export default function DiaryCoverScreen() {
     setCoverBusy(true); setError(null);
     try {
       const availableSlots = Math.max(0, 4 - selectedCoverIds.length);
-      const selected = await pickPhotosForUpload(availableSlots || 4);
+      if (!availableSlots) { setError('Remove a cover photo before adding another.'); return; }
+      const selected = await pickPhotosForUpload(availableSlots);
       if (!selected.length) return;
-      const result = await uploadDiaryPhotos(session.userId, selected);
-      if (result.assetIds.length) {
-        const nextIds = availableSlots
-          ? [...selectedCoverIds, ...result.assetIds].slice(0, 4)
-          : result.assetIds.slice(0, 4);
-        await setCoverIds(nextIds);
-      }
+      const result = await addDiaryPhotos(session.userId, { kind: 'cover', diaryId: diary.id }, selected, attachPendingCover);
+      setPendingCoverCount(result.pendingCount);
       if (result.errors.length) setError(`${result.errors.length} ${result.errors.length === 1 ? 'photo' : 'photos'} could not be uploaded. Try again.`);
     } catch { setError('Cover photos could not be uploaded. Check your connection and try again.'); }
     finally { setCoverBusy(false); }
@@ -104,6 +104,8 @@ export default function DiaryCoverScreen() {
         <AppTextInput accessibilityLabel="Diary start date" placeholder="Start date DD/MM/YYYY" value={start} onChangeText={setStart} />
         <AppTextInput accessibilityLabel="Diary end date" placeholder="End date DD/MM/YYYY" value={end} onChangeText={setEnd} />
         {error ? <AppText color={Palette.danger}>{error}</AppText> : null}
+        {coverBusy ? <AppText color={Palette.textMuted} variant="caption">Uploading cover photos…</AppText> : null}
+        {pendingCoverCount ? <AppButton label={`Retry ${pendingCoverCount} pending cover ${pendingCoverCount === 1 ? 'photo' : 'photos'}`} size="compact" variant="secondary" onPress={() => session?.userId ? void resumeDiaryPhotos(session.userId, diary.id, 'cover', attachPendingCover).then(({ pendingCount }) => setPendingCoverCount(pendingCount)) : undefined} /> : null}
       </View>}</SavedAutosaveScope> : <><View style={{ gap: Space.md }}><View style={{ alignItems: 'center', flexDirection: 'row' }}><AppText style={{ flex: 1 }} variant="title">{diary.title}</AppText>{canEdit ? <IconAction accessibilityLabel="Edit Diary Cover" icon="edit" size="compact" trip onPress={beginEdit} /> : null}</View>{diary.description ? <AppText>{diary.description}</AppText> : null}<AppText color={Palette.textMuted}>{diary.startDate || diary.endDate ? [formatDiaryDate(diary.startDate), formatDiaryDate(diary.endDate)].filter(Boolean).join(' – ') : 'No date range yet'}</AppText>{mutationError || loadError ? <AppText color={mutationError ? Palette.danger : Palette.textMuted} variant="caption">{mutationError ?? loadError}</AppText> : null}{canRetryPending ? <AppButton label="Retry pending Diary changes" onPress={() => void retryPending()} variant="secondary" /> : null}{canEdit && !canEditMedia ? <AppText color={Palette.textMuted} variant="caption">Diary photo editing will be enabled in the photo integration stage.</AppText> : null}</View><View accessibilityLabel="Diary modes" style={{ flexDirection: 'row', gap: Space.md }}><CoverModeTile icon="menu-book" label="Diary" onPress={() => void resumeDiary()} /><CoverModeTile icon="map" label="Map" onPress={() => router.push({ pathname: '/diaries/[diaryId]/map', params: { diaryId: diary.id } })} /></View></>}
     </View>
   </ScrollView></KeyboardAvoidingView></SafeAreaView>;

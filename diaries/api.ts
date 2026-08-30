@@ -45,4 +45,7 @@ export const diaryMutationApi = {
   updateObject: (id: string, objectId: string, body: Record<string, unknown>) => mutate(`/diaries/${encodeURIComponent(id)}/objects/${encodeURIComponent(objectId)}`, 'PATCH', body),
   deleteObject: (id: string, objectId: string, body: Record<string, unknown>) => mutate(`/diaries/${encodeURIComponent(id)}/objects/${encodeURIComponent(objectId)}`, 'DELETE', body),
   reorderObjects: (id: string, topicId: string, body: Record<string, unknown>) => mutate(`/diaries/${encodeURIComponent(id)}/topics/${encodeURIComponent(topicId)}/objects/order`, 'PUT', body),
+  attachCover: (id: string, body: Record<string, unknown>) => mutate(`/diaries/${encodeURIComponent(id)}/cover/photos`, 'POST', body),
+  removeCover: (id: string, mediaId: string, body: Record<string, unknown>) => mutate(`/diaries/${encodeURIComponent(id)}/cover/photos/${encodeURIComponent(mediaId)}`, 'DELETE', body),
+  reorderCover: (id: string, body: Record<string, unknown>) => mutate(`/diaries/${encodeURIComponent(id)}/cover/photos/order`, 'PUT', body),
 };

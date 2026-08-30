@@ -23,11 +23,12 @@ assert.notEqual(diaryOutboxKey('user-a'), diaryOutboxKey('user-b'));
 values.set(diaryOutboxKey('user-b'), '{broken'); assert.deepEqual((await storage.get('user-b')).items, []);
 
 const [api, provider, prototypeStorage] = await Promise.all([readFile(new URL('./api.ts', import.meta.url), 'utf8'), readFile(new URL('./provider.tsx', import.meta.url), 'utf8'), readFile(new URL('./storage.ts', import.meta.url), 'utf8')]);
-for (const route of ['/diaries', '/days/date/', '/topics/order', '/objects/order']) assert.match(api, new RegExp(route.replaceAll('/', '\\/')));
-for (const kind of ['create_diary', 'update_diary', 'delete_diary', 'ensure_day', 'update_day', 'delete_day', 'create_topic', 'update_topic', 'delete_topic', 'reorder_topics', 'create_object', 'update_object', 'delete_object', 'reorder_objects']) assert.match(provider, new RegExp(`'${kind}'`));
+for (const route of ['/diaries', '/days/date/', '/topics/order', '/objects/order', '/cover/photos', '/cover/photos/order']) assert.match(api, new RegExp(route.replaceAll('/', '\\/')));
+for (const kind of ['create_diary', 'update_diary', 'delete_diary', 'ensure_day', 'update_day', 'delete_day', 'create_topic', 'update_topic', 'delete_topic', 'reorder_topics', 'create_object', 'update_object', 'delete_object', 'reorder_objects', 'attach_cover', 'remove_cover', 'reorder_cover']) assert.match(provider, new RegExp(`'${kind}'`));
 assert.match(provider, /diary_version_conflict/); assert.match(provider, /semanticallySatisfied/); assert.match(provider, /conflictRetries < 1/);
 assert.match(provider, /intent\.expectedVersion = authority\.version/); assert.match(provider, /intent\.clientRequestId/);
 assert.match(provider, /retryable\(error\)/); assert.match(provider, /idempotency_conflict/); assert.match(provider, /nextDiaryIntents/);
 assert.doesNotMatch(provider, /from '@\/diaries\/storage'/); assert.match(prototypeStorage, /prototype-v1/);
-assert.match(provider, /diary_media_mutations_unavailable/); assert.match(provider, /diary_reference_mutations_unavailable/);
+assert.match(provider, /photoAssetId: item\.photoAssetId/); assert.match(provider, /editorialPlaceId: item\.editorialPlaceId/); assert.match(provider, /personalPlaceCardId: item\.personalPlaceCardId/);
+assert.match(provider, /detail\.coverMedia\.some\(\(media\) => media\.clientRequestId === intent\.clientRequestId\)/);
 console.log('✓ Diary durable outbox isolates users, preserves request IDs, serializes per Diary, and exposes bounded conflict handling');
