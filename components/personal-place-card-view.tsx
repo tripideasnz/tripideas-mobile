@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { TripImageCollage } from '@/components/trip-image-collage';
-import { PlaceCardPresentation } from '@/components/place-card-presentation';
 import { CardSurface } from '@/components/ui/card-surface';
 import { MediaFrame } from '@/components/ui/media-frame';
 import { Palette, Space, Type } from '@/constants/design';
@@ -13,13 +12,11 @@ export function PersonalPlaceCardView({
   card,
   compact = false,
   embedded = false,
-  editorialIndex = false,
   onPress,
 }: {
   card: PersonalPlaceCard;
   compact?: boolean;
   embedded?: boolean;
-  editorialIndex?: boolean;
   onPress?: () => void;
 }) {
   const router = useRouter();
@@ -68,33 +65,9 @@ export function PersonalPlaceCardView({
         params: { cardId: card.id, mode: 'view' },
       }))}
       style={({ pressed }) => ({
-        marginBottom: embedded || compact
-          ? 0
-          : editorialIndex
-            ? Space.xxl
-            : Space.lg,
+        marginBottom: embedded || compact ? 0 : Space.lg,
         opacity: pressed ? 0.7 : 1,
       })}>
-      {editorialIndex ? (
-        <PlaceCardPresentation
-          media={(
-            <TripImageCollage
-              emptyLabel="Personal Place"
-              images={coverImages}
-              onImageError={(image) => image.cacheKey && retryImage(image.cacheKey)}
-              style={{ aspectRatio: 16 / 9, width: '100%' }}
-            />
-          )}
-          title={card.title || 'Untitled Personal Place'}>
-          {card.body ? (
-            <Text
-              numberOfLines={2}
-              style={{ color: Palette.textMuted, ...Type.label, marginTop: Space.sm }}>
-              {card.body}
-            </Text>
-          ) : null}
-        </PlaceCardPresentation>
-      ) : (
       <CardSurface style={compact ? { flexDirection: 'row', minHeight: 92 } : undefined}>
         {compact ? (
           <TripImageCollage
@@ -117,16 +90,15 @@ export function PersonalPlaceCardView({
             <Text
               numberOfLines={compact ? 1 : 3}
               style={{
-                color: Palette.textBody,
-                ...Type.body,
-                marginTop: Space.sm,
+                color: compact ? Palette.textMuted : Palette.textBody,
+                ...(compact ? Type.label : Type.body),
+                marginTop: compact ? Space.xs : Space.sm,
               }}>
               {card.body}
             </Text>
           ) : null}
         </View>
       </CardSurface>
-      )}
     </Pressable>
   );
 }

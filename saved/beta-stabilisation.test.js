@@ -21,6 +21,7 @@ assert.match(headers, /Platform\.OS === 'ios'/);
 assert.match(headers, /height: 44/);
 assert.match(headers, /width: 44/);
 assert.match(places, /headerAddAction\(/);
+assert.match(places, /options=\{session \? headerAddAction/);
 assert.match(trips, /headerAddAction\(/);
 assert.match(tripDetail, /headerShareAction\(/);
 assert.match(tripDetail, /clearHeaderRightAction\(\)/);

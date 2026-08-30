@@ -94,13 +94,15 @@ console.log('✓ Personal Place presentation omits readiness controls and Trip d
 
 assert.match(list, /headerAddAction\(\{/);
 assert.match(list, /accessibilityLabel: 'Add Personal Place'/);
-assert.match(list, /<PersonalPlaceCardView card=\{card\} editorialIndex/);
+assert.match(list, /<PersonalPlaceCardView card=\{card\} compact/);
+assert.match(list, /gap: Space\.lg/);
 assert.match(list, /icon="delete-outline"/);
 assert.match(personalCard, /<TripImageCollage/);
 assert.match(personalCard, /slice\(0, 4\)/);
-assert.match(personalCard, /aspectRatio: 16 \/ 9/);
-assert.match(personalCard, /<PlaceCardPresentation/);
-assert.match(personalCard, /color: Palette\.textMuted, \.\.\.Type\.label/);
+assert.match(personalCard, /style=\{\{ height: 92, width: 112 \}\}/);
+assert.match(personalCard, /compact \? Palette\.textMuted : Palette\.textBody/);
+assert.match(personalCard, /compact \? Type\.label : Type\.body/);
+assert.doesNotMatch(personalCard, /PlaceCardPresentation|editorialIndex/);
 assert.match(personalCard, /params: \{ cardId: card\.id, mode: 'view' \}/);
 assert.match(editor, /setIsEditing\(initialMode === 'edit'\)/);
 assert.match(editor, /onPress=\{\(\) => void finishEditing\(\)\}/);
@@ -135,3 +137,9 @@ assert.match(provider, /photoAuthorizationRef\.current\.clear\(\)/);
 assert.match(personalCard, /authorizePhoto\(media\.photoAssetId\)/);
 assert.doesNotMatch(personalCard, /authorizePhotoRead/);
 console.log('✓ Personal Places render user-scoped cache first, refresh on focus and deduplicate photo authorization');
+
+assert.equal((list.match(/<Stack\.Screen/g) ?? []).length, 1);
+assert.match(list, /options=\{session \? headerAddAction/);
+assert.match(list, /clearHeaderRightAction\(\)/);
+assert.match(list, /onPress: \(\) => void createPlace\(\)/);
+console.log('✓ Personal Places registers exactly one lifecycle-stable native Add action');
