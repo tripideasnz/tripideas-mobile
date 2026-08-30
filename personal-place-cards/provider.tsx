@@ -10,6 +10,7 @@ import {
 } from 'react';
 import { useSession } from '@/auth/provider';
 import { ApiError } from '@/lib/api-client';
+import { authorizePhotoRead } from '@/notebooks/api';
 import {
   attachPersonalPlaceCardMedia,
   createPersonalPlaceCard,
@@ -25,12 +26,14 @@ import type { PersonalPlaceCard, PersonalPlaceCardInput } from './types';
 import { removePersonalPlaceCard, upsertPersonalPlaceCard } from './model';
 
 type Context = {
+  authorizePhoto: (photoAssetId: string) => Promise<string>;
   cards: PersonalPlaceCard[];
   create: (input?: PersonalPlaceCardInput) => Promise<PersonalPlaceCard>;
   deleteCard: (id: string) => Promise<void>;
   get: (id?: string | null) => PersonalPlaceCard | undefined;
   isLoading: boolean;
   load: (id: string) => Promise<PersonalPlaceCard>;
+  invalidatePhotoAuthorization: (photoAssetId: string) => void;
   mutate: {
     attachPhoto: (
       id: string,
@@ -53,6 +56,9 @@ export function PersonalPlaceCardProvider({ children }: PropsWithChildren) {
   const userId = session?.userId ?? null;
   const activeUser = useRef<string | null>(null);
   const cardsRef = useRef<PersonalPlaceCard[]>([]);
+  const photoAuthorizationRef = useRef(new Map<string, { expiresAt: string; url: string }>());
+  const photoAuthorizationInFlightRef = useRef(new Map<string, Promise<string>>());
+  const refreshInFlightRef = useRef<Promise<void> | null>(null);
   const [cards, setCards] = useState<PersonalPlaceCard[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -69,21 +75,60 @@ export function PersonalPlaceCardProvider({ children }: PropsWithChildren) {
     return card;
   }, [store]);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(() => {
     const ownerId = activeUser.current;
-    if (!ownerId) return;
+    if (!ownerId) return Promise.resolve();
+    if (refreshInFlightRef.current) return refreshInFlightRef.current;
     setIsLoading(true);
-    try {
-      await store(ownerId, await listPersonalPlaceCards());
-    } finally {
-      if (activeUser.current === ownerId) setIsLoading(false);
-    }
+    const request = listPersonalPlaceCards()
+      .then((next) => store(ownerId, next))
+      .then(() => undefined)
+      .finally(() => {
+        if (refreshInFlightRef.current === request) {
+          refreshInFlightRef.current = null;
+        }
+        if (activeUser.current === ownerId) setIsLoading(false);
+      });
+    refreshInFlightRef.current = request;
+    return request;
   }, [store]);
+
+  const invalidatePhotoAuthorization = useCallback((photoAssetId: string) => {
+    photoAuthorizationRef.current.delete(photoAssetId);
+  }, []);
+
+  const authorizePhoto = useCallback(async (photoAssetId: string) => {
+    const ownerId = activeUser.current;
+    if (!ownerId) throw new ApiError(401, 'mobile_session_required');
+    const cached = photoAuthorizationRef.current.get(photoAssetId);
+    if (cached && Date.parse(cached.expiresAt) > Date.now() + 30_000) {
+      return cached.url;
+    }
+    const inFlight = photoAuthorizationInFlightRef.current.get(photoAssetId);
+    if (inFlight) return inFlight;
+    const request = authorizePhotoRead(photoAssetId)
+      .then((authorization) => {
+        if (activeUser.current === ownerId) {
+          photoAuthorizationRef.current.set(photoAssetId, authorization);
+        }
+        return authorization.url;
+      })
+      .finally(() => {
+        if (photoAuthorizationInFlightRef.current.get(photoAssetId) === request) {
+          photoAuthorizationInFlightRef.current.delete(photoAssetId);
+        }
+      });
+    photoAuthorizationInFlightRef.current.set(photoAssetId, request);
+    return request;
+  }, []);
 
   useEffect(() => {
     let mounted = true;
     activeUser.current = userId;
     cardsRef.current = [];
+    photoAuthorizationRef.current.clear();
+    photoAuthorizationInFlightRef.current.clear();
+    refreshInFlightRef.current = null;
     setCards([]);
     if (!userId) {
       setIsLoading(false);
@@ -181,9 +226,20 @@ export function PersonalPlaceCardProvider({ children }: PropsWithChildren) {
   }, [store]);
 
   const value = useMemo<Context>(() => ({
-    cards, create, deleteCard, get: (id) => cards.find((card) => card.id === id),
-    isLoading, load, mutate, refresh,
-  }), [cards, create, deleteCard, isLoading, load, mutate, refresh]);
+    authorizePhoto, cards, create, deleteCard,
+    get: (id) => cards.find((card) => card.id === id),
+    invalidatePhotoAuthorization, isLoading, load, mutate, refresh,
+  }), [
+    authorizePhoto,
+    cards,
+    create,
+    deleteCard,
+    invalidatePhotoAuthorization,
+    isLoading,
+    load,
+    mutate,
+    refresh,
+  ]);
   return (
     <PersonalPlaceCardContext.Provider value={value}>
       {children}

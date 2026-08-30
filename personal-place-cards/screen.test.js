@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 const read = (relativePath) =>
   readFile(new URL(`../${relativePath}`, import.meta.url), 'utf8');
 
-const [editor, list, tripDetail, tripEntry, personalCard, placeDetail, editorial, picker, autosaveStatus, showMore, sharedRemove] = await Promise.all([
+const [editor, list, tripDetail, tripEntry, personalCard, placeDetail, editorial, picker, autosaveStatus, showMore, sharedRemove, provider, mapPreview] = await Promise.all([
   read('app/personal-place-cards/[cardId].tsx'),
   read('app/personal-place-cards/index.tsx'),
   read('app/trips/[tripId].tsx'),
@@ -16,11 +16,16 @@ const [editor, list, tripDetail, tripEntry, personalCard, placeDetail, editorial
   read('components/ui/autosave-status.tsx'),
   read('components/ui/show-more-text.tsx'),
   read('components/ui/contained-remove-button.tsx'),
+  read('personal-place-cards/provider.tsx'),
+  read('components/place-map-preview.tsx'),
 ]);
 
 assert.doesNotMatch(editor, /accessibilityLabel="Latitude"|accessibilityLabel="Longitude"|Confirm location/);
 assert.match(editor, /label="Locate now"/);
 assert.match(editor, /label="Locate on map"/);
+assert.match(mapPreview, /camera\.current\?\.easeTo/);
+assert.match(mapPreview, /center: \[longitude, latitude\]/);
+assert.match(mapPreview, /zoom: 13/);
 assert.match(list, /activeAttachmentCount > 0/);
 assert.match(list, /Remove this Place Card from/);
 assert.match(list, /Delete Personal Place/);
@@ -89,12 +94,18 @@ console.log('✓ Personal Place presentation omits readiness controls and Trip d
 
 assert.match(list, /headerAddAction\(\{/);
 assert.match(list, /accessibilityLabel: 'Add Personal Place'/);
-assert.match(list, /<PersonalPlaceCardView card=\{card\} compact/);
+assert.match(list, /<PersonalPlaceCardView card=\{card\} editorialIndex/);
 assert.match(list, /icon="delete-outline"/);
 assert.match(personalCard, /<TripImageCollage/);
 assert.match(personalCard, /slice\(0, 4\)/);
+assert.match(personalCard, /aspectRatio: 16 \/ 9/);
+assert.match(personalCard, /<PlaceCardPresentation/);
+assert.match(personalCard, /color: Palette\.textMuted, \.\.\.Type\.label/);
 assert.match(personalCard, /params: \{ cardId: card\.id, mode: 'view' \}/);
 assert.match(editor, /setIsEditing\(initialMode === 'edit'\)/);
+assert.match(editor, /onPress=\{\(\) => void finishEditing\(\)\}/);
+assert.doesNotMatch(editor, /<AppText[^>]*>Edit Personal Place<\/AppText>/);
+assert.match(editor, /<AutoExpandingTextInput[\s\S]{0,500}<FinishEditAction/);
 assert.match(editor, /<ShowMoreText/);
 assert.match(showMore, /numberOfLines=\{expanded \? undefined : 3\}/);
 assert.match(showMore, /\.\.\. show more/);
@@ -113,3 +124,14 @@ assert.match(editor, /label=\{`Remove body photo \$\{index \+ 1\}`\}/);
 assert.doesNotMatch(editor, />Trip readiness</);
 assert.match(editor, /Ready to add to Trips\./);
 console.log('✓ index and finished view use the canonical Saved interaction grammar');
+
+assert.match(list, /useFocusEffect\(useCallback/);
+assert.match(list, /void refresh\(\)\.catch/);
+assert.match(provider, /personalPlaceCardStorage\.get\(userId\)/);
+assert.match(provider, /refreshInFlightRef/);
+assert.match(provider, /photoAuthorizationInFlightRef/);
+assert.match(provider, /Date\.parse\(cached\.expiresAt\) > Date\.now\(\) \+ 30_000/);
+assert.match(provider, /photoAuthorizationRef\.current\.clear\(\)/);
+assert.match(personalCard, /authorizePhoto\(media\.photoAssetId\)/);
+assert.doesNotMatch(personalCard, /authorizePhotoRead/);
+console.log('✓ Personal Places render user-scoped cache first, refresh on focus and deduplicate photo authorization');

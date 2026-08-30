@@ -1,25 +1,29 @@
 import { useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { authorizePhotoRead } from '@/notebooks/api';
 import { TripImageCollage } from '@/components/trip-image-collage';
+import { PlaceCardPresentation } from '@/components/place-card-presentation';
 import { CardSurface } from '@/components/ui/card-surface';
 import { MediaFrame } from '@/components/ui/media-frame';
 import { Palette, Space, Type } from '@/constants/design';
 import type { PersonalPlaceCard } from '@/personal-place-cards/types';
+import { usePersonalPlaceCards } from '@/personal-place-cards/provider';
 
 export function PersonalPlaceCardView({
   card,
   compact = false,
   embedded = false,
+  editorialIndex = false,
   onPress,
 }: {
   card: PersonalPlaceCard;
   compact?: boolean;
   embedded?: boolean;
+  editorialIndex?: boolean;
   onPress?: () => void;
 }) {
   const router = useRouter();
+  const { authorizePhoto, invalidatePhotoAuthorization } = usePersonalPlaceCards();
   const coverMedia = [
     ...card.media.filter((item) => item.role === 'main'),
     ...card.media.filter((item) => item.role === 'body'),
@@ -28,16 +32,17 @@ export function PersonalPlaceCardView({
   const [coverImages, setCoverImages] = useState<
     { alt: string; cacheKey: string; url: string }[]
   >([]);
+  const [authorizationRevision, setAuthorizationRevision] = useState(0);
   useEffect(() => {
     let mounted = true;
     setCoverImages([]);
     void Promise.all(coverMedia.map(async (media) => {
       try {
-        const result = await authorizePhotoRead(media.photoAssetId);
+        const url = await authorizePhoto(media.photoAssetId);
         return {
           alt: card.title ?? 'Personal Place photo',
           cacheKey: media.photoAssetId,
-          url: result.url,
+          url,
         };
       } catch {
         return null;
@@ -48,7 +53,12 @@ export function PersonalPlaceCardView({
     return () => { mounted = false; };
     // Photo IDs are the stable cover identity; title changes only affect fallback alt text.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [coverKey]);
+  }, [authorizationRevision, authorizePhoto, coverKey]);
+
+  const retryImage = (photoAssetId: string) => {
+    invalidatePhotoAuthorization(photoAssetId);
+    setAuthorizationRevision((revision) => revision + 1);
+  };
 
   return (
     <Pressable
@@ -58,14 +68,39 @@ export function PersonalPlaceCardView({
         params: { cardId: card.id, mode: 'view' },
       }))}
       style={({ pressed }) => ({
-        marginBottom: embedded || compact ? 0 : Space.lg,
+        marginBottom: embedded || compact
+          ? 0
+          : editorialIndex
+            ? Space.xxl
+            : Space.lg,
         opacity: pressed ? 0.7 : 1,
       })}>
+      {editorialIndex ? (
+        <PlaceCardPresentation
+          media={(
+            <TripImageCollage
+              emptyLabel="Personal Place"
+              images={coverImages}
+              onImageError={(image) => image.cacheKey && retryImage(image.cacheKey)}
+              style={{ aspectRatio: 16 / 9, width: '100%' }}
+            />
+          )}
+          title={card.title || 'Untitled Personal Place'}>
+          {card.body ? (
+            <Text
+              numberOfLines={2}
+              style={{ color: Palette.textMuted, ...Type.label, marginTop: Space.sm }}>
+              {card.body}
+            </Text>
+          ) : null}
+        </PlaceCardPresentation>
+      ) : (
       <CardSurface style={compact ? { flexDirection: 'row', minHeight: 92 } : undefined}>
         {compact ? (
           <TripImageCollage
             emptyLabel="Personal Place"
             images={coverImages}
+            onImageError={(image) => image.cacheKey && retryImage(image.cacheKey)}
             style={{ height: 92, width: 112 }}
           />
         ) : coverImages[0] ? (
@@ -81,12 +116,17 @@ export function PersonalPlaceCardView({
           {card.body ? (
             <Text
               numberOfLines={compact ? 1 : 3}
-              style={{ color: Palette.textBody, ...Type.body, marginTop: Space.sm }}>
+              style={{
+                color: Palette.textBody,
+                ...Type.body,
+                marginTop: Space.sm,
+              }}>
               {card.body}
             </Text>
           ) : null}
         </View>
       </CardSurface>
+      )}
     </Pressable>
   );
 }

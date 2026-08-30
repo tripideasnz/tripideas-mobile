@@ -1,8 +1,8 @@
 import { useRouter } from 'expo-router';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, Text } from 'react-native';
 
 import { PlaceCardActions } from '@/components/place-card-actions';
-import { CardSurface } from '@/components/ui/card-surface';
+import { PlaceCardPresentation } from '@/components/place-card-presentation';
 import { MediaFrame } from '@/components/ui/media-frame';
 import { Palette, Space, Type } from '@/constants/design';
 import type { PlaceCardData } from '@/types/content';
@@ -74,79 +74,48 @@ export function PlaceCard({
         marginBottom: embedded ? 0 : Space.xxl,
         opacity: pressed ? 0.74 : 1,
       })}>
-      <CardSurface
-        style={
-          embedded
-            ? {
-                borderColor: 'transparent',
-                borderRadius: 0,
-                borderWidth: 0,
-                elevation: 0,
-                shadowOpacity: 0,
-              }
-            : undefined
-        }>
-        {place.imageUrl ? (
+      <PlaceCardPresentation
+        media={place.imageUrl ? (
           <MediaFrame
             source={{ uri: place.imageUrl }}
             accessibilityLabel={place.imageAlt ?? place.title ?? 'Place image'}
             aspectRatio={16 / 9}
             radius={0}
           />
-        ) : null}
-
-        {placeId && showSaveButton ? (
+        ) : undefined}
+        overlayActions={placeId && showSaveButton ? (
           <PlaceCardActions placeId={placeId} />
+        ) : undefined}
+        style={embedded ? {
+          borderColor: 'transparent',
+          borderRadius: 0,
+          borderWidth: 0,
+          elevation: 0,
+          shadowOpacity: 0,
+        } : undefined}
+        title={place.title}
+        titleTrailing={distanceLabel ? (
+          <Text
+            numberOfLines={1}
+            style={{ color: Palette.textMuted, ...Type.label, textAlign: 'right' }}>
+            {distanceLabel}
+          </Text>
+        ) : undefined}>
+        {showSnippet && heading ? (
+          <Text
+            numberOfLines={1}
+            style={{ color: Palette.textMuted, ...Type.label, marginTop: Space.sm }}>
+            {heading}
+          </Text>
         ) : null}
-
-        <View style={{ padding: Space.lg }}>
-          <View
-            style={{
-              alignItems: 'baseline',
-              flexDirection: 'row',
-            }}>
-            <Text numberOfLines={2} style={{ flex: 1, ...Type.cardTitle }}>
-              {place.title}
-            </Text>
-
-            {distanceLabel ? (
-              <Text
-                numberOfLines={1}
-                style={{
-                  color: Palette.textMuted,
-                  ...Type.label,
-                  textAlign: 'right',
-                }}>
-                {distanceLabel}
-              </Text>
-            ) : null}
-          </View>
-
-          {showSnippet && heading ? (
-            <Text
-              numberOfLines={1}
-              style={{
-                color: Palette.textMuted,
-                ...Type.label,
-                marginTop: Space.sm,
-              }}>
-              {heading}
-            </Text>
-          ) : null}
-
-          {showSnippet && preview ? (
-            <Text
-              numberOfLines={3}
-              style={{
-                color: Palette.textBody,
-                ...Type.body,
-                marginTop: Space.md,
-              }}>
-              {preview}
-            </Text>
-          ) : null}
-        </View>
-      </CardSurface>
+        {showSnippet && preview ? (
+          <Text
+            numberOfLines={3}
+            style={{ color: Palette.textBody, ...Type.body, marginTop: Space.md }}>
+            {preview}
+          </Text>
+        ) : null}
+      </PlaceCardPresentation>
     </Pressable>
   );
 }

@@ -22,7 +22,6 @@ import { StatusText } from '@/components/ui/status-text';
 import { LoadingView } from '@/components/ui/loading-view';
 import { Palette, Radius, Screen, Space, Type } from '@/constants/design';
 import { ApiError } from '@/lib/api-client';
-import { authorizePhotoRead } from '@/notebooks/api';
 import {
   PERSONAL_PLACE_AUTOSAVE_DELAY_MS,
   shouldAdoptPersonalPlaceAutosave,
@@ -83,7 +82,7 @@ export default function PersonalPlaceCardScreen() {
         : '/personal-place-cards' as const;
   const backFromPersonalPlace = () => backOrFallback(router, personalPlaceFallback);
   const { isLoading: isLoadingSession, session, signIn } = useSession();
-  const { get, load, mutate } = usePersonalPlaceCards();
+  const { authorizePhoto, get, load, mutate } = usePersonalPlaceCards();
   const { addPersonalCardToTrip, trips } = useMyTrips();
   const card = get(cardId);
   const cardMedia = card?.media;
@@ -146,8 +145,7 @@ export default function PersonalPlaceCardScreen() {
     let mounted = true;
     void Promise.all(cardMedia.map(async (item) => {
       try {
-        const authorization = await authorizePhotoRead(item.photoAssetId);
-        return [item.id, authorization.url] as const;
+        return [item.id, await authorizePhoto(item.photoAssetId)] as const;
       } catch {
         return null;
       }
@@ -159,7 +157,7 @@ export default function PersonalPlaceCardScreen() {
       }
     });
     return () => { mounted = false; };
-  }, [cardMedia]);
+  }, [authorizePhoto, cardMedia]);
 
   useEffect(() => {
     if (session?.userId && cardId) {
@@ -426,20 +424,20 @@ export default function PersonalPlaceCardScreen() {
         padding: Screen.gutter,
         paddingBottom: Screen.bottom,
       }}>
-      <Stack.Screen options={{ headerLeft: () => <HeaderBackButton color={Palette.trip} onPress={backFromPersonalPlace} />, title: 'Edit Personal Place' }} />
-      <View style={{ alignItems: 'center', flexDirection: 'row' }}>
-        <AppText style={{ flex: 1 }} variant="title">Edit Personal Place</AppText>
+      <Stack.Screen options={{ headerLeft: () => <HeaderBackButton color={Palette.trip} onPress={() => void finishEditing()} />, title: 'Edit Personal Place' }} />
+      <View style={{ alignItems: 'center', flexDirection: 'row', gap: Space.sm }}>
+        <View style={{ flex: 1 }}>
+          <AutoExpandingTextInput
+            accessibilityLabel="Personal Place title"
+            maxLength={200}
+            onChangeText={(value) => updateDraft('title', value)}
+            placeholder="Title"
+            textVariant="title"
+            value={title}
+          />
+        </View>
         <FinishEditAction accessibilityLabel="Finish editing Personal Place" size="default" onPress={() => void finishEditing()} />
       </View>
-
-      <AutoExpandingTextInput
-        accessibilityLabel="Personal Place title"
-        maxLength={200}
-        onChangeText={(value) => updateDraft('title', value)}
-        placeholder="Title"
-        textVariant="title"
-        value={title}
-      />
       <View onLayout={(event) => { bodyYRef.current = event.nativeEvent.layout.y; }}>
       {isEditingBody ? (
         <AppTextInput

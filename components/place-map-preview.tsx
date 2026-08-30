@@ -1,4 +1,5 @@
-import { Camera, Map as MapLibreMap, Marker } from '@maplibre/maplibre-react-native';
+import { Camera, Map as MapLibreMap, Marker, type CameraRef } from '@maplibre/maplibre-react-native';
+import { useEffect, useRef } from 'react';
 import { Pressable } from 'react-native';
 
 import { MAP_STYLE_URL } from '@/constants/map';
@@ -17,6 +18,16 @@ export function PlaceMapPreview({
   longitude,
   onPress,
 }: PlaceMapPreviewProps) {
+  const camera = useRef<CameraRef>(null);
+
+  useEffect(() => {
+    camera.current?.easeTo({
+      center: [longitude, latitude],
+      duration: 400,
+      zoom: 13,
+    });
+  }, [latitude, longitude]);
+
   return (
     <Pressable
       accessibilityLabel="Open this place on the TripIdeas.nz map"
@@ -39,6 +50,7 @@ export function PlaceMapPreview({
         logo={false}
         style={{ flex: 1 }}>
         <Camera
+          ref={camera}
           initialViewState={{
             center: [longitude, latitude],
             zoom: 13,
