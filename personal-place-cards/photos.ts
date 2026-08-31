@@ -7,15 +7,12 @@ import {
 import type { SelectedPhoto } from '@/photo-uploads/types';
 import type { PersonalPlaceCard } from './types';
 import { hasAttachedPhoto } from './model';
+import {
+  type PendingPersonalPlacePhoto,
+  reconcilePendingPersonalPlacePhotos,
+} from './photo-reconciliation';
 
-export type PendingPersonalPlacePhoto = {
-  cardId: string;
-  createdAt: string;
-  replaceMediaId?: string;
-  role: 'main' | 'body';
-  uploadId: string;
-  userId: string;
-};
+export type { PendingPersonalPlacePhoto } from './photo-reconciliation';
 const key = (userId: string) =>
   `tripideas.personalPlaceCardPhotos.user.${userId}.v1`;
 
@@ -31,6 +28,27 @@ async function list(userId: string): Promise<PendingPersonalPlacePhoto[]> {
 }
 async function set(userId: string, values: PendingPersonalPlacePhoto[]) {
   await AsyncStorage.setItem(key(userId), JSON.stringify(values));
+}
+
+async function reconcile(
+  userId: string,
+  card: PersonalPlaceCard
+) {
+  const [allPending, uploads] = await Promise.all([
+    list(userId),
+    listNativePhotoUploads(userId),
+  ]);
+  const cardPending = allPending.filter((item) => item.cardId === card.id);
+  const result = reconcilePendingPersonalPlacePhotos(cardPending, uploads, card);
+  const next = [
+    ...allPending.filter((item) => item.cardId !== card.id),
+    ...result.retained,
+  ];
+  if (
+    next.length !== allPending.length ||
+    next.some((item, index) => item.uploadId !== allPending[index]?.uploadId)
+  ) await set(userId, next);
+  return result;
 }
 
 type Attach = (
@@ -131,7 +149,8 @@ export async function resumePersonalPlaceCardPhotos(
   read: Read,
   remove?: Remove
 ) {
-  const pending = (await list(userId)).filter((item) => item.cardId === cardId);
+  const authoritative = await read(cardId);
+  const pending = (await reconcile(userId, authoritative)).retained;
   let completed = 0;
   for (const item of pending) {
     try {
@@ -143,11 +162,47 @@ export async function resumePersonalPlaceCardPhotos(
   return { completed, pendingCount: pending.length - completed };
 }
 
-export async function listPersonalPlaceCardPhotoPreviews(userId: string, cardId: string) {
-  const [pending, uploads] = await Promise.all([list(userId), listNativePhotoUploads(userId)]);
-  const byId = new Map(uploads.map((upload) => [upload.id, upload]));
-  return pending.filter((item) => item.cardId === cardId).map((item) => {
-    const upload = byId.get(item.uploadId);
-    return { ...item, uri: upload?.localFileUri ?? null, state: upload?.state ?? 'RETRYABLE_ERROR' };
-  });
+export async function listPersonalPlaceCardPhotoPreviews(
+  userId: string,
+  card: PersonalPlaceCard
+) {
+  return (await reconcile(userId, card)).previews;
+}
+
+export async function retryPersonalPlaceCardPhoto(
+  userId: string,
+  cardId: string,
+  uploadId: string,
+  attach: Attach,
+  read: Read,
+  remove?: Remove
+) {
+  const authoritative = await read(cardId);
+  const pending = (await reconcile(userId, authoritative)).retained.find(
+    (item) => item.uploadId === uploadId
+  );
+  if (!pending) return null;
+  const upload = (await listNativePhotoUploads(userId)).find(
+    (item) => item.id === uploadId
+  );
+  if (upload?.state !== 'RETRYABLE_ERROR') return null;
+  return finish(pending, attach, read, remove);
+}
+
+export async function retirePersonalPlaceCardPhotoIntent(
+  userId: string,
+  cardId: string,
+  photoAssetId: string
+) {
+  const [pending, uploads] = await Promise.all([
+    list(userId),
+    listNativePhotoUploads(userId),
+  ]);
+  const matchingUploadIds = new Set(uploads
+    .filter((upload) => upload.assetId === photoAssetId)
+    .map((upload) => upload.id));
+  if (matchingUploadIds.size === 0) return;
+  await set(userId, pending.filter((item) =>
+    item.cardId !== cardId || !matchingUploadIds.has(item.uploadId)
+  ));
 }
