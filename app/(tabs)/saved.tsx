@@ -46,6 +46,7 @@ export default function SavedScreen() {
         : savedPlaceIds.length
           ? countText(savedPlaceIds.length, 'place')
           : 'No favourites yet',
+      description: 'Keep places you want to find again.',
       title: 'Favourites',
     },
     {
@@ -59,6 +60,7 @@ export default function SavedScreen() {
         : trips.length
           ? countText(trips.length, 'trip')
           : 'No trips yet',
+      description: 'Group places into a Trip to plan and share.',
       title: 'Trips',
     },
     {
@@ -72,6 +74,7 @@ export default function SavedScreen() {
         : cards.length
           ? countText(cards.length, 'place')
           : 'No personal places yet',
+      description: 'Create your own places with notes, photos, and a location.',
       title: 'Personal Places',
     },
     personalContentFeatures.notebooks ? {

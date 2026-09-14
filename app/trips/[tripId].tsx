@@ -15,7 +15,7 @@ import { SignedOutFeature } from '@/components/signed-out-feature';
 import { useSession } from '@/auth/provider';
 
 import { TripEntryCard } from '@/components/trip-entry-card';
-import { PlaceSearch } from '@/components/place-search';
+import { TripPlacePicker } from '@/components/trip-place-picker';
 import { AutosaveNote } from '@/components/ui/autosave-note';
 import { IconAction } from '@/components/ui/icon-action';
 import { clearHeaderRightAction, headerShareAction } from '@/components/ui/header-actions';
@@ -46,7 +46,6 @@ export default function TripDetailScreen() {
   const router = useRouter();
   const {
     getTrip,
-    addPlaceToTrip,
     isLoading: isLoadingTrips,
     refresh,
     removeTripEntry,
@@ -63,7 +62,6 @@ export default function TripDetailScreen() {
   const [personalPhotoUrls, setPersonalPhotoUrls] = useState<Record<string, string>>({});
   const [highlightedEntryId, setHighlightedEntryId] = useState<string | null>(null);
   const [isSearchingPlaces, setIsSearchingPlaces] = useState(false);
-  const [isAddingPlace, setIsAddingPlace] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
   const entryOffsetsRef = useRef<Record<string, number>>({});
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -445,25 +443,17 @@ export default function TripDetailScreen() {
           <View style={{ alignItems: 'center', flexDirection: 'row', marginBottom: Space.lg }}>
             <Text style={{ flex: 1, ...Type.section }}>Places</Text>
             <IconAction
-              accessibilityLabel={isSearchingPlaces ? 'Close Place search' : 'Search and add Place'}
+              accessibilityLabel={isSearchingPlaces ? 'Close Place search' : 'Add places from Favourites or Search'}
               icon={isSearchingPlaces ? 'close' : 'add'}
               onPress={() => setIsSearchingPlaces((value) => !value)}
             />
           </View>
 
-          {isSearchingPlaces ? <View style={{ marginBottom: Space.xxl }}>
-            <PlaceSearch
-              onPlacePress={(place) => {
-                if (!place._id || isAddingPlace) return;
-                setIsAddingPlace(true);
-                void addPlaceToTrip(trip.id, place._id)
-                  .then(() => setIsSearchingPlaces(false))
-                  .catch(() => Alert.alert('Unable to add Place', 'Check your connection and try again.'))
-                  .finally(() => setIsAddingPlace(false));
-              }}
-              placeholder={isAddingPlace ? 'Adding Place…' : 'Search TripIdeas Places'}
-            />
-          </View> : null}
+          {isSearchingPlaces ? <TripPlacePicker
+            key={trip.id}
+            tripId={trip.id}
+            onClose={() => setIsSearchingPlaces(false)}
+          /> : null}
 
           {isLoadingPlaces ? (
             <LoadingView />
@@ -507,7 +497,7 @@ export default function TripDetailScreen() {
             ))
           ) : (
             <Text style={{ color: '#717171', fontSize: 16 }}>
-              No places in this trip yet. Add one from Favourites.
+              No places yet. Tap + to add from Favourites or search TripIdeas.
             </Text>
           )}
         </>

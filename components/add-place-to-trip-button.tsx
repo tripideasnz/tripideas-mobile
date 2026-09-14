@@ -1,11 +1,14 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { Pressable } from 'react-native';
+import { ActivityIndicator, Pressable } from 'react-native';
 import type { GestureResponderEvent, ViewStyle } from 'react-native';
 
 import { Palette, Radius } from '@/constants/design';
 
 type AddPlaceToTripButtonProps = {
   isSignedIn?: boolean;
+  isPending?: boolean;
+  disabled?: boolean;
+  isCurrentTrip?: boolean;
   isInTrip: boolean;
   onPress: (event: GestureResponderEvent) => void;
   style?: ViewStyle;
@@ -13,6 +16,9 @@ type AddPlaceToTripButtonProps = {
 
 export function AddPlaceToTripButton({
   isInTrip,
+  isPending = false,
+  disabled = false,
+  isCurrentTrip = false,
   isSignedIn = true,
   onPress,
   style,
@@ -20,10 +26,14 @@ export function AddPlaceToTripButton({
   return (
     <Pressable
       accessibilityRole="button"
+      disabled={disabled || isPending}
+      accessibilityState={{ disabled: disabled || isPending, busy: isPending, selected: isInTrip }}
       accessibilityLabel={
         !isSignedIn
           ? 'Sign in to view and edit your private Trips'
-          : isInTrip
+          : isCurrentTrip
+            ? isInTrip ? 'Remove from this Trip' : 'Add to this Trip'
+            : isInTrip
             ? 'Add to another Trip'
             : 'Add to Trip'
       }
@@ -41,11 +51,11 @@ export function AddPlaceToTripButton({
         },
         style,
       ]}>
-      <MaterialIcons
+      {isPending ? <ActivityIndicator color={Palette.trip} /> : <MaterialIcons
         name={isInTrip ? 'folder' : 'folder-open'}
         size={25}
         color={isInTrip ? Palette.trip : Palette.text}
-      />
+      />}
     </Pressable>
   );
 }

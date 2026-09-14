@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import { Pressable, Text } from 'react-native';
 
-import { PlaceCardActions } from '@/components/place-card-actions';
+import { PlaceCardActions, type PlaceTripAction } from '@/components/place-card-actions';
 import { PlaceCardPresentation } from '@/components/place-card-presentation';
 import { MediaFrame } from '@/components/ui/media-frame';
 import { Palette, Space, Type } from '@/constants/design';
@@ -35,16 +35,22 @@ function getDistanceLabel(distanceKm: number | undefined) {
 }
 
 export function PlaceCard({
+  disabled = false,
   embedded = false,
   navigationOrigin,
   onPress,
+  onOpenPlace,
+  tripAction,
   place,
   showSaveButton = true,
   showSnippet = false,
 }: {
+  disabled?: boolean;
   embedded?: boolean;
   navigationOrigin?: 'favourites';
   onPress?: () => void;
+  onOpenPlace?: () => void;
+  tripAction?: PlaceTripAction;
   place: PlaceCardData;
   showSaveButton?: boolean;
   showSnippet?: boolean;
@@ -58,13 +64,17 @@ export function PlaceCard({
 
   return (
     <Pressable
-      disabled={!canOpenPlace}
+      accessibilityRole="button"
+      accessibilityLabel={onPress ? `Select ${place.title || 'Place'}` : `Open ${place.title || 'Place'}`}
+      accessibilityState={{ disabled: disabled || (!onPress && !canOpenPlace) }}
+      disabled={disabled || (!onPress && !canOpenPlace)}
       onPress={() => {
         if (onPress) { onPress(); return; }
         if (!place.slug?.current) {
           return;
         }
 
+        onOpenPlace?.();
         router.push({
           pathname: '/place/[slug]',
           params: { slug: place.slug.current, origin: navigationOrigin },
@@ -72,7 +82,7 @@ export function PlaceCard({
       }}
       style={({ pressed }) => ({
         marginBottom: embedded ? 0 : Space.xxl,
-        opacity: pressed ? 0.74 : 1,
+        opacity: disabled ? 0.5 : pressed ? 0.74 : 1,
       })}>
       <PlaceCardPresentation
         media={place.imageUrl ? (
@@ -84,7 +94,7 @@ export function PlaceCard({
           />
         ) : undefined}
         overlayActions={placeId && showSaveButton ? (
-          <PlaceCardActions placeId={placeId} />
+          <PlaceCardActions placeId={placeId} tripAction={tripAction} />
         ) : undefined}
         style={embedded ? {
           borderColor: 'transparent',

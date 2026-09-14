@@ -256,7 +256,7 @@ export default function TripMapScreen() {
                     <MapPin emphasis={selectedPlaceId === `personal:${item.entryId}` ? 'selected' : 'default'} />
                   </Marker>
                 ))}
-                {userPosition ? <Marker anchor="center" lngLat={[userPosition.longitude, userPosition.latitude]}><MapPin emphasis="selected" /></Marker> : null}
+                {userPosition ? <Marker anchor="center" lngLat={[userPosition.longitude, userPosition.latitude]}><MapPin emphasis="focused" /></Marker> : null}
               </MapLibreMap>
               <View style={{ gap: 8, position: 'absolute', right: 16, top: 16 }}>
                 <MapRecenterControl onPress={() => void locateUser()} />

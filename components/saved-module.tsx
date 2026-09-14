@@ -8,6 +8,7 @@ import { Palette, Radius, Space } from '@/constants/design';
 type SavedModuleProps = {
   accessibilityLabel?: string;
   disabled?: boolean;
+  description?: string;
   icon: ComponentProps<typeof MaterialIcons>['name'];
   onPress: () => void;
   stateText: string;
@@ -17,6 +18,7 @@ type SavedModuleProps = {
 export function SavedModule({
   accessibilityLabel,
   disabled = false,
+  description,
   icon,
   onPress,
   stateText,
@@ -44,6 +46,7 @@ export function SavedModule({
       <MaterialIcons color={Palette.text} name={icon} size={25} />
       <View style={{ flex: 1, gap: Space.xs, marginLeft: Space.lg }}>
         <AppText variant="bodyStrong">{title}</AppText>
+        {description ? <AppText color={Palette.textBody} variant="caption">{description}</AppText> : null}
         <AppText color={Palette.textMuted} variant="caption">
           {stateText}
         </AppText>

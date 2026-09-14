@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { AppButton } from '@/components/ui/app-button';
@@ -34,6 +34,7 @@ export function AddToTripModal({
   const [isCreating, setIsCreating] = useState(false);
   const [newTripName, setNewTripName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const submittingRef = useRef(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [createdTrip, setCreatedTrip] = useState<MyTrip | null>(null);
   const [tripPlaces, setTripPlaces] = useState<PlaceCardData[]>([]);
@@ -80,13 +81,15 @@ export function AddToTripModal({
   }, [placeId, previewPlaceIdsKey]);
 
   const handleClose = () => {
+    if (submittingRef.current) return;
     resetCreate();
     onClose();
   };
 
   const handleSubmit = async () => {
     const trimmed = newTripName.trim();
-    if (!trimmed || isSubmitting) return;
+    if (!trimmed || submittingRef.current) return;
+    submittingRef.current = true;
     setIsSubmitting(true);
     setActionError(null);
     try {
@@ -109,12 +112,14 @@ export function AddToTripModal({
         );
       }
     } finally {
+      submittingRef.current = false;
       setIsSubmitting(false);
     }
   };
 
   const handleSelectTrip = async (tripId: string) => {
-    if (isSubmitting) return;
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setIsSubmitting(true);
     setActionError(null);
     try {
@@ -125,6 +130,7 @@ export function AddToTripModal({
         `Could not add this place to the Trip${tripRequestDiagnostic(error)}. Check your connection and try again.`
       );
     } finally {
+      submittingRef.current = false;
       setIsSubmitting(false);
     }
   };
@@ -153,6 +159,8 @@ export function AddToTripModal({
           <AppText variant="title">{createdTrip ? 'Place added' : 'Add to Trip'}</AppText>
           <Pressable
             accessibilityRole="button"
+            disabled={isSubmitting}
+            accessibilityState={{ disabled: isSubmitting }}
             onPress={handleClose}
             style={({ pressed }) => ({
               opacity: pressed ? 0.45 : 1,
@@ -163,6 +171,9 @@ export function AddToTripModal({
           </Pressable>
         </View>
 
+        {isSubmitting ? <AppText accessibilityLiveRegion="polite" style={{ marginBottom: Space.md }}>
+          {showCreateForm ? 'Creating Trip and adding place…' : 'Adding place to Trip…'}
+        </AppText> : null}
         {createdTrip ? (
           <View style={{ gap: Space.lg }}>
             <AppText color={Palette.textMuted}>The place was added successfully.</AppText>
@@ -197,6 +208,7 @@ export function AddToTripModal({
             {trips.length > 0 ? (
               <Pressable
                 accessibilityRole="button"
+                disabled={isSubmitting}
                 onPress={resetCreate}
                 style={({ pressed }) => ({
                   alignItems: 'center',
@@ -219,6 +231,7 @@ export function AddToTripModal({
               return (
                 <View key={trip.id} style={{ marginBottom: Space.md, opacity: alreadyAdded ? 0.75 : 1 }}>
                   <TripIndexCard
+                    disabled={isSubmitting}
                     accessibilityLabel={`Add place to ${trip.name}`}
                     images={getTripImages(trip, tripPlaces)}
                     onPress={() => void handleSelectTrip(trip.id)}
@@ -235,6 +248,7 @@ export function AddToTripModal({
 
             <Pressable
               accessibilityRole="button"
+              disabled={isSubmitting}
               onPress={() => setIsCreating(true)}
               style={({ pressed }) => ({
                 marginBottom: Space.md,

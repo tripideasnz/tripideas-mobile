@@ -1,6 +1,6 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import type { NativeStackNavigationOptions } from '@react-navigation/native-stack';
-import { Platform, Pressable } from 'react-native';
+import { Pressable } from 'react-native';
 
 import { Palette } from '@/constants/design';
 
@@ -43,32 +43,16 @@ function fallback(icon: 'add' | 'share', action: HeaderAction) {
   };
 }
 
-function nativeItem(icon: 'plus' | 'square.and.arrow.up', action: HeaderAction): NativeStackNavigationOptions {
-  return {
-    unstable_headerRightItems: () => [{
-      accessibilityLabel: action.accessibilityLabel,
-      disabled: action.disabled,
-      hidesSharedBackground: true,
-      icon: { type: 'sfSymbol', name: icon },
-      label: action.accessibilityLabel,
-      onPress: action.onPress,
-      tintColor: Palette.trip,
-      type: 'button',
-      variant: 'plain',
-    }],
-  };
-}
-
+// Use the existing React header control on every platform. Native toolbar items
+// depend on the installed iOS binary and can leave beta builds without actions.
 export function headerAddAction(action: HeaderAction): NativeStackNavigationOptions {
-  return Platform.OS === 'ios' ? nativeItem('plus', action) : { headerRight: fallback('add', action) };
+  return { headerRight: fallback('add', action) };
 }
 
 export function headerShareAction(action: HeaderAction): NativeStackNavigationOptions {
-  return Platform.OS === 'ios' ? nativeItem('square.and.arrow.up', action) : { headerRight: fallback('share', action) };
+  return { headerRight: fallback('share', action) };
 }
 
 export function clearHeaderRightAction(): NativeStackNavigationOptions {
-  return Platform.OS === 'ios'
-    ? { unstable_headerRightItems: () => [] }
-    : { headerRight: () => null };
+  return { headerRight: () => null };
 }

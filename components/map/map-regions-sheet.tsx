@@ -45,7 +45,7 @@ export function MapRegionsSheet({
       presentationStyle="pageSheet"
       visible={visible}>
       <SafeAreaView style={{ backgroundColor: '#fff', flex: 1 }}>
-        <SheetHeader onApply={onClose} onDismiss={onClose} title="Regions" />
+        <SheetHeader onDismiss={onClose} title="Regions" />
         <ScrollView
           contentContainerStyle={{ paddingBottom: 40, paddingHorizontal: 18 }}>
           {isLoading ? (
@@ -258,11 +258,9 @@ function SubRegionRow({
 }
 
 function SheetHeader({
-  onApply,
   onDismiss,
   title,
 }: {
-  onApply: () => void;
   onDismiss: () => void;
   title: string;
 }) {
@@ -277,16 +275,10 @@ function SheetHeader({
         paddingHorizontal: 18,
         paddingVertical: 14,
       }}>
-      <Pressable
-        accessibilityLabel="Apply filter"
-        accessibilityRole="button"
-        onPress={onApply}
-        style={({ pressed }) => ({ opacity: pressed ? 0.55 : 1 })}>
-        <Text style={{ color: '#0080C8', fontSize: 17, fontWeight: '700' }}>Apply</Text>
-      </Pressable>
+      <View style={{ width: 42 }} />
       <Text style={{ fontSize: 19, fontWeight: '800' }}>{title}</Text>
       <Pressable
-        accessibilityLabel="Close without applying"
+        accessibilityLabel="Close Region filters"
         accessibilityRole="button"
         hitSlop={8}
         onPress={onDismiss}

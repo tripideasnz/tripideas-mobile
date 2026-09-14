@@ -121,7 +121,7 @@ function HelpSection() {
           Discover places, select your Favourites, create your own trip ideas, save them and share with family and friends.
         </HelpTopic>
         <HelpTopic title="Saved">
-          Saved is the home for your private Favourites, Trips, Personal Places, and Notebooks.
+          Saved is the home for your private Favourites, Trips, and Personal Places.
         </HelpTopic>
         <HelpTopic title="Favourites">
           Tap the heart on a Place to keep it in your private Favourites.
@@ -132,9 +132,7 @@ function HelpSection() {
         <HelpTopic title="Personal Places">
           Create private Place Cards for places that are not yet in TripIdeas.
         </HelpTopic>
-        <HelpTopic title="Notebooks">
-          Keep longer notes, plans, pages, and photos together in a private Notebook.
-        </HelpTopic>
+
         <HelpTopic title="Sharing and privacy">
           Creating and saving private content requires sign-in.
         </HelpTopic>

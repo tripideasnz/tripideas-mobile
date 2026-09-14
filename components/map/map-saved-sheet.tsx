@@ -43,16 +43,10 @@ export function MapSavedSheet({
             paddingHorizontal: 18,
             paddingVertical: 14,
           }}>
-          <Pressable
-            accessibilityLabel="Apply filter"
-            accessibilityRole="button"
-            onPress={onClose}
-            style={({ pressed }) => ({ opacity: pressed ? 0.55 : 1 })}>
-            <Text style={{ color: '#0080C8', fontSize: 17, fontWeight: '700' }}>Apply</Text>
-          </Pressable>
+          <View style={{ width: 42 }} />
           <Text style={{ fontSize: 19, fontWeight: '800' }}>Saved</Text>
           <Pressable
-            accessibilityLabel="Close without applying"
+            accessibilityLabel="Close Saved filters"
             accessibilityRole="button"
             hitSlop={8}
             onPress={onClose}

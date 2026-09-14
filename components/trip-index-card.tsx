@@ -8,12 +8,14 @@ import type { MyTrip } from '@/trips/types';
 
 export function TripIndexCard({
   accessibilityLabel,
+  disabled = false,
   images,
   onPress,
   style,
   trip,
 }: {
   accessibilityLabel?: string;
+  disabled?: boolean;
   images: TripImage[];
   onPress?: () => void;
   style?: ViewStyle;
@@ -46,8 +48,10 @@ export function TripIndexCard({
     <Pressable
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="button"
+      accessibilityState={{ disabled }}
+      disabled={disabled}
       onPress={onPress}
-      style={({ pressed }) => ({ ...surface, opacity: pressed ? 0.65 : 1 })}>
+      style={({ pressed }) => ({ ...surface, opacity: disabled ? 0.5 : pressed ? 0.65 : 1 })}>
       {content}
     </Pressable>
   );

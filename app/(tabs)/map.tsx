@@ -14,7 +14,7 @@ import {
 } from '@maplibre/maplibre-react-native';
 import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { type NativeSyntheticEvent, Pressable, Text, View } from 'react-native';
+import { Alert, type NativeSyntheticEvent, Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSession } from '@/auth/provider';
 
@@ -227,7 +227,6 @@ export default function MapScreen() {
   const [isFitPending, setIsFitPending] = useState(false);
   const [fitResetTrigger, setFitResetTrigger] = useState(0);
   const hasInitialFittedRef = useRef(false);
-  const prevPeekSheetHeightRef = useRef(0);
   const mapPaddingRef = useRef<ViewPadding>({ top: 0, right: 56, bottom: PEEK_SHEET_FALLBACK + 16, left: 56 });
   const displayedPlacesRef = useRef<MappablePlace[]>([]);
   const [peekSheetHeight, setPeekSheetHeight] = useState(0);
@@ -243,7 +242,15 @@ export default function MapScreen() {
 
   const locateUser = useCallback(async () => {
     const result = await getOneForegroundLocation();
-    if (result.status !== 'granted') return;
+    if (result.status !== 'granted') {
+      Alert.alert('Location unavailable', result.status === 'denied'
+        ? 'Foreground location permission was not granted.'
+        : 'Your current location could not be obtained.');
+      return;
+    }
+    // A camera navigation action must win over a pending initial/filter fit.
+    hasInitialFittedRef.current = true;
+    setIsFitPending(false);
     setUserPosition(result.point);
     cameraRef.current?.easeTo({
       center: [result.point.longitude, result.point.latitude],
@@ -685,13 +692,8 @@ export default function MapScreen() {
     }
   }, [isMapReady, isLoadingPlaces, displayedPlaces, peekSheetHeight, mapPadding, hasPlaceContext]);
 
-  useEffect(() => {
-    if (!hasInitialFittedRef.current || !isMapReady || peekSheetHeight === 0) return;
-    if (peekSheetHeight === prevPeekSheetHeightRef.current) return;
-    if (hasPlaceContext) return;
-    prevPeekSheetHeightRef.current = peekSheetHeight;
-    fitCameraToPlaces(cameraRef.current, displayedPlaces, mapPadding);
-  }, [peekSheetHeight, isMapReady, displayedPlaces, mapPadding, hasPlaceContext]);
+  // Tray height changes must not refit all results: that would undo locator
+  // navigation or a pan into a viewport with a different result count.
 
   const applySelection = (nextSelection: MapContentSelection) => {
     // Exit rule 3: choosing a map filter clears the place context.
@@ -921,7 +923,7 @@ export default function MapScreen() {
         ) : null}
         {userPosition ? (
           <Marker lngLat={[userPosition.longitude, userPosition.latitude]} anchor="center">
-            <MapPin emphasis="selected" />
+            <MapPin emphasis="focused" />
           </Marker>
         ) : null}
 
@@ -985,34 +987,7 @@ export default function MapScreen() {
         }}>
         <MapControls
           onLayersPress={() => setIsStyleSheetOpen(true)}
-          onRecenterPress={() => {
-            if (!placeContext && selection.type === 'all' && selectedActivityTagIds.length === 0) {
-              void locateUser();
-              return;
-            }
-            if (placeContext) {
-              cameraRef.current?.easeTo({
-                center: [placeContext.lng, placeContext.lat] as LngLat,
-                zoom: 13,
-                duration: 450,
-              });
-              return;
-            }
-
-            if (
-              selection.type === 'all' &&
-              selectedActivityTagIds.length === 0
-            ) {
-              cameraRef.current?.easeTo({
-                center: DEFAULT_CENTER,
-                zoom: DEFAULT_ZOOM,
-                duration: 450,
-              });
-              return;
-            }
-
-            fitCameraToPlaces(cameraRef.current, activityFilteredPlaces, mapPadding);
-          }}
+          onRecenterPress={() => { void locateUser(); }}
         />
       </View>
 

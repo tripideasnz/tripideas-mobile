@@ -10,7 +10,15 @@ import { useSavedPlaces } from '@/saved/provider';
 import { useMyTrips } from '@/trips/provider';
 import { useSession } from '@/auth/provider';
 
+export type PlaceTripAction = {
+  isInTrip: boolean;
+  isPending: boolean;
+  disabled: boolean;
+  onPress: () => void;
+};
+
 type PlaceCardActionsProps = {
+  tripAction?: PlaceTripAction;
   buttonStyle?: ViewStyle;
   inline?: boolean;
   placeId: string;
@@ -18,6 +26,7 @@ type PlaceCardActionsProps = {
 };
 
 export function PlaceCardActions({
+  tripAction,
   buttonStyle,
   inline = false,
   placeId,
@@ -61,10 +70,14 @@ export function PlaceCardActions({
           style={buttonStyle}
         />
         <AddPlaceToTripButton
-          isInTrip={isInTrip}
+          isInTrip={tripAction?.isInTrip ?? isInTrip}
+          isCurrentTrip={Boolean(tripAction)}
+          isPending={tripAction?.isPending}
+          disabled={tripAction?.disabled}
           isSignedIn={Boolean(session)}
           onPress={(event) => {
             event.stopPropagation();
+            if (tripAction) { tripAction.onPress(); return; }
             void (async () => {
               if (!session && !(await signIn())) return;
               setIsTripPickerOpen(true);
@@ -74,7 +87,7 @@ export function PlaceCardActions({
         />
       </View>
 
-      <AddToTripModal
+      {!tripAction ? <AddToTripModal
         onClose={() => setIsTripPickerOpen(false)}
         onCreateTrip={async (name) => {
           return createTripWithPlace(name, placeId);
@@ -107,7 +120,7 @@ export function PlaceCardActions({
         }}
         placeId={isTripPickerOpen ? placeId : null}
         trips={trips}
-      />
+      /> : null}
     </>
   );
 }

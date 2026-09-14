@@ -13,11 +13,9 @@ const [headers, places, trips, tripDetail, editor, photos] = await Promise.all([
   read('personal-place-cards/photos.ts'),
 ]);
 
-assert.match(headers, /unstable_headerRightItems/);
-assert.match(headers, /nativeItem\('plus', action\)/);
-assert.match(headers, /nativeItem\('square\.and\.arrow\.up', action\)/);
-assert.match(headers, /hidesSharedBackground: true/);
-assert.match(headers, /Platform\.OS === 'ios'/);
+assert.match(headers, /headerRight: fallback\('add', action\)/);
+assert.match(headers, /headerRight: fallback\('share', action\)/);
+assert.doesNotMatch(headers, /unstable_headerRightItems/);
 assert.match(headers, /height: 44/);
 assert.match(headers, /width: 44/);
 assert.match(places, /headerAddAction\(/);
@@ -25,15 +23,17 @@ assert.match(places, /options=\{session \? headerAddAction/);
 assert.match(trips, /headerAddAction\(/);
 assert.match(tripDetail, /headerShareAction\(/);
 assert.match(tripDetail, /clearHeaderRightAction\(\)/);
-assert.match(headers, /unstable_headerRightItems: \(\) => \[\]/);
+assert.match(headers, /headerRight: \(\) => null/);
 assert.doesNotMatch(places, /headerRight:[\s\S]{0,250}<MaterialIcons/);
 assert.doesNotMatch(trips, /headerRight:[\s\S]{0,250}<MaterialIcons/);
-console.log('✓ retained native headers avoid custom iOS header hosts and keep a fixed Android fallback');
+console.log('✓ shared header controls keep Add and Share available across platforms');
 
 assert.match(trips, /accessibilityLabel="Create Trip"[\s\S]{0,180}color=\{Palette\.success\}/);
 assert.match(trips, /accessibilityLabel="Cancel Trip creation"[\s\S]{0,180}color=\{Palette\.danger\}/);
 assert.match(trips, /disabled=\{!newTripName\.trim\(\) \|\| isCreatingTrip\}/);
-assert.match(trips, /Creating trip…/);
+assert.match(trips, /accessibilityLabel="Creating Trip"/);
+assert.match(trips, /<ActivityIndicator/);
+assert.doesNotMatch(trips, /<StatusText>Creating trip/);
 console.log('✓ Trip creation confirmation and cancellation use semantic colours');
 
 assert.match(editor, /<AppText variant="section">Photos<\/AppText>/);

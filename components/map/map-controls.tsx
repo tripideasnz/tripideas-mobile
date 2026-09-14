@@ -29,7 +29,7 @@ export function MapControls({
       />
       {sep}
       <ControlButton
-        accessibilityLabel="Recenter map"
+        accessibilityLabel="Show my current location"
         icon="my-location"
         onPress={onRecenterPress}
       />

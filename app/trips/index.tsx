@@ -1,6 +1,6 @@
 import { Stack, useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
-import { Alert, ScrollView, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, ScrollView, View } from 'react-native';
 
 import { TripIndexCard } from '@/components/trip-index-card';
 import { SignedOutFeature } from '@/components/signed-out-feature';
@@ -34,6 +34,7 @@ export default function TripsScreen() {
     retryImport,
     trips,
   } = useMyTrips();
+  const creatingRef = useRef(false);
   const [newTripName, setNewTripName] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [isCreatingTrip, setIsCreatingTrip] = useState(false);
@@ -73,7 +74,8 @@ export default function TripsScreen() {
   }, [isLoading, tripPlaceIdsKey]);
 
   const submitCreate = async () => {
-    if (!newTripName.trim() || isCreatingTrip) return;
+    if (!newTripName.trim() || creatingRef.current) return;
+    creatingRef.current = true;
     setIsCreatingTrip(true);
     setCreateError(null);
     try {
@@ -81,12 +83,14 @@ export default function TripsScreen() {
       if (trip) {
         setNewTripName('');
         setShowCreate(false);
+        router.push({ pathname: '/trips/[tripId]', params: { tripId: trip.id } });
       }
     } catch (error) {
       setCreateError(
         `Could not create the Trip${tripRequestDiagnostic(error)}. Check your connection and try again.`
       );
     } finally {
+      creatingRef.current = false;
       setIsCreatingTrip(false);
     }
   };
@@ -103,6 +107,7 @@ export default function TripsScreen() {
 
   return (
     <ScrollView
+      keyboardShouldPersistTaps="handled"
       style={{ flex: 1, backgroundColor: Palette.background }}
       contentContainerStyle={{
         paddingBottom: Screen.bottom,
@@ -161,6 +166,7 @@ export default function TripsScreen() {
           <AutoExpandingTextInput
             accessibilityLabel="New trip name"
             autoFocus
+            editable={!isCreatingTrip}
             onChangeText={(value) => {
               setNewTripName(value);
               setCreateError(null);
@@ -171,13 +177,17 @@ export default function TripsScreen() {
             style={{ flex: 1 }}
             value={newTripName}
           />
-          <IconAction
+          {isCreatingTrip ? <View accessibilityLabel="Creating Trip" accessibilityRole="progressbar"
+            accessibilityState={{ busy: true }}
+            style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
+            <ActivityIndicator color={Palette.trip} />
+          </View> : <IconAction
             accessibilityLabel="Create Trip"
             color={Palette.success}
             disabled={!newTripName.trim() || isCreatingTrip}
             icon="check"
             onPress={submitCreate}
-          />
+          />}
           <IconAction
             accessibilityLabel="Cancel Trip creation"
             color={Palette.danger}
@@ -191,7 +201,6 @@ export default function TripsScreen() {
           />
         </View>
       ) : null}
-      {isCreatingTrip ? <StatusText>Creating trip…</StatusText> : null}
       {createError ? <AppText color={Palette.danger} style={{ marginBottom: Space.lg }}>{createError}</AppText> : null}
 
       {isLoading || isLoadingPlaces ? (

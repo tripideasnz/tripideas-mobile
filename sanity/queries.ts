@@ -25,8 +25,8 @@ export const ISLANDS_QUERY = `
   north{
     title,
     maori,
-    "imageAlt": coalesce(heroImage.alt, mainImage.alt, image.alt),
-    "imageUrl": coalesce(heroImage.asset->url, mainImage.asset->url, image.asset->url),
+    "imageAlt": coalesce(article->mainImage.alt, heroImage.alt, mainImage.alt, image.alt),
+    "imageUrl": coalesce(article->mainImage.asset->url, heroImage.asset->url, mainImage.asset->url, image.asset->url),
     "preview": description[_type == "block" && style == "normal"][0].children[0].text,
     regions[]->{
       _id,
@@ -49,8 +49,8 @@ export const ISLANDS_QUERY = `
   south{
     title,
     maori,
-    "imageAlt": coalesce(heroImage.alt, mainImage.alt, image.alt),
-    "imageUrl": coalesce(heroImage.asset->url, mainImage.asset->url, image.asset->url),
+    "imageAlt": coalesce(article->mainImage.alt, heroImage.alt, mainImage.alt, image.alt),
+    "imageUrl": coalesce(article->mainImage.asset->url, heroImage.asset->url, mainImage.asset->url, image.asset->url),
     "preview": description[_type == "block" && style == "normal"][0].children[0].text,
     regions[]->{
       _id,

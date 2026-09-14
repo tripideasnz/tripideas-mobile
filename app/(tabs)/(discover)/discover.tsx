@@ -205,6 +205,11 @@ function IslandCard({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const regions = (island.regions ?? []).filter(Boolean);
+  const handleIslandPress = () => {
+    const next = !isOpen;
+    setIsOpen(next);
+    if (next) onOpen?.();
+  };
 
   return (
     <CardSurface
@@ -222,14 +227,19 @@ function IslandCard({
         />
       ) : null}
 
+      {/* Image tap target: absolute so the original visible layout is unchanged. */}
+      {island.imageUrl ? <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${isOpen ? 'Collapse' : 'Expand'} ${island.title || island.slug}`}
+        accessibilityState={{ expanded: isOpen }}
+        onPress={handleIslandPress}
+        style={{ position: 'absolute', top: 0, left: 0, right: 0, height: isOpen ? expandedImageHeight : imageHeight }}
+      /> : null}
+
       <Pressable
         accessibilityRole="button"
         accessibilityState={{ expanded: isOpen }}
-        onPress={() => {
-          const next = !isOpen;
-          setIsOpen(next);
-          if (next) onOpen?.();
-        }}
+        onPress={handleIslandPress}
         style={({ pressed }) => ({
           alignItems: 'center',
           flexDirection: 'row',
