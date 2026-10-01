@@ -35,6 +35,7 @@ assert.match(diaryCover, /keyboardDismissMode="interactive"/);
 
 for (const source of [diaryIndex, diaryCover]) {
   assert.match(source, /DD\/MM\/YYYY/);
-  assert.match(source, /Enter dates in DD\/MM\/YYYY format, for example 05\/09\/2026/);
+  assert.match(source, /Enter dates in DD\/MM\/YYYY format/);
 }
+assert.match(diaryCover, /Enter dates in DD\/MM\/YYYY format, for example 05\/09\/2026/);
 console.log('✓ Saved titles share vertical expansion and Diary dates expose an explicit accepted format');

@@ -4,13 +4,14 @@ import { readFile } from 'node:fs/promises';
 const read = (relativePath) =>
   readFile(new URL(`../${relativePath}`, import.meta.url), 'utf8');
 
-const [headers, places, trips, tripDetail, editor, photos] = await Promise.all([
+const [headers, places, trips, tripDetail, editor, photos, photoReconciliation] = await Promise.all([
   read('components/ui/header-actions.tsx'),
   read('app/personal-place-cards/index.tsx'),
   read('app/trips/index.tsx'),
   read('app/trips/[tripId].tsx'),
   read('app/personal-place-cards/[cardId].tsx'),
   read('personal-place-cards/photos.ts'),
+  read('personal-place-cards/photo-reconciliation.ts'),
 ]);
 
 assert.match(headers, /headerRight: fallback\('add', action\)/);
@@ -45,9 +46,13 @@ assert.match(editor, /pendingBodyPreviews\.map/);
 assert.match(editor, /aspectRatio: 1/);
 assert.match(editor, /Loading photo…/);
 assert.match(editor, /Uploading…/);
-assert.match(editor, /Upload paused/);
-assert.match(editor, /Retry photo uploads/);
+assert.match(editor, /Photo failed to upload/);
+assert.match(editor, /label="Try again"/);
+assert.match(editor, /retryPersonalPlaceCardPhoto\(/);
+assert.doesNotMatch(editor, /Upload paused/);
+assert.doesNotMatch(editor, /Retry photo uploads/);
 assert.match(photos, /listNativePhotoUploads/);
-assert.match(photos, /upload\?\.localFileUri \?\? null/);
-assert.match(photos, /pending\.filter\(\(item\) => item\.cardId === cardId\)/);
+assert.match(photos, /allPending\.filter\(\(item\) => item\.cardId === card\.id\)/);
+assert.match(photos, /reconcilePendingPersonalPlacePhotos\(cardPending, uploads, card\)/);
+assert.match(photoReconciliation, /uri: upload\.localFileUri/);
 console.log('✓ Personal Place photos use one fixed grid with durable restart and retry previews');
