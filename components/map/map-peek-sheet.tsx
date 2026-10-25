@@ -47,7 +47,8 @@ const PeekPlaceItem = memo(function PeekPlaceItem({
 }) {
   return (
     <Pressable
-      accessibilityLabel={`${place.title || 'Place'}${selected ? ', selected. Activate again to open.' : ''}`}
+      accessibilityHint="Opens the place."
+      accessibilityLabel={`${place.title || 'Place'}${selected ? ', selected' : ''}`}
       disabled={!place.slug?.current}
       onPress={() => onPress(place)}
       style={({ pressed }) => ({

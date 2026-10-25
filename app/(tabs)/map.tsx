@@ -40,6 +40,12 @@ import {
   type MappablePlace,
 } from '@/components/map/map-filters';
 import { MapSavedSheet } from '@/components/map/map-saved-sheet';
+import {
+  revealMarkerCamera,
+  selectedMarkerNeedsMove,
+  type ObscuredEdges,
+} from '@/components/map/marker-visibility';
+import { openPlaceFromMap } from '@/components/map/place-navigation';
 import type { MapContentSelection } from '@/components/map/map-selection';
 import { MapTileView } from '@/components/map/map-tile-view';
 import { useMapSelection } from '@/components/map/use-map-selection';
@@ -66,6 +72,8 @@ const DEFAULT_ZOOM = 5;
 const NZ_BOUNDS: LngLatBounds = [165.5, -47.5, 179.0, -34.0];
 const QUICK_FILTERS_BAR_HEIGHT = 44;
 const PEEK_SHEET_FALLBACK = 289;
+// Room the selected-marker label needs above the marker pin.
+const SELECTED_MARKER_LABEL_ALLOWANCE = 80;
 
 type MapTrayState = 'minimised' | 'peek' | 'full';
 
@@ -167,10 +175,15 @@ export default function MapScreen() {
   const [isRegionsSheetOpen, setIsRegionsSheetOpen] = useState(false);
   const [isSavedSheetOpen, setIsSavedSheetOpen] = useState(false);
   const [isStyleSheetOpen, setIsStyleSheetOpen] = useState(false);
-  const openMapPlace = useCallback((place: Pick<MapPlace, 'slug'>) => { const slug = place.slug?.current; if (slug) router.push({ pathname: '/place/[slug]', params: { origin: 'map', slug } }); }, [router]);
+  // Every entry point opens the Place through one guarded helper, so rapid taps
+  // cannot push the screen twice and the origin is always 'map'.
+  const openMapPlace = useCallback((place: Pick<MapPlace, 'slug'>) => { openPlaceFromMap(router, place.slug?.current); }, [router]);
   const { activate: activatePlace, clear: clearSelectedPlace, select: setSelectedPlaceId, selectedId: selectedPlaceId } = useMapSelection(openMapPlace);
   const [mapStyleId, setMapStyleId] = useState<MapStyleId>('streets');
   const [visibleBounds, setVisibleBounds] = useState<LngLatBounds | null>(null);
+  // Latest viewport and map size, read without re-rendering (marker reveal).
+  const visibleBoundsRef = useRef<LngLatBounds | null>(null);
+  const mapSizeRef = useRef({ height: 0, width: 0 });
   // Shared location behaviour (cached position first, then a refined fix, one
   // request at a time). It only moves the camera and the user marker, so every
   // active filter is left exactly as it was.
@@ -237,7 +250,8 @@ export default function MapScreen() {
       return;
     }
     if (router.canGoBack()) router.back();
-  }, [placeContext, router]);
+    else clearPlaceContext();
+  }, [clearPlaceContext, placeContext, router]);
 
   // Exit rule 2: re-tapping the Map tab while already on it resets place context and filters,
   // clears URL params so useFocusEffect doesn't re-hydrate on next focus, and schedules
@@ -477,6 +491,22 @@ export default function MapScreen() {
     placeContext !== null &&
     displayedPlaces.some((p) => p.slug?.current === placeContext.slug);
 
+  // Selecting a marker shows a label above it and the peek sheet sits below, so
+  // the marker is brought into the clear area only when it is not already there.
+  // Zoom, filters and clustering are untouched.
+  const revealSelectedMarker = (place: MappablePlace) => {
+    const obscured: ObscuredEdges = {
+      bottom: (peekSheetHeight > 0 ? peekSheetHeight : PEEK_SHEET_FALLBACK) + 16,
+      left: 24,
+      right: 24,
+      top: insets.top + QUICK_FILTERS_BAR_HEIGHT + SELECTED_MARKER_LABEL_ALLOWANCE,
+    };
+    const marker = { lat: place.coordinates.lat, lng: place.coordinates.lng };
+    if (!selectedMarkerNeedsMove({ bounds: visibleBoundsRef.current, marker, obscured, viewport: mapSizeRef.current })) return;
+    cancelPendingFit();
+    cameraRef.current?.easeTo(revealMarkerCamera(marker, obscured));
+  };
+
   const handleSourcePress = async (event: NativeSyntheticEvent<PressEventWithFeatures>) => {
     event.stopPropagation();
     const feature = event.nativeEvent.features[0];
@@ -500,9 +530,14 @@ export default function MapScreen() {
 
     const id = properties?.id as string | null;
     const place = displayedPlaces.find((candidate) => mapPlaceId(candidate) === id);
-    if (id && place) activatePlace(id, place);
+    if (id && place && activatePlace(id, place) === 'select') revealSelectedMarker(place);
   };
-  const handleThumbnailPress = useCallback((place: MapPlace) => activatePlace(mapPlaceId(place), place), [activatePlace]);
+  // Thumbnails open the Place on the first tap. The place is selected first so
+  // its marker is still highlighted when the user comes back.
+  const handleThumbnailPress = useCallback((place: MapPlace) => {
+    setSelectedPlaceId(mapPlaceId(place));
+    openMapPlace(place);
+  }, [openMapPlace, setSelectedPlaceId]);
 
   const isLoading =
     isLoadingPlaces ||
@@ -741,7 +776,12 @@ export default function MapScreen() {
   }
 
   return (
-    <View style={{ backgroundColor: '#fff', flex: 1 }}>
+    <View
+      onLayout={(event) => {
+        const { height, width } = event.nativeEvent.layout;
+        mapSizeRef.current = { height, width };
+      }}
+      style={{ backgroundColor: '#fff', flex: 1 }}>
       <MapLibreMap
         mapStyle={MAP_STYLES.find((s) => s.id === mapStyleId)?.url ?? MAP_STYLE_URL}
         touchPitch={false}
@@ -753,6 +793,7 @@ export default function MapScreen() {
         onPress={clearSelectedPlace}
         onRegionDidChange={(event) => {
           lastCameraRef.current = cameraStateFromRegion(event.nativeEvent);
+          visibleBoundsRef.current = event.nativeEvent.bounds;
           setVisibleBounds(event.nativeEvent.bounds);
         }}
         style={{ flex: 1 }}>

@@ -33,6 +33,13 @@ assert.match(peek, /onPress=\{onPlacePress\}/);
 assert.doesNotMatch(peek, /router\.push/);
 assert.match(mainMap, /handleThumbnailPress/);
 assert.match(mainMap, /onPlacePress=\{handleThumbnailPress\}/);
+// Thumbnails open the Place on the first tap (markers keep select-first).
+const thumbnail = mainMap.match(/const handleThumbnailPress = useCallback\(\(place: MapPlace\) => \{[\s\S]*?\}, \[openMapPlace, setSelectedPlaceId\]\);/)?.[0] ?? '';
+assert.ok(thumbnail);
+assert.match(thumbnail, /setSelectedPlaceId\(mapPlaceId\(place\)\)/);
+assert.match(thumbnail, /openMapPlace\(place\)/);
+assert.doesNotMatch(thumbnail, /activatePlace/);
+assert.doesNotMatch(peek, /Activate again to open/);
 
 assert.match(diaryMap, /useMapSelection\(openFeature\)/);
 assert.match(diaryMap, /activateFeature\(feature\.itemId, feature\)/);
@@ -41,4 +48,4 @@ assert.match(diaryMap, /selected\. Activate again to open/);
 assert.match(diaryMap, /openFeature\(selectedFeature\)/);
 for (const identity of ['diaryId: feature.diaryId', 'topicId: feature.topicId', 'itemId: feature.itemId']) assert.match(diaryMap, new RegExp(identity));
 
-console.log('✓ main and Diary maps share select-first, activate-again interaction semantics');
+console.log('✓ map markers and the Diary map keep select-first semantics; main-map thumbnails open on the first tap');

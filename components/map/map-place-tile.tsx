@@ -2,6 +2,7 @@ import { useRouter } from 'expo-router';
 import { Pressable, Text, View } from 'react-native';
 
 import { PlaceCardActions } from '@/components/place-card-actions';
+import { openPlaceFromMap } from '@/components/map/place-navigation';
 import { MediaFrame } from '@/components/ui/media-frame';
 import { Palette, Radius, Space, Type } from '@/constants/design';
 import type { MapPlace } from '@/sanity/types';
@@ -18,14 +19,8 @@ export function MapPlaceTile({ place }: { place: MapPlace }) {
     <Pressable
       disabled={!canOpenPlace}
       onPress={() => {
-        if (!place.slug?.current) {
-          return;
-        }
-
-        router.push({
-          pathname: '/place/[slug]',
-          params: { origin: 'map', slug: place.slug.current },
-        });
+        // Same guarded helper as the marker and thumbnail entry points.
+        openPlaceFromMap(router, place.slug?.current);
       }}
       style={({ pressed }) => ({
         opacity: pressed ? 0.72 : 1,
