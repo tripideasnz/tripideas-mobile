@@ -1,10 +1,10 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Image } from 'expo-image';
-import { useEffect, useRef } from 'react';
+import { memo, useCallback, useEffect, useRef } from 'react';
 import {
+  FlatList,
   Keyboard,
   Pressable,
-  ScrollView,
   Text,
   View,
 } from 'react-native';
@@ -21,7 +21,82 @@ import {
   Space,
   Type,
 } from '@/constants/design';
+import {
+  indexOfSelectedPlace,
+  PEEK_ITEM_WIDTH,
+  peekItemLayout,
+  peekScrollOffset,
+} from '@/components/map/peek-list';
 import type { MapPlace } from '@/sanity/types';
+
+const PeekSeparator = () => <View style={{ width: Space.md }} />;
+
+const placeKey = (place: MapPlace, index: number) =>
+  place._id ?? place.slug?.current ?? String(index);
+
+// One thumbnail. Memoised: a viewport change or a selection elsewhere only
+// re-renders the items whose place or selected state actually changed.
+const PeekPlaceItem = memo(function PeekPlaceItem({
+  onPress,
+  place,
+  selected,
+}: {
+  onPress: (place: MapPlace) => void;
+  place: MapPlace;
+  selected: boolean;
+}) {
+  return (
+    <Pressable
+      accessibilityLabel={`${place.title || 'Place'}${selected ? ', selected. Activate again to open.' : ''}`}
+      disabled={!place.slug?.current}
+      onPress={() => onPress(place)}
+      style={({ pressed }) => ({
+        borderColor: selected ? Palette.trip : 'transparent',
+        borderRadius: Radius.small,
+        borderWidth: 2,
+        opacity: pressed ? 0.7 : 1,
+        padding: 2,
+        width: PEEK_ITEM_WIDTH,
+      })}>
+      <View
+        style={{
+          aspectRatio: 4 / 3,
+          backgroundColor: Palette.surfaceMuted,
+          borderRadius: Radius.small,
+          overflow: 'hidden',
+        }}>
+        {place.imageUrl ? (
+          <Image
+            accessibilityLabel={place.imageAlt ?? place.title ?? 'Place image'}
+            contentFit="cover"
+            source={{ uri: place.imageUrl }}
+            style={{ height: '100%', width: '100%' }}
+          />
+        ) : null}
+      </View>
+      <Text
+        numberOfLines={1}
+        style={{
+          ...Type.label,
+          fontSize: 13,
+          marginTop: Space.sm,
+        }}>
+        {place.title}
+      </Text>
+      {place.subRegion?.name ? (
+        <Text
+          numberOfLines={1}
+          style={{
+            color: Palette.textMuted,
+            fontSize: 11,
+            marginTop: 2,
+          }}>
+          {place.subRegion.name}
+        </Text>
+      ) : null}
+    </Pressable>
+  );
+});
 
 type MapPeekSheetProps = {
   activeFilters: MapActiveFilter[];
@@ -52,11 +127,22 @@ export function MapPeekSheet({
   resultCount,
   selectedPlaceId,
 }: MapPeekSheetProps) {
-  const placesRef = useRef<ScrollView>(null);
+  const placesRef = useRef<FlatList<MapPlace>>(null);
   useEffect(() => {
-    const index = places.findIndex((place) => (place._id ?? place.slug?.current) === selectedPlaceId);
-    if (index >= 0) placesRef.current?.scrollTo({ animated: true, x: Math.max(0, index * (142 + Space.md) - Space.md) });
+    const index = indexOfSelectedPlace(places, selectedPlaceId);
+    if (index >= 0) placesRef.current?.scrollToOffset({ animated: true, offset: peekScrollOffset(index, Space.md) });
   }, [places, selectedPlaceId]);
+
+  const renderPlace = useCallback(
+    ({ item }: { item: MapPlace }) => (
+      <PeekPlaceItem
+        onPress={onPlacePress}
+        place={item}
+        selected={(item._id ?? item.slug?.current ?? null) === selectedPlaceId}
+      />
+    ),
+    [onPlacePress, selectedPlaceId]
+  );
 
   const countLabel = isLoading
     ? 'Loading...'
@@ -163,68 +249,25 @@ export function MapPeekSheet({
           ) : null}
 
           {places.length > 0 ? (
-            <ScrollView
+            <FlatList
               ref={placesRef}
-              contentContainerStyle={{ gap: Space.md, paddingTop: Space.md }}
+              contentContainerStyle={{ paddingTop: Space.md }}
+              data={places}
+              extraData={selectedPlaceId}
+              // Virtualised: only thumbnails near the viewport are mounted, so
+              // image requests follow what the user can actually scroll to.
+              getItemLayout={(_, index) => peekItemLayout(index, Space.md)}
               horizontal
-              showsHorizontalScrollIndicator={false}>
-              {places.map((place, index) => {
-                const placeId = place._id ?? place.slug?.current ?? null; const selected = placeId === selectedPlaceId;
-                return (
-                <Pressable
-                  accessibilityLabel={`${place.title || 'Place'}${selected ? ', selected. Activate again to open.' : ''}`}
-                  disabled={!place.slug?.current}
-                  key={place._id ?? place.slug?.current ?? index}
-                  onPress={() => onPlacePress(place)}
-                  style={({ pressed }) => ({
-                    borderColor: selected ? Palette.trip : 'transparent',
-                    borderRadius: Radius.small,
-                    borderWidth: 2,
-                    opacity: pressed ? 0.7 : 1,
-                    padding: 2,
-                    width: 142,
-                  })}>
-                  <View
-                    style={{
-                      aspectRatio: 4 / 3,
-                      backgroundColor: Palette.surfaceMuted,
-                      borderRadius: Radius.small,
-                      overflow: 'hidden',
-                    }}>
-                    {place.imageUrl ? (
-                      <Image
-                        accessibilityLabel={
-                          place.imageAlt ?? place.title ?? 'Place image'
-                        }
-                        contentFit="cover"
-                        source={{ uri: place.imageUrl }}
-                        style={{ height: '100%', width: '100%' }}
-                      />
-                    ) : null}
-                  </View>
-                  <Text
-                    numberOfLines={1}
-                    style={{
-                      ...Type.label,
-                      fontSize: 13,
-                      marginTop: Space.sm,
-                    }}>
-                    {place.title}
-                  </Text>
-                  {place.subRegion?.name ? (
-                    <Text
-                      numberOfLines={1}
-                      style={{
-                        color: Palette.textMuted,
-                        fontSize: 11,
-                        marginTop: 2,
-                      }}>
-                      {place.subRegion.name}
-                    </Text>
-                  ) : null}
-                </Pressable>
-              ); })}
-            </ScrollView>
+              initialNumToRender={6}
+              ItemSeparatorComponent={PeekSeparator}
+              keyboardShouldPersistTaps="handled"
+              keyExtractor={placeKey}
+              maxToRenderPerBatch={6}
+              renderItem={renderPlace}
+              showsHorizontalScrollIndicator={false}
+              style={{ flexGrow: 0 }}
+              windowSize={5}
+            />
           ) : null}
         </>
       )}

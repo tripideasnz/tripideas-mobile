@@ -15,7 +15,8 @@ assert.doesNotMatch(locate, /setSelection|setSelectedActivityTagIds|setQuery/);
 assert.match(map, /onRecenterPress=\{\(\) => \{ void locateUser\(\); \}\}/);
 assert.match(map, /userPosition.latitude\]\} anchor="center">\s*<MapPin emphasis="focused"/);
 assert.match(map, /setVisibleBounds\(event.nativeEvent.bounds\)/);
-assert.match(map, /return displayedPlaces.filter/);
+// Viewport filtering moved to a pure helper (behaviour covered in map-performance.test.js).
+assert.match(map, /placesInBounds\(displayedPlaces, visibleBounds\)/);
 assert.doesNotMatch(map, /prevPeekSheetHeightRef/);
 assert.match(search, /keyboardDismissMode="on-drag"/);
 assert.match(search, /onScrollBeginDrag=\{Keyboard.dismiss\}/);

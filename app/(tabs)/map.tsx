@@ -28,6 +28,17 @@ import { MapStyleSheet } from '@/components/map/map-style-sheet';
 import { MapQuickFilters } from '@/components/map/map-quick-filters';
 import { orderMapNavigation } from '@/components/map/map-region-order';
 import { MapRegionsSheet } from '@/components/map/map-regions-sheet';
+import { cameraStateFromRegion, resolveInitialCamera, type MapCameraState } from '@/components/map/map-camera-state';
+import {
+  getPlacesForSelection,
+  hasValidCoordinates,
+  mapPlaceId,
+  matchesActivityTags,
+  matchesSearch,
+  placesInBounds,
+  reuseIfSame,
+  type MappablePlace,
+} from '@/components/map/map-filters';
 import { MapSavedSheet } from '@/components/map/map-saved-sheet';
 import type { MapContentSelection } from '@/components/map/map-selection';
 import { MapTileView } from '@/components/map/map-tile-view';
@@ -58,51 +69,9 @@ const PEEK_SHEET_FALLBACK = 289;
 
 type MapTrayState = 'minimised' | 'peek' | 'full';
 
-type MappablePlace = MapPlace & {
-  coordinates: {
-    lat: number;
-    lng: number;
-  };
-};
-
-function hasValidCoordinates(place: MapPlace): place is MappablePlace {
-  return (
-    Number.isFinite(place.coordinates?.lat) &&
-    Number.isFinite(place.coordinates?.lng)
-  );
-}
-
-const mapPlaceId = (place: MapPlace) => place._id ?? place.slug?.current ?? `${place.coordinates?.lat}-${place.coordinates?.lng}`;
-
 function parseCoordinate(value: string | undefined): number | null {
   const n = parseFloat(value ?? '');
   return Number.isFinite(n) ? n : null;
-}
-
-function matchesSearch(place: MapPlace, query: string) {
-  if (!query) {
-    return true;
-  }
-
-  return [
-    place.title,
-    place.subtitle,
-    place.subRegion?.name,
-    place.subRegion?.region?.name,
-  ]
-    .filter(Boolean)
-    .some((value) => value?.toLocaleLowerCase().includes(query));
-}
-
-function matchesActivityTags(place: MapPlace, selectedTagIds: string[]) {
-  if (selectedTagIds.length === 0) {
-    return true;
-  }
-
-  const selectedIds = new Set(selectedTagIds);
-  return (place.activityTags ?? []).some(
-    (tag) => Boolean(tag._id && selectedIds.has(tag._id))
-  );
 }
 
 function isSameSelection(
@@ -141,47 +110,6 @@ type PlaceContext = {
   tripId?: string;
 };
 
-function getPlacesForSelection({
-  places,
-  savedPlaceIds,
-  selection,
-  trips,
-}: {
-  places: MappablePlace[];
-  savedPlaceIds: string[];
-  selection: MapContentSelection;
-  trips: ReturnType<typeof useMyTrips>['trips'];
-}) {
-  if (selection.type === 'region') {
-    return places.filter(
-      (place) => place.subRegion?.region?._id === selection.regionId
-    );
-  }
-
-  if (selection.type === 'subregion') {
-    return places.filter(
-      (place) => place.subRegion?._id === selection.subRegionId
-    );
-  }
-
-  if (selection.type === 'favourites') {
-    const savedIds = new Set(savedPlaceIds);
-    return places.filter((place) => Boolean(place._id && savedIds.has(place._id)));
-  }
-
-  if (selection.type === 'trip') {
-    const trip = trips.find((candidate) => candidate.id === selection.tripId);
-    const tripPlaceIds = new Set(
-      (trip?.places ?? []).map((place) => place.placeId)
-    );
-    return places.filter((place) =>
-      Boolean(place._id && tripPlaceIds.has(place._id))
-    );
-  }
-
-  return places;
-}
-
 export default function MapScreen() {
   const { session, signIn } = useSession();
   const router = useRouter();
@@ -191,7 +119,12 @@ export default function MapScreen() {
   const sourceRef = useRef<GeoJSONSourceRef>(null);
 
   // Tracks the last camera state so the map restores position after tile view collapses.
-  const lastCameraRef = useRef({ center: DEFAULT_CENTER, zoom: DEFAULT_ZOOM });
+  const lastCameraRef = useRef<MapCameraState>({
+    bearing: 0,
+    center: DEFAULT_CENTER,
+    pitch: 0,
+    zoom: DEFAULT_ZOOM,
+  });
 
   // URL params are the arrival signal — read-only, never written back.
   const { cardId: rawCardId, date: rawDate, diaryId: rawDiaryId, lat: rawLat, lng: rawLng, notebookId: rawNotebookId, origin: rawOrigin, title: rawTitle, slug: rawSlug, tripId: rawTripId, tripLabel: rawTripLabel } =
@@ -512,17 +445,17 @@ export default function MapScreen() {
 
   // Subset of displayedPlaces that falls within the current map viewport.
   // Falls back to the full filtered set until the first region-change event fires.
-  const visiblePlaces = useMemo(() => {
-    if (!visibleBounds) return displayedPlaces;
-    const [west, south, east, north] = visibleBounds;
-    return displayedPlaces.filter(
-      (place) =>
-        place.coordinates.lng >= west &&
-        place.coordinates.lng <= east &&
-        place.coordinates.lat >= south &&
-        place.coordinates.lat <= north
-    );
-  }, [displayedPlaces, visibleBounds]);
+  const nextVisiblePlaces = useMemo(
+    () => placesInBounds(displayedPlaces, visibleBounds),
+    [displayedPlaces, visibleBounds]
+  );
+  // A viewport change that leaves the visible places unchanged keeps the same
+  // array, so neither the peek list nor the full list is handed new data.
+  const stableVisiblePlacesRef = useRef<MappablePlace[]>(nextVisiblePlaces);
+  const visiblePlaces = reuseIfSame(stableVisiblePlacesRef.current, nextVisiblePlaces);
+  useEffect(() => {
+    stableVisiblePlacesRef.current = visiblePlaces;
+  }, [visiblePlaces]);
 
   const placesGeoJSON = useMemo((): GeoJSON.FeatureCollection => ({
     type: 'FeatureCollection',
@@ -792,8 +725,8 @@ export default function MapScreen() {
           activeFilters={activeFilters}
           isLoading={isLoading}
           onCollapse={() => {
+            // Restore the map where the user left it: no refit, filters untouched.
             setIsMapReady(false);
-            setIsFitPending(true);
             setTrayState('peek');
           }}
           onRegionsPress={() => setIsRegionsSheetOpen(true)}
@@ -826,30 +759,24 @@ export default function MapScreen() {
         onDidFinishLoadingMap={() => setIsMapReady(true)}
         onPress={clearSelectedPlace}
         onRegionDidChange={(event) => {
-          lastCameraRef.current = {
-            center: event.nativeEvent.center,
-            zoom: event.nativeEvent.zoom,
-          };
+          lastCameraRef.current = cameraStateFromRegion(event.nativeEvent);
           setVisibleBounds(event.nativeEvent.bounds);
         }}
         style={{ flex: 1 }}>
         <Camera
           ref={cameraRef}
-          initialViewState={
-            placeContext
-              ? { center: [placeContext.lng, placeContext.lat] as LngLat, zoom: 13 }
-              : hasInitialFittedRef.current
-                ? { center: lastCameraRef.current.center, zoom: lastCameraRef.current.zoom }
-                : {
-                    bounds: NZ_BOUNDS,
-                    padding: {
-                      top: insets.top + QUICK_FILTERS_BAR_HEIGHT,
-                      right: 56,
-                      bottom: PEEK_SHEET_FALLBACK,
-                      left: 56,
-                    },
-                  }
-          }
+          initialViewState={resolveInitialCamera({
+            hasPositioned: hasInitialFittedRef.current,
+            last: lastCameraRef.current,
+            nzBounds: NZ_BOUNDS,
+            nzPadding: {
+              top: insets.top + QUICK_FILTERS_BAR_HEIGHT,
+              right: 56,
+              bottom: PEEK_SHEET_FALLBACK,
+              left: 56,
+            },
+            placeContext,
+          })}
         />
 
         <GeoJSONSource

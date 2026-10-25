@@ -27,8 +27,9 @@ assert.match(mainMap, /properties\?\.cluster_id !== undefined/);
 
 assert.match(peek, /selectedPlaceId/);
 assert.match(peek, /borderColor: selected \? Palette\.trip/);
-assert.match(peek, /placesRef\.current\?\.scrollTo/);
-assert.match(peek, /onPress=\{\(\) => onPlacePress\(place\)\}/);
+assert.match(peek, /placesRef\.current\?\.scrollToOffset/);
+assert.match(peek, /onPress=\{\(\) => onPress\(place\)\}/);
+assert.match(peek, /onPress=\{onPlacePress\}/);
 assert.doesNotMatch(peek, /router\.push/);
 assert.match(mainMap, /handleThumbnailPress/);
 assert.match(mainMap, /onPlacePress=\{handleThumbnailPress\}/);
