@@ -23,7 +23,7 @@ export function SavedLocationPicker({ initial, onCancel, onSave, saveLabel = 'Sa
   const zoom = useRef(initial ? 13 : 5);
   const [selected, setSelected] = useState<SavedCoordinates | null>(initial);
   const [saving, setSaving] = useState(false);
-  const { locateUser, userPosition } = useMapUserLocation(camera);
+  const { isLocating, locateUser, userPosition } = useMapUserLocation(camera);
   const save = async () => {
     if (!selected || saving) return;
     setSaving(true);
@@ -41,7 +41,7 @@ export function SavedLocationPicker({ initial, onCancel, onSave, saveLabel = 'Sa
       {userPosition ? <UserLocation animated /> : null}
     </MapLibreMap>
     <View style={{ bottom: Math.max(insets.bottom, Screen.bottom) + 88, gap: Space.sm, position: 'absolute', right: Space.md }}>
-      <MapRecenterControl onPress={() => void locateUser()} />
+      <MapRecenterControl isLocating={isLocating} onPress={() => void locateUser()} />
       <MapZoomControls onZoomInPress={() => { zoom.current += 1; camera.current?.zoomTo(zoom.current, { duration: 250 }); }} onZoomOutPress={() => { zoom.current -= 1; camera.current?.zoomTo(zoom.current, { duration: 250 }); }} />
     </View>
     <View style={{ flexDirection: 'row', gap: Space.md, paddingBottom: Math.max(insets.bottom, Screen.bottom), paddingHorizontal: Screen.gutter, paddingTop: Space.lg }}>

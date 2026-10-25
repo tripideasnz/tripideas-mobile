@@ -144,12 +144,14 @@ test('closing the list restores the camera: no refit, no filter changes', async 
 
 test('recentring on the user keeps every active filter', async () => {
   const source = await read('app/(tabs)/map.tsx');
-  const locate = source.match(/const locateUser = useCallback\(async \(\) => \{[\s\S]*?\n  \}, \[\]\);/)?.[0] ?? '';
-  assert.ok(locate, 'locateUser found');
-  assert.doesNotMatch(locate, /setSelection|setSelectedActivityTagIds|setQuery|clearPlaceContext|setPlaceContext|setSelectedPlaceId/);
-  assert.match(locate, /setUserPosition\(result\.point\)/);
-  assert.match(locate, /easeTo\(/);
-  assert.match(locate, /Math\.max\(lastCameraRef\.current\.zoom, 13\)/);
+  // The map now uses the shared location hook (see location-reliability.test.js).
+  const hook = await read('location/use-map-user-location.ts');
+  const cancelFit = source.match(/const cancelPendingFit = useCallback\(\(\) => \{[\s\S]*?\}, \[\]\);/)?.[0] ?? '';
+  assert.ok(cancelFit, 'the only map-side callback is the fit cancellation');
+  assert.doesNotMatch(cancelFit, /setSelection|setSelectedActivityTagIds|setQuery|clearPlaceContext|setPlaceContext|setSelectedPlaceId/);
+  assert.match(hook, /easeTo\(/);
+  assert.match(hook, /Math\.max\(getZoom\?\.\(\) \?\? minimumZoom, minimumZoom\)/);
+  assert.match(source, /getZoom: getCurrentZoom/);
 });
 
 // ── No Sanity refetch on list transitions ────────────────────────────────────

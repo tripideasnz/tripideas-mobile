@@ -47,7 +47,7 @@ export default function TripMapScreen() {
   const { getTrip, isLoading: isLoadingTrips } = useMyTrips();
   const trip = getTrip(selectedTripId);
   const cameraRef = useRef<CameraRef>(null);
-  const { locateUser, userPosition } = useMapUserLocation(cameraRef);
+  const { isLocating, locateUser, userPosition } = useMapUserLocation(cameraRef);
   const zoomRef = useRef(5);
   const centerRef = useRef<[number, number]>([174.77557, -41.28664]);
   const [places, setPlaces] = useState<PlaceCardData[]>([]);
@@ -259,7 +259,7 @@ export default function TripMapScreen() {
                 {userPosition ? <Marker anchor="center" lngLat={[userPosition.longitude, userPosition.latitude]}><MapPin emphasis="focused" /></Marker> : null}
               </MapLibreMap>
               <View style={{ gap: 8, position: 'absolute', right: 16, top: 16 }}>
-                <MapRecenterControl onPress={() => void locateUser()} />
+                <MapRecenterControl isLocating={isLocating} onPress={() => void locateUser()} />
                 <MapZoomControls
                   onZoomInPress={() => { zoomRef.current = Math.min(20, zoomRef.current + 1); cameraRef.current?.easeTo({ center: centerRef.current, zoom: zoomRef.current, duration: 180 }); }}
                   onZoomOutPress={() => { zoomRef.current = Math.max(2, zoomRef.current - 1); cameraRef.current?.easeTo({ center: centerRef.current, zoom: zoomRef.current, duration: 180 }); }}

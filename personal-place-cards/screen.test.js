@@ -21,7 +21,8 @@ const [editor, list, tripDetail, tripEntry, personalCard, placeDetail, editorial
 ]);
 
 assert.doesNotMatch(editor, /accessibilityLabel="Latitude"|accessibilityLabel="Longitude"|Confirm location/);
-assert.match(editor, /label="Locate now"/);
+assert.match(editor, /'Locate now'/);
+assert.match(editor, /useLocateNow\(/);
 assert.match(editor, /label="Locate on map"/);
 assert.match(mapPreview, /camera\.current\?\.easeTo/);
 assert.match(mapPreview, /center: \[longitude, latitude\]/);

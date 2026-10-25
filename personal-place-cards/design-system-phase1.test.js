@@ -31,7 +31,7 @@ assert.match(editor, /<AutosaveStatus[\s\S]{0,220}queueMetadataSave/);
 assert.match(editor, /await queueMetadataSave\(revisionRef\.current\)/);
 assert.match(editor, /if \(revisionRef\.current === 0\) setIsEditing\(false\)/);
 
-assert.match(editor, /getOneForegroundLocation/); assert.match(foreground, /requestForegroundPermissionsAsync/);
+assert.match(editor, /useLocateNow/); assert.match(foreground, /requestForegroundPermissionsAsync/);
 assert.match(editor, /locationConfirmed: true/); assert.doesNotMatch(editor, /accessibilityLabel="Latitude"|accessibilityLabel="Longitude"/);
 assert.match(pickerRoute, /<SavedLocationPicker/); assert.match(pickerRoute, /await mutate\.update/);
 assert.match(pickerShell, /const \[selected, setSelected\] = useState/);

@@ -1,10 +1,11 @@
 import { Camera, Map as MapLibreMap, Marker, type CameraRef } from '@maplibre/maplibre-react-native';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable } from 'react-native';
 
 import { MAP_STYLE_URL } from '@/constants/map';
 import { Radius, Shadow } from '@/constants/design';
 import { MapPin } from '@/components/map/map-pin';
+import { needsRecentre } from '@/components/place-map-camera';
 
 type PlaceMapPreviewProps = {
   latitude: number;
@@ -19,14 +20,22 @@ export function PlaceMapPreview({
   onPress,
 }: PlaceMapPreviewProps) {
   const camera = useRef<CameraRef>(null);
+  const [mapReady, setMapReady] = useState(false);
+  // The camera is created centred on the mount-time coordinates.
+  const applied = useRef({ latitude, longitude });
 
+  // Centre only once MapLibre reports it is ready (earlier commands can be
+  // dropped), and only when the saved coordinates actually changed.
   useEffect(() => {
+    const next = { latitude, longitude };
+    if (!needsRecentre(mapReady, applied.current, next)) return;
+    applied.current = next;
     camera.current?.easeTo({
       center: [longitude, latitude],
       duration: 400,
       zoom: 13,
     });
-  }, [latitude, longitude]);
+  }, [latitude, longitude, mapReady]);
 
   return (
     <Pressable
@@ -43,6 +52,7 @@ export function PlaceMapPreview({
       }}>
       <MapLibreMap
         mapStyle={MAP_STYLE_URL}
+        onDidFinishLoadingMap={() => setMapReady(true)}
         dragPan={false}
         touchZoom={false}
         touchRotate={false}

@@ -8,10 +8,15 @@ const [map, search, trips, personal, profile, sheet, queries, picker, card] = aw
   read('components/map/map-saved-sheet.tsx'), read('sanity/queries.ts'),
   read('components/trip-place-picker.tsx'), read('components/place-card.tsx'),
 ]);
-const locate = map.slice(map.indexOf('  const locateUser ='), map.indexOf('// Activate place context'));
-assert.match(locate, /getOneForegroundLocation\(\)/);
-assert.match(locate, /center: \[result.point.longitude, result.point.latitude\]/);
+// The map uses the shared location hook; it only moves the camera and marker.
+const locate = map.slice(map.indexOf('  // Shared location behaviour'), map.indexOf('// Activate place context'));
+const locationHook = await read('location/use-map-user-location.ts');
+const locateFlow = await read('location/map-locate.ts');
+assert.match(locate, /useMapUserLocation\(cameraRef/);
+assert.match(locationHook, /center: \[point.longitude, point.latitude\]/);
+assert.match(locateFlow, /acquire\(\{/);
 assert.doesNotMatch(locate, /setSelection|setSelectedActivityTagIds|setQuery/);
+assert.doesNotMatch(locationHook + locateFlow, /setSelection|setSelectedActivityTagIds|setQuery/);
 assert.match(map, /onRecenterPress=\{\(\) => \{ void locateUser\(\); \}\}/);
 assert.match(map, /userPosition.latitude\]\} anchor="center">\s*<MapPin emphasis="focused"/);
 assert.match(map, /setVisibleBounds\(event.nativeEvent.bounds\)/);

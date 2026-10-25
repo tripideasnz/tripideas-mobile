@@ -14,7 +14,7 @@ import {
 } from '@maplibre/maplibre-react-native';
 import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, type NativeSyntheticEvent, Pressable, Text, View } from 'react-native';
+import { type NativeSyntheticEvent, Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSession } from '@/auth/provider';
 
@@ -59,7 +59,7 @@ import type {
   MapPlace,
 } from '@/sanity/types';
 import { useMyTrips } from '@/trips/provider';
-import { getOneForegroundLocation, type ForegroundPoint } from '@/location/foreground';
+import { useMapUserLocation } from '@/location/use-map-user-location';
 
 const DEFAULT_CENTER: LngLat = [174.77557, -41.28664];
 const DEFAULT_ZOOM = 5;
@@ -171,26 +171,19 @@ export default function MapScreen() {
   const { activate: activatePlace, clear: clearSelectedPlace, select: setSelectedPlaceId, selectedId: selectedPlaceId } = useMapSelection(openMapPlace);
   const [mapStyleId, setMapStyleId] = useState<MapStyleId>('streets');
   const [visibleBounds, setVisibleBounds] = useState<LngLatBounds | null>(null);
-  const [userPosition, setUserPosition] = useState<ForegroundPoint | null>(null);
-
-  const locateUser = useCallback(async () => {
-    const result = await getOneForegroundLocation();
-    if (result.status !== 'granted') {
-      Alert.alert('Location unavailable', result.status === 'denied'
-        ? 'Foreground location permission was not granted.'
-        : 'Your current location could not be obtained.');
-      return;
-    }
+  // Shared location behaviour (cached position first, then a refined fix, one
+  // request at a time). It only moves the camera and the user marker, so every
+  // active filter is left exactly as it was.
+  const getCurrentZoom = useCallback(() => lastCameraRef.current.zoom, []);
+  const cancelPendingFit = useCallback(() => {
     // A camera navigation action must win over a pending initial/filter fit.
     hasInitialFittedRef.current = true;
     setIsFitPending(false);
-    setUserPosition(result.point);
-    cameraRef.current?.easeTo({
-      center: [result.point.longitude, result.point.latitude],
-      zoom: Math.max(lastCameraRef.current.zoom, 13),
-      duration: 400,
-    });
   }, []);
+  const { isLocating, locateUser, userPosition } = useMapUserLocation(cameraRef, {
+    getZoom: getCurrentZoom,
+    onBeforeMove: cancelPendingFit,
+  });
 
   // Activate place context from URL params on focus; clear local state on blur.
   // Trip selection from URL params is applied once then the param is cleared so
@@ -914,6 +907,7 @@ export default function MapScreen() {
         }}>
         <MapControls
           onLayersPress={() => setIsStyleSheetOpen(true)}
+          isLocating={isLocating}
           onRecenterPress={() => { void locateUser(); }}
         />
       </View>

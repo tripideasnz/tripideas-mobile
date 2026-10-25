@@ -1,6 +1,20 @@
 import * as Location from 'expo-location';
 
-export type ForegroundPoint = { latitude: number; longitude: number; accuracyMeters: number | null };
+import { createForegroundLocationService } from '@/location/foreground-acquire';
+import type { ForegroundPoint } from '@/location/foreground-types';
+
+export type { ForegroundPoint } from '@/location/foreground-types';
+export {
+  describeLocationFailure,
+  failureNeedsSettings,
+  type AcquireOptions,
+  type LocationAcquisition,
+  type LocationFailureReason,
+  type LocationFix,
+} from '@/location/foreground-acquire';
+
+/** Shared one-shot acquisition: last-known first, timeout, single-flight. */
+export const foregroundLocation = createForegroundLocationService({ location: Location });
 export type ForegroundLocationResult =
   | { status: 'granted'; point: ForegroundPoint }
   | { status: 'denied' | 'unavailable' };

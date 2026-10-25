@@ -1,13 +1,15 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { Pressable, View } from 'react-native';
+import { ActivityIndicator, Pressable, View } from 'react-native';
 
 import { Palette, Radius, Shadow } from '@/constants/design';
 type MapControlsProps = {
+  isLocating?: boolean;
   onLayersPress: () => void;
   onRecenterPress: () => void;
 };
 
 export function MapControls({
+  isLocating = false,
   onLayersPress,
   onRecenterPress,
 }: MapControlsProps) {
@@ -30,6 +32,7 @@ export function MapControls({
       {sep}
       <ControlButton
         accessibilityLabel="Show my current location"
+        busy={isLocating}
         icon="my-location"
         onPress={onRecenterPress}
       />
@@ -72,20 +75,23 @@ export function MapZoomControls({
   );
 }
 
-export function MapRecenterControl({ onPress }: { onPress: () => void }) {
+export function MapRecenterControl({ isLocating = false, onPress }: { isLocating?: boolean; onPress: () => void }) {
   return (
     <View style={{ ...Shadow.floating, backgroundColor: 'rgba(255,255,255,0.96)', borderColor: Palette.border, borderRadius: Radius.card, borderWidth: 1, overflow: 'hidden' }}>
-      <ControlButton accessibilityLabel="Show my location and recenter map" icon="my-location" onPress={onPress} />
+      <ControlButton accessibilityLabel="Show my location and recenter map" busy={isLocating} icon="my-location" onPress={onPress} />
     </View>
   );
 }
 
 function ControlButton({
   accessibilityLabel,
+  busy = false,
   icon,
   onPress,
 }: {
   accessibilityLabel: string;
+  /** Shows a spinner and ignores taps while an operation is running. */
+  busy?: boolean;
   icon: React.ComponentProps<typeof MaterialIcons>['name'];
   onPress: () => void;
 }) {
@@ -93,6 +99,8 @@ function ControlButton({
     <Pressable
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="button"
+      accessibilityState={{ busy }}
+      disabled={busy}
       onPress={onPress}
       style={({ pressed }) => ({
         alignItems: 'center',
@@ -101,7 +109,11 @@ function ControlButton({
         opacity: pressed ? 0.55 : 1,
         width: 48,
       })}>
-      <MaterialIcons color={Palette.text} name={icon} size={23} />
+      {busy ? (
+        <ActivityIndicator color={Palette.text} size="small" />
+      ) : (
+        <MaterialIcons color={Palette.text} name={icon} size={23} />
+      )}
     </Pressable>
   );
 }

@@ -50,7 +50,7 @@ import {
   pickPhotosForUpload,
 } from '@/photo-uploads/picker';
 import { useMyTrips } from '@/trips/provider';
-import { getOneForegroundLocation } from '@/location/foreground';
+import { useLocateNow } from '@/location/use-locate-now';
 
 type SaveState = 'failed' | 'idle' | 'saving';
 type PendingPhotoPreview = {
@@ -158,6 +158,18 @@ export default function PersonalPlaceCardScreen() {
       initializedCardRef.current = card.id;
     }
   }, [card]);
+
+  // Locate now: a fresh fix saves as before; an approximate (cached) position
+  // is only saved after the user confirms it.
+  const locateNow = useLocateNow({
+    describeSaveError: personalPlaceCardError,
+    save: (point) => mutate.update(cardId as string, {
+      latitude: point.latitude,
+      longitude: point.longitude,
+      locationConfirmed: true,
+      locationSource: 'USER_SELECTED',
+    }),
+  });
 
   // Private photos: shared authorisation cache, stable image cache keys, and
   // one automatic retry before a visible retry control is shown.
@@ -512,18 +524,12 @@ export default function PersonalPlaceCardScreen() {
 
       <AppText variant="section">Location</AppText>
       <View style={{ flexDirection: 'row', gap: Space.sm }}>
-        <AppButton label="Locate now" onPress={() => void getOneForegroundLocation().then((result) => {
-          if (result.status !== 'granted') {
-            setMessage('Location is unavailable. You can still locate this Place on the map.');
-            return;
-          }
-          void act(() => mutate.update(card.id, {
-            latitude: result.point.latitude,
-            longitude: result.point.longitude,
-            locationConfirmed: true,
-            locationSource: 'USER_SELECTED',
-          }));
-        })} style={{ flex: 1 }} />
+        <AppButton
+          disabled={locateNow.isBusy}
+          label={locateNow.state.kind === 'saving' ? 'Saving…' : locateNow.isBusy ? 'Locating…' : 'Locate now'}
+          onPress={() => void locateNow.locate()}
+          style={{ flex: 1 }}
+        />
         <AppButton label="Locate on map" onPress={() => router.push({ pathname: '/personal-place-cards/location-picker', params: {
           cardId: card.id,
           latitude: card.location ? String(card.location.latitude) : undefined,
@@ -533,6 +539,27 @@ export default function PersonalPlaceCardScreen() {
           tripId: originTripId,
         } })} style={{ flex: 1 }} variant="secondary" />
       </View>
+      {locateNow.status ? (
+        <View style={{ gap: Space.sm }}>
+          <AppText
+            accessibilityLiveRegion="polite"
+            color={locateNow.status.tone === 'danger' ? Palette.danger : locateNow.status.tone === 'success' ? Palette.success : Palette.textMuted}
+            variant="caption">
+            {locateNow.status.text}
+          </AppText>
+          {locateNow.state.kind === 'confirm-approximate' ? (
+            <View style={{ flexDirection: 'row', gap: Space.sm }}>
+              <AppButton label="Save this location" onPress={() => void locateNow.confirmApproximate()} size="compact" />
+              <AppButton label="Not now" onPress={locateNow.dismiss} size="compact" variant="secondary" />
+            </View>
+          ) : null}
+          {locateNow.status.needsSettings ? (
+            <View style={{ alignItems: 'flex-start' }}>
+              <AppButton label="Open Settings" onPress={() => void Linking.openSettings()} size="compact" variant="secondary" />
+            </View>
+          ) : null}
+        </View>
+      ) : null}
       {card.location ? (
         <PlaceMapPreview
           latitude={card.location.latitude}
