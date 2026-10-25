@@ -138,10 +138,15 @@ assert.match(list, /useFocusEffect\(useCallback/);
 assert.match(list, /void refresh\(\)\.catch/);
 assert.match(provider, /personalPlaceCardStorage\.get\(userId\)/);
 assert.match(provider, /refreshInFlightRef/);
-assert.match(provider, /photoAuthorizationInFlightRef/);
-assert.match(provider, /Date\.parse\(cached\.expiresAt\) > Date\.now\(\) \+ 30_000/);
-assert.match(provider, /photoAuthorizationRef\.current\.clear\(\)/);
-assert.match(personalCard, /authorizePhoto\(media\.photoAssetId\)/);
+// Authorisation caching and in-flight de-duplication live in the extracted
+// authoriser (behaviour is covered by photo-loader.test.js).
+const authorizer = await read('personal-place-cards/photo-authorizer.ts');
+assert.match(authorizer, /inFlight/);
+assert.match(authorizer, /Date\.parse\(cached\.expiresAt\) > now\(\) \+ skewMs/);
+assert.match(authorizer, /skewMs = 30_000/);
+assert.match(provider, /photoAuthorizerRef\.current\.clear\(\)/);
+assert.match(provider, /photoAuthorizerRef\.current\.authorize\(photoAssetId\)/);
+assert.match(personalCard, /usePersonalPhotos\(/);
 assert.doesNotMatch(personalCard, /authorizePhotoRead/);
 console.log('✓ Personal Places render user-scoped cache first, refresh on focus and deduplicate photo authorization');
 

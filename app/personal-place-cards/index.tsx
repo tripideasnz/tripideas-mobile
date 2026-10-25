@@ -1,6 +1,6 @@
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Alert, ScrollView, View } from 'react-native';
+import { Alert, FlatList, View } from 'react-native';
 
 import { PersonalPlaceCardView } from '@/components/personal-place-card-view';
 import { SignedOutFeature } from '@/components/signed-out-feature';
@@ -64,19 +64,33 @@ export default function PersonalPlaceCardsScreen() {
           onSignIn={signIn}
         />
       ) : (
-        <ScrollView
+        <FlatList
+          data={cards}
+          keyExtractor={(card) => card.id}
+          // Virtualised: a card (and its photo authorisations) exists only while
+          // it is near the viewport.
+          initialNumToRender={5}
+          maxToRenderPerBatch={5}
+          windowSize={3}
           style={{ flex: 1, backgroundColor: Palette.background }}
           contentContainerStyle={{
             gap: Space.lg,
             paddingBottom: Screen.bottom,
             paddingHorizontal: Screen.gutter,
             paddingTop: Screen.top,
-          }}>
-          {message ? <AppText color={Palette.danger}>{message}</AppText> : null}
-          {refreshMessage ? <AppText color={Palette.textMuted}>{refreshMessage}</AppText> : null}
-          {isLoading && cards.length === 0 ? <LoadingView /> : cards.length === 0 ? (
-            <AppText color={Palette.textMuted}>No Personal Places yet.</AppText>
-          ) : cards.map((card) => {
+          }}
+          ListHeaderComponent={message || refreshMessage ? (
+            <View style={{ gap: Space.lg }}>
+              {message ? <AppText color={Palette.danger}>{message}</AppText> : null}
+              {refreshMessage ? <AppText color={Palette.textMuted}>{refreshMessage}</AppText> : null}
+            </View>
+          ) : null}
+          ListEmptyComponent={
+            isLoading ? <LoadingView /> : (
+              <AppText color={Palette.textMuted}>No Personal Places yet.</AppText>
+            )
+          }
+          renderItem={({ item: card }) => {
             const activeAttachmentCount = trips.filter((trip) => trip.entries?.some(
               (entry) => entry.type === 'personalPlaceCard' &&
                 'personalPlaceCard' in entry && entry.personalPlaceCard.id === card.id
@@ -117,8 +131,8 @@ export default function PersonalPlaceCardsScreen() {
                 </View>
               </View>
             );
-          })}
-        </ScrollView>
+          }}
+        />
       )}
     </>
   );

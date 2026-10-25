@@ -15,6 +15,7 @@ export function PlaceDetailContent({
   hero,
   location,
   mapActions,
+  onGalleryImageError,
   title,
   titleActions,
 }: {
@@ -22,9 +23,10 @@ export function PlaceDetailContent({
   children?: ReactNode;
   galleryImages?: PlaceGalleryImage[];
   galleryPosition?: 'after-location' | 'before-location';
-  hero?: { alt: string; url: string } | null;
+  hero?: { alt: string; cacheKey?: string; onError?: () => void; url: string } | null;
   location?: { latitude: number; longitude: number } | null;
   mapActions?: ReactNode;
+  onGalleryImageError?: (image: PlaceGalleryImage) => void;
   title: string;
   titleActions?: ReactNode;
 }) {
@@ -34,7 +36,8 @@ export function PlaceDetailContent({
         <Image
           accessibilityLabel={hero.alt}
           contentFit="cover"
-          source={{ uri: hero.url }}
+          onError={hero.onError}
+          source={hero.cacheKey ? { cacheKey: hero.cacheKey, uri: hero.url } : { uri: hero.url }}
           style={{ aspectRatio: 16 / 9, width: '100%' }}
           transition={150}
         />
@@ -61,7 +64,7 @@ export function PlaceDetailContent({
         {body ? <View style={{ marginBottom: Space.xl }}>{body}</View> : null}
 
         {galleryPosition === 'before-location' ? (
-          <PlacePhotoGrid images={galleryImages} placeTitle={title} />
+          <PlacePhotoGrid images={galleryImages} onImageError={onGalleryImageError ? (image) => onGalleryImageError(image) : undefined} placeTitle={title} />
         ) : null}
 
         {location ? (
@@ -79,7 +82,7 @@ export function PlaceDetailContent({
         ) : null}
 
         {galleryPosition === 'after-location' ? (
-          <PlacePhotoGrid images={galleryImages} placeTitle={title} />
+          <PlacePhotoGrid images={galleryImages} onImageError={onGalleryImageError ? (image) => onGalleryImageError(image) : undefined} placeTitle={title} />
         ) : null}
         {children}
       </View>

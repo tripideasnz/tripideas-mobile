@@ -11,6 +11,8 @@ import {
 import { useSession } from '@/auth/provider';
 import { ApiError } from '@/lib/api-client';
 import { authorizePhotoRead } from '@/notebooks/api';
+import { createPhotoAuthorizer } from './photo-authorizer';
+import { createPhotoFailureTracker, type PhotoFailureTracker } from './photo-loader';
 import {
   attachPersonalPlaceCardMedia,
   createPersonalPlaceCard,
@@ -34,6 +36,8 @@ type Context = {
   isLoading: boolean;
   load: (id: string) => Promise<PersonalPlaceCard>;
   invalidatePhotoAuthorization: (photoAssetId: string) => void;
+  /** Remembers photos whose automatic recovery was exhausted (per user, in memory). */
+  photoFailures: PhotoFailureTracker;
   mutate: {
     attachPhoto: (
       id: string,
@@ -56,8 +60,12 @@ export function PersonalPlaceCardProvider({ children }: PropsWithChildren) {
   const userId = session?.userId ?? null;
   const activeUser = useRef<string | null>(null);
   const cardsRef = useRef<PersonalPlaceCard[]>([]);
-  const photoAuthorizationRef = useRef(new Map<string, { expiresAt: string; url: string }>());
-  const photoAuthorizationInFlightRef = useRef(new Map<string, Promise<string>>());
+  // Signed read URLs live only in this in-memory authoriser. It is emptied
+  // whenever the signed-in user changes.
+  const photoAuthorizerRef = useRef(
+    createPhotoAuthorizer({ fetchAuthorization: authorizePhotoRead })
+  );
+  const photoFailuresRef = useRef(createPhotoFailureTracker());
   const refreshInFlightRef = useRef<Promise<void> | null>(null);
   const [cards, setCards] = useState<PersonalPlaceCard[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -94,40 +102,20 @@ export function PersonalPlaceCardProvider({ children }: PropsWithChildren) {
   }, [store]);
 
   const invalidatePhotoAuthorization = useCallback((photoAssetId: string) => {
-    photoAuthorizationRef.current.delete(photoAssetId);
+    photoAuthorizerRef.current.invalidate(photoAssetId);
   }, []);
 
   const authorizePhoto = useCallback(async (photoAssetId: string) => {
-    const ownerId = activeUser.current;
-    if (!ownerId) throw new ApiError(401, 'mobile_session_required');
-    const cached = photoAuthorizationRef.current.get(photoAssetId);
-    if (cached && Date.parse(cached.expiresAt) > Date.now() + 30_000) {
-      return cached.url;
-    }
-    const inFlight = photoAuthorizationInFlightRef.current.get(photoAssetId);
-    if (inFlight) return inFlight;
-    const request = authorizePhotoRead(photoAssetId)
-      .then((authorization) => {
-        if (activeUser.current === ownerId) {
-          photoAuthorizationRef.current.set(photoAssetId, authorization);
-        }
-        return authorization.url;
-      })
-      .finally(() => {
-        if (photoAuthorizationInFlightRef.current.get(photoAssetId) === request) {
-          photoAuthorizationInFlightRef.current.delete(photoAssetId);
-        }
-      });
-    photoAuthorizationInFlightRef.current.set(photoAssetId, request);
-    return request;
+    if (!activeUser.current) throw new ApiError(401, 'mobile_session_required');
+    return photoAuthorizerRef.current.authorize(photoAssetId);
   }, []);
 
   useEffect(() => {
     let mounted = true;
     activeUser.current = userId;
     cardsRef.current = [];
-    photoAuthorizationRef.current.clear();
-    photoAuthorizationInFlightRef.current.clear();
+    photoAuthorizerRef.current.clear();
+    photoFailuresRef.current.clearAll();
     refreshInFlightRef.current = null;
     setCards([]);
     if (!userId) {
@@ -228,7 +216,8 @@ export function PersonalPlaceCardProvider({ children }: PropsWithChildren) {
   const value = useMemo<Context>(() => ({
     authorizePhoto, cards, create, deleteCard,
     get: (id) => cards.find((card) => card.id === id),
-    invalidatePhotoAuthorization, isLoading, load, mutate, refresh,
+    invalidatePhotoAuthorization, isLoading, load, mutate,
+    photoFailures: photoFailuresRef.current, refresh,
   }), [
     authorizePhoto,
     cards,

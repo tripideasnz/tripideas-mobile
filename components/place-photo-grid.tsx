@@ -51,7 +51,7 @@ function PhotoTile({
         accessibilityIgnoresInvertColors
         contentFit="cover"
         onError={onImageError}
-        source={{ uri: image.url }}
+        source={image.cacheKey ? { cacheKey: image.cacheKey, uri: image.url } : { uri: image.url }}
         style={{
           backgroundColor: Palette.surfaceMuted,
           borderRadius: Radius.card,
@@ -286,7 +286,7 @@ export function PlacePhotoGrid({
                         }`
                       }
                       contentFit="contain"
-                      source={{ uri: item.url }}
+                      source={item.cacheKey ? { cacheKey: item.cacheKey, uri: item.url } : { uri: item.url }}
                       style={{ height: '100%', width: '100%' }}
                     />
                   </View>

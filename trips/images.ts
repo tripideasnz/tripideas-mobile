@@ -3,14 +3,29 @@ import type { PlaceCardData } from '@/types/content';
 
 export type TripImage = {
   alt: string;
+  /** Stable image-cache identity (private photos); never derived from a signed URL. */
   cacheKey?: string;
+  /** The photo could not be loaded: shown as a retry placeholder. */
+  failed?: boolean;
+  /** Private photo asset, used to report errors and retry. */
+  photoAssetId?: string;
   url: string;
 };
+
+/** A Personal Place photo for a Trip: a bare URL, or a loaded/failed photo. */
+export type PersonalTripPhoto =
+  | string
+  | {
+      cacheKey?: string;
+      failed?: boolean;
+      photoAssetId?: string;
+      url?: string | null;
+    };
 
 export function getTripImages(
   trip: MyTrip,
   places: PlaceCardData[],
-  personalPhotoUrls: Record<string, string> = {}
+  personalPhotoUrls: Record<string, PersonalTripPhoto> = {}
 ): TripImage[] {
   const placesById = new Map(
     places
@@ -22,11 +37,17 @@ export function getTripImages(
     return trip.entries.flatMap((entry) => {
       if (entry.type === 'personalPlaceCard') {
         if (!('personalPlaceCard' in entry)) return [];
-        const url = personalPhotoUrls[entry.personalPlaceCard.id];
-        return url ? [{
+        const photo = personalPhotoUrls[entry.personalPlaceCard.id];
+        if (!photo) return [];
+        const ref = typeof photo === 'string' ? { url: photo } : photo;
+        if (!ref.url && !ref.failed) return [];
+        return [{
           alt: entry.personalPlaceCard.title ?? 'Personal Place photo',
-          url,
-        }] : [];
+          ...(ref.cacheKey ? { cacheKey: ref.cacheKey } : {}),
+          ...(ref.failed ? { failed: true } : {}),
+          ...(ref.photoAssetId ? { photoAssetId: ref.photoAssetId } : {}),
+          url: ref.url ?? '',
+        }];
       }
       const place = placesById.get(entry.editorialPlace.id);
       return place?.imageUrl ? [{

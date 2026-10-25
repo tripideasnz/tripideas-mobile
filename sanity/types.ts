@@ -121,6 +121,8 @@ export type PlacePage = PlaceCardData & {
 export type PlaceGalleryImage = {
   _key?: string;
   alt?: string;
+  /** Stable image-cache identity for private photos (not derived from the URL). */
+  cacheKey?: string;
   url: string;
 };
 

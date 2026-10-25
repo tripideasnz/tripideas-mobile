@@ -40,6 +40,7 @@ import {
 } from '@/personal-place-cards/photos';
 import { personalPlaceBodyPhotoCount } from '@/personal-place-cards/photo-reconciliation';
 import { usePersonalPlaceCards } from '@/personal-place-cards/provider';
+import { usePersonalPhotos } from '@/personal-place-cards/use-personal-photos';
 import type {
   PersonalPlaceCard,
   PersonalPlaceCardMedia,
@@ -85,7 +86,7 @@ export default function PersonalPlaceCardScreen() {
         : '/personal-place-cards' as const;
   const backFromPersonalPlace = () => backOrFallback(router, personalPlaceFallback);
   const { isLoading: isLoadingSession, session, signIn } = useSession();
-  const { authorizePhoto, get, load, mutate } = usePersonalPlaceCards();
+  const { get, load, mutate } = usePersonalPlaceCards();
   const { addPersonalCardToTrip, trips } = useMyTrips();
   const card = get(cardId);
   const cardMedia = card?.media;
@@ -96,7 +97,6 @@ export default function PersonalPlaceCardScreen() {
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>('idle');
-  const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
   const [pendingBodyPreviews, setPendingBodyPreviews] = useState<PendingPhotoPreview[]>([]);
   const [pendingMainPreview, setPendingMainPreview] = useState<string | null>(null);
   const initializedCardRef = useRef<string | null>(null);
@@ -159,24 +159,12 @@ export default function PersonalPlaceCardScreen() {
     }
   }, [card]);
 
-  useEffect(() => {
-    if (!cardMedia) return;
-    let mounted = true;
-    void Promise.all(cardMedia.map(async (item) => {
-      try {
-        return [item.id, await authorizePhoto(item.photoAssetId)] as const;
-      } catch {
-        return null;
-      }
-    })).then((results) => {
-      if (mounted) {
-        setPhotoUrls(Object.fromEntries(
-          results.filter(Boolean) as [string, string][]
-        ));
-      }
-    });
-    return () => { mounted = false; };
-  }, [authorizePhoto, cardMedia]);
+  // Private photos: shared authorisation cache, stable image cache keys, and
+  // one automatic retry before a visible retry control is shown.
+  const photos = usePersonalPhotos(
+    (cardMedia ?? []).map((item) => item.photoAssetId),
+    { maxAutoRetries: 1 }
+  );
 
   useEffect(() => {
     if (session?.userId && cardId) {
@@ -361,11 +349,16 @@ export default function PersonalPlaceCardScreen() {
   };
 
   if (!isEditing) {
-    const heroUrl = mainMedia ? photoUrls[mainMedia.id] : null;
+    const heroPhoto = mainMedia ? photos.get(mainMedia.photoAssetId) : null;
     const galleryImages = bodyMedia.flatMap((media) => {
-      const url = photoUrls[media.id];
-      return url ? [{ _key: media.id, alt: card.title ?? 'Personal Place photo', url }] : [];
+      const photo = photos.get(media.photoAssetId);
+      return photo?.status === 'ready'
+        ? [{ _key: media.id, alt: card.title ?? 'Personal Place photo', cacheKey: photo.cacheKey, url: photo.url }]
+        : [];
     });
+    const failedPhotoAssetIds = card.media
+      .map((item) => item.photoAssetId)
+      .filter((id) => photos.get(id)?.status === 'failed');
     return (
       <ScrollView style={{ flex: 1, backgroundColor: Palette.background }}>
         <Stack.Screen options={{ headerLeft: () => <HeaderBackButton color={Palette.trip} onPress={backFromPersonalPlace} />, title: card.title || 'Personal Place' }} />
@@ -375,10 +368,16 @@ export default function PersonalPlaceCardScreen() {
           ) : undefined}
           galleryImages={galleryImages}
           galleryPosition="before-location"
-          hero={heroUrl ? {
+          hero={heroPhoto?.status === 'ready' && mainMedia ? {
             alt: card.title ?? 'Personal Place main photo',
-            url: heroUrl,
+            cacheKey: heroPhoto.cacheKey,
+            onError: () => photos.reportError(mainMedia.photoAssetId, heroPhoto.url),
+            url: heroPhoto.url,
           } : null}
+          onGalleryImageError={(image) => {
+            const media = bodyMedia.find((item) => item.id === image._key);
+            if (media) photos.reportError(media.photoAssetId, image.url);
+          }}
           location={card.location ? {
             latitude: card.location.latitude,
             longitude: card.location.longitude,
@@ -429,6 +428,17 @@ export default function PersonalPlaceCardScreen() {
               <MaterialIcons color={Palette.trip} name="place" size={18} />
               <AppText color={Palette.textMuted} variant="caption">Personal Place</AppText>
             </View>
+            {failedPhotoAssetIds.length > 0 ? (
+              <View style={{ alignItems: 'flex-start', gap: Space.sm }}>
+                <StatusText>Some photos could not be loaded.</StatusText>
+                <AppButton
+                  label="Retry photos"
+                  onPress={() => failedPhotoAssetIds.forEach((id) => photos.retry(id))}
+                  size="compact"
+                  variant="secondary"
+                />
+              </View>
+            ) : null}
             {message ? <StatusText>{message}</StatusText> : null}
           </View>
         </PlaceDetailContent>
@@ -436,7 +446,7 @@ export default function PersonalPlaceCardScreen() {
     );
   }
 
-  const mainPreviewUrl = pendingMainPreview ?? (mainMedia ? photoUrls[mainMedia.id] : null);
+  const mainPhoto = mainMedia ? photos.get(mainMedia.photoAssetId) : null;
   const remainingBodySlots = Math.max(0, 10 - bodyMedia.length - pendingBodyPreviews.length);
   return (
     <ScrollView
@@ -536,12 +546,22 @@ export default function PersonalPlaceCardScreen() {
         style={{ gap: Space.md }}>
         <AppText variant="section">Photos</AppText>
         {mainMedia ? (
-        mainPreviewUrl ? (
+        pendingMainPreview || mainPhoto?.status === 'ready' ? (
           <PhotoEditorTile
             accessibilityLabel="Replace main photo"
-            imageUrl={mainPreviewUrl}
+            cacheKey={pendingMainPreview ? undefined : mainPhoto?.cacheKey}
+            imageUrl={pendingMainPreview ?? (mainPhoto?.url as string)}
+            onError={pendingMainPreview ? undefined : () => photos.reportError(mainMedia.photoAssetId, mainPhoto?.url)}
             onPress={replaceMainPhoto}
             onRemove={() => void removePhoto(mainMedia)}
+            wide
+          />
+        ) : mainPhoto?.status === 'failed' ? (
+          <PhotoFailedTile
+            label="Main photo could not be loaded."
+            onRemove={() => void removePhoto(mainMedia)}
+            onRetry={() => photos.retry(mainMedia.photoAssetId)}
+            removeLabel="Remove main photo"
             wide
           />
         ) : (
@@ -632,18 +652,38 @@ export default function PersonalPlaceCardScreen() {
               overflow: 'hidden',
               width: '48%',
             }}>
-            {photoUrls[media.id] ? (
-              <Image
-                accessibilityLabel={`Body photo ${index + 1}`}
-                contentFit="cover"
-                source={{ uri: photoUrls[media.id] }}
-                style={{ height: '100%', width: '100%' }}
-              />
-            ) : (
-              <View style={{ alignItems: 'center', flex: 1, justifyContent: 'center', padding: Space.sm }}>
-                <StatusText>Loading photo…</StatusText>
-              </View>
-            )}
+            {(() => {
+              const photo = photos.get(media.photoAssetId);
+              if (photo?.status === 'ready') {
+                return (
+                  <Image
+                    accessibilityLabel={`Body photo ${index + 1}`}
+                    contentFit="cover"
+                    onError={() => photos.reportError(media.photoAssetId, photo.url)}
+                    source={{ cacheKey: photo.cacheKey, uri: photo.url }}
+                    style={{ height: '100%', width: '100%' }}
+                  />
+                );
+              }
+              if (photo?.status === 'failed') {
+                return (
+                  <View style={{ alignItems: 'center', flex: 1, gap: Space.sm, justifyContent: 'center', padding: Space.sm }}>
+                    <AppText color={Palette.danger} variant="caption">Photo could not be loaded</AppText>
+                    <AppButton
+                      label="Try again"
+                      onPress={() => photos.retry(media.photoAssetId)}
+                      size="compact"
+                      variant="secondary"
+                    />
+                  </View>
+                );
+              }
+              return (
+                <View style={{ alignItems: 'center', flex: 1, justifyContent: 'center', padding: Space.sm }}>
+                  <StatusText>Loading photo…</StatusText>
+                </View>
+              );
+            })()}
             <View style={{ position: 'absolute', right: Space.sm, top: Space.sm }}>
               <ContainedRemoveButton
                 label={`Remove body photo ${index + 1}`}
@@ -740,15 +780,54 @@ export default function PersonalPlaceCardScreen() {
   );
 }
 
+function PhotoFailedTile({
+  label,
+  onRemove,
+  onRetry,
+  removeLabel,
+  wide = false,
+}: {
+  label: string;
+  onRemove: () => void;
+  onRetry: () => void;
+  removeLabel: string;
+  wide?: boolean;
+}) {
+  return (
+    <View
+      style={{
+        alignItems: 'center',
+        aspectRatio: wide ? 16 / 9 : 1,
+        backgroundColor: Palette.surfaceMuted,
+        borderRadius: Radius.card,
+        gap: Space.sm,
+        justifyContent: 'center',
+        padding: Space.md,
+        position: 'relative',
+        width: '100%',
+      }}>
+      <AppText color={Palette.danger} variant="caption">{label}</AppText>
+      <AppButton label="Try again" onPress={onRetry} size="compact" variant="secondary" />
+      <View style={{ bottom: Space.sm, position: 'absolute', right: Space.sm }}>
+        <ContainedRemoveButton label={removeLabel} onPress={onRemove} />
+      </View>
+    </View>
+  );
+}
+
 function PhotoEditorTile({
   accessibilityLabel,
+  cacheKey,
   imageUrl,
+  onError,
   onPress,
   onRemove,
   wide = false,
 }: {
   accessibilityLabel: string;
+  cacheKey?: string;
   imageUrl: string;
+  onError?: () => void;
   onPress?: () => void;
   onRemove: () => void;
   wide?: boolean;
@@ -762,7 +841,8 @@ function PhotoEditorTile({
       style={{ position: 'relative' }}>
       <Image
         contentFit="cover"
-        source={{ uri: imageUrl }}
+        onError={onError}
+        source={cacheKey ? { cacheKey, uri: imageUrl } : { uri: imageUrl }}
         style={{
           aspectRatio: wide ? 16 / 9 : 1,
           borderRadius: Radius.card,

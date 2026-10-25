@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { TripImageCollage } from '@/components/trip-image-collage';
@@ -6,7 +5,8 @@ import { CardSurface } from '@/components/ui/card-surface';
 import { MediaFrame } from '@/components/ui/media-frame';
 import { Palette, Space, Type } from '@/constants/design';
 import type { PersonalPlaceCard } from '@/personal-place-cards/types';
-import { usePersonalPlaceCards } from '@/personal-place-cards/provider';
+import { usePersonalPhotos } from '@/personal-place-cards/use-personal-photos';
+import type { TripImage } from '@/trips/images';
 
 export function PersonalPlaceCardView({
   card,
@@ -20,42 +20,31 @@ export function PersonalPlaceCardView({
   onPress?: () => void;
 }) {
   const router = useRouter();
-  const { authorizePhoto, invalidatePhotoAuthorization } = usePersonalPlaceCards();
+  // Main photo first, then body photos, up to four. Only these are authorised,
+  // and only while this card is mounted (visible in a virtualised list).
   const coverMedia = [
     ...card.media.filter((item) => item.role === 'main'),
     ...card.media.filter((item) => item.role === 'body'),
   ].slice(0, 4);
-  const coverKey = coverMedia.map((item) => item.photoAssetId).join('|');
-  const [coverImages, setCoverImages] = useState<
-    { alt: string; cacheKey: string; url: string }[]
-  >([]);
-  const [authorizationRevision, setAuthorizationRevision] = useState(0);
-  useEffect(() => {
-    let mounted = true;
-    setCoverImages([]);
-    void Promise.all(coverMedia.map(async (media) => {
-      try {
-        const url = await authorizePhoto(media.photoAssetId);
-        return {
-          alt: card.title ?? 'Personal Place photo',
-          cacheKey: media.photoAssetId,
-          url,
-        };
-      } catch {
-        return null;
-      }
-    })).then((images) => {
-      if (mounted) setCoverImages(images.filter((image): image is NonNullable<typeof image> => image !== null));
-    });
-    return () => { mounted = false; };
-    // Photo IDs are the stable cover identity; title changes only affect fallback alt text.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authorizationRevision, authorizePhoto, coverKey]);
-
-  const retryImage = (photoAssetId: string) => {
-    invalidatePhotoAuthorization(photoAssetId);
-    setAuthorizationRevision((revision) => revision + 1);
-  };
+  const photos = usePersonalPhotos(coverMedia.map((media) => media.photoAssetId));
+  // Reveal the images together once each has loaded or failed, so the collage
+  // layout does not reflow while photos arrive.
+  const settled = coverMedia.every((media) => {
+    const photo = photos.get(media.photoAssetId);
+    return photo !== null && photo.status !== 'loading';
+  });
+  const coverImages: TripImage[] = !settled ? [] : coverMedia.flatMap((media) => {
+    const photo = photos.get(media.photoAssetId);
+    if (!photo) return [];
+    return [{
+      alt: card.title ?? 'Personal Place photo',
+      cacheKey: photo.cacheKey,
+      failed: photo.status === 'failed',
+      photoAssetId: media.photoAssetId,
+      url: photo.url ?? '',
+    }];
+  });
+  const firstImage = coverImages[0];
 
   return (
     <Pressable
@@ -73,15 +62,31 @@ export function PersonalPlaceCardView({
           <TripImageCollage
             emptyLabel="Personal Place"
             images={coverImages}
-            onImageError={(image) => image.cacheKey && retryImage(image.cacheKey)}
+            onImageError={(image) => image.photoAssetId && photos.reportError(image.photoAssetId, image.url)}
+            onImageRetry={(image) => image.photoAssetId && photos.retry(image.photoAssetId)}
             style={{ height: 92, width: 112 }}
           />
-        ) : coverImages[0] ? (
+        ) : firstImage?.failed ? (
+          <Pressable
+            accessibilityLabel="Photo unavailable. Tap to retry."
+            accessibilityRole="button"
+            onPress={() => firstImage.photoAssetId && photos.retry(firstImage.photoAssetId)}
+            style={{
+              alignItems: 'center',
+              aspectRatio: 16 / 9,
+              backgroundColor: Palette.surfaceMuted,
+              justifyContent: 'center',
+              width: '100%',
+            }}>
+            <Text style={{ color: Palette.textMuted, ...Type.label }}>Photo unavailable. Tap to retry.</Text>
+          </Pressable>
+        ) : firstImage ? (
           <MediaFrame
             accessibilityLabel={card.title ?? 'Personal Place photo'}
             aspectRatio={16 / 9}
+            onError={() => firstImage.photoAssetId && photos.reportError(firstImage.photoAssetId, firstImage.url)}
             radius={0}
-            source={{ uri: coverImages[0].url }}
+            source={{ cacheKey: firstImage.cacheKey, uri: firstImage.url }}
           />
         ) : null}
         <View style={{ flex: 1, justifyContent: 'center', padding: Space.lg, paddingRight: compact ? 60 : Space.lg }}>

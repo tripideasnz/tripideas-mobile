@@ -24,13 +24,13 @@ import { TripImageCollage } from '@/components/trip-image-collage';
 import { AutoExpandingTextInput } from '@/components/ui/app-text-input';
 import { Palette, Radius, Screen, Space, Type } from '@/constants/design';
 import { fetchPlaceCardsByIds } from '@/sanity/place-cards';
-import { getTripImages } from '@/trips/images';
+import { getTripImages, type PersonalTripPhoto } from '@/trips/images';
 import { useMyTrips } from '@/trips/provider';
 import {
   buildPublicTripSnapshot,
   createPublicTripShare,
 } from '@/trips/public-sharing';
-import { authorizePhotoRead } from '@/notebooks/api';
+import { usePersonalPhotos } from '@/personal-place-cards/use-personal-photos';
 import {
   buildTripShareCardData,
   buildTripShareMessage,
@@ -59,7 +59,6 @@ export default function TripDetailScreen() {
   const [places, setPlaces] = useState<PlaceCardData[]>([]);
   const [isLoadingPlaces, setIsLoadingPlaces] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [personalPhotoUrls, setPersonalPhotoUrls] = useState<Record<string, string>>({});
   const [highlightedEntryId, setHighlightedEntryId] = useState<string | null>(null);
   const [isSearchingPlaces, setIsSearchingPlaces] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
@@ -81,6 +80,30 @@ export default function TripDetailScreen() {
   const isNameDirty = Boolean(
     trip && trimmedName && trimmedName !== trip.name
   );
+  // Personal Place main photos come from the provider's shared authorisation
+  // cache, so a normal refresh of this Trip does not re-request them.
+  const personalMainPhotos = useMemo(
+    () => (trip?.entries ?? []).flatMap((entry) => {
+      if (entry.type !== 'personalPlaceCard' || !('personalPlaceCard' in entry)) return [];
+      const main = entry.personalPlaceCard.media.find((item) => item.role === 'main');
+      return main ? [{ cardId: entry.personalPlaceCard.id, photoAssetId: main.photoAssetId }] : [];
+    }),
+    [trip?.entries]
+  );
+  const personalPhotos = usePersonalPhotos(
+    personalMainPhotos.map((photo) => photo.photoAssetId)
+  );
+  const personalPhotoUrls: Record<string, PersonalTripPhoto> = {};
+  for (const { cardId, photoAssetId } of personalMainPhotos) {
+    const photo = personalPhotos.get(photoAssetId);
+    if (!photo || photo.status === 'loading') continue;
+    personalPhotoUrls[cardId] = {
+      cacheKey: photo.cacheKey,
+      failed: photo.status === 'failed',
+      photoAssetId,
+      url: photo.url,
+    };
+  }
   const tripImages = trip
     ? getTripImages(trip, places, personalPhotoUrls).slice(0, 4)
     : [];
@@ -101,30 +124,6 @@ export default function TripDetailScreen() {
     () => new Map(places.map((place) => [place._id, place])),
     [places]
   );
-
-  useEffect(() => {
-    let mounted = true;
-    const cards = orderedEntries.flatMap((entry) =>
-      entry.type === 'personalPlaceCard' && 'personalPlaceCard' in entry
-        ? [entry.personalPlaceCard]
-        : []
-    );
-    void Promise.all(cards.map(async (card) => {
-      const main = card.media.find((item) => item.role === 'main');
-      if (!main) return null;
-      try {
-        const result = await authorizePhotoRead(main.photoAssetId);
-        return [card.id, result.url] as const;
-      } catch {
-        return null;
-      }
-    })).then((results) => {
-      if (mounted) {
-        setPersonalPhotoUrls(Object.fromEntries(results.filter(Boolean) as [string, string][]));
-      }
-    });
-    return () => { mounted = false; };
-  }, [orderedEntries]);
 
   useEffect(() => {
     setName(trip?.name ?? '');
@@ -407,6 +406,8 @@ export default function TripDetailScreen() {
           {tripImages.length > 0 ? (
             <TripImageCollage
               images={tripImages}
+              onImageError={(image) => image.photoAssetId && personalPhotos.reportError(image.photoAssetId, image.url)}
+              onImageRetry={(image) => image.photoAssetId && personalPhotos.retry(image.photoAssetId)}
               style={{
                 aspectRatio: 16 / 9,
                 borderRadius: Radius.card,
