@@ -74,6 +74,9 @@ type MyTripsContextValue = {
 
 const MyTripsContext = createContext<MyTripsContextValue | null>(null);
 
+// A refresh that keeps being overtaken by edits gives up after this many fetches.
+const MAX_REFRESH_ATTEMPTS = 3;
+
 function createLocalTripId() {
   return `trip-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
@@ -134,39 +137,126 @@ export function MyTripsProvider({ children }: PropsWithChildren) {
     );
   }, []);
 
-  const storeAuthoritative = useCallback(async (ownerId: string, next: MyTrip[]) => {
-    if (activeUserRef.current !== ownerId) return;
-    const stored = await tripStorage.setCache(ownerId, next);
-    if (activeUserRef.current === ownerId) {
+  // Bumped every time Trips are written. A refresh remembers the value it started
+  // at: if it has moved by the time the response arrives, a write (a mutation) landed
+  // while the request was in flight, and that response may predate it.
+  const writeVersionRef = useRef(0);
+  // The one full refresh that may run at a time for the active user, and, for callers
+  // that need data newer than a refresh already running, one follow-up queued behind it.
+  const refreshInFlightRef = useRef<{ ownerId: string; promise: Promise<void> } | null>(null);
+  const followUpRef = useRef<{ ownerId: string; promise: Promise<void> } | null>(null);
+
+  // Cache writes for one user run one at a time, in the order they were requested, so a
+  // slow older write can never finish after, and so overwrite on disk, a newer one.
+  // Writes for different users are independent: each only touches its own user's key.
+  const cacheWritesRef = useRef(new Map<string, Promise<unknown>>());
+
+  const storeAuthoritative = useCallback(
+    async (ownerId: string, next: MyTrip[], options?: { skipIfSuperseded?: boolean }) => {
+      if (activeUserRef.current !== ownerId) return;
+      const version = ++writeVersionRef.current;
+      const previous = cacheWritesRef.current.get(ownerId) ?? Promise.resolve();
+      const write = previous
+        .catch(() => undefined)
+        .then(async (): Promise<MyTrip[] | null> => {
+          // A refresh's write that has been overtaken by a newer write is dropped before it
+          // reaches storage, so stale Trips are never persisted behind a newer result.
+          if (options?.skipIfSuperseded && writeVersionRef.current !== version) return null;
+          return tripStorage.setCache(ownerId, next);
+        });
+      cacheWritesRef.current.set(ownerId, write.catch(() => undefined));
+      const stored = await write;
+      if (stored === null || activeUserRef.current !== ownerId) return;
+      // Writes complete in request order, so a later one still to come will apply after this.
+      if (options?.skipIfSuperseded && writeVersionRef.current !== version) return;
       apiTripsRef.current = stored;
       setTripsState(visibleTrips(stored));
-    }
-  }, [visibleTrips]);
+    },
+    [visibleTrips]
+  );
 
-  const refresh = useCallback(async () => {
-    const ownerId = activeUserRef.current;
-    if (!ownerId) return;
-    setIsFetching(true);
-    setLoadError(null);
-    try {
+  // Fetch the Trips and store them. Returns whether they were applied. A response that
+  // may predate a mutation made while it was in flight is discarded and fetched again
+  // (a few attempts at most, so a steady stream of edits cannot loop forever).
+  const fetchAndStore = useCallback(async (ownerId: string): Promise<boolean> => {
+    for (let attempt = 0; attempt < MAX_REFRESH_ATTEMPTS; attempt += 1) {
+      const startedAtVersion = writeVersionRef.current;
       const latest = await listTrips(
         await tripStorage.getCache(ownerId),
         deletedTripIdsRef.current
       );
-      await storeAuthoritative(ownerId, latest);
-      if (activeUserRef.current === ownerId) setHasData(true);
-    } catch {
-      if (activeUserRef.current === ownerId) {
-        setLoadError('Showing saved Trips. Connect to refresh them.');
-      }
-    } finally {
-      if (activeUserRef.current === ownerId) setIsFetching(false);
+      if (activeUserRef.current !== ownerId) return false;
+      if (writeVersionRef.current !== startedAtVersion) continue;
+      await storeAuthoritative(ownerId, latest, { skipIfSuperseded: true });
+      return activeUserRef.current === ownerId;
     }
+    return false;
   }, [storeAuthoritative]);
+
+  const startRefresh = useCallback((ownerId: string): Promise<void> => {
+    setIsFetching(true);
+    setLoadError(null);
+    const entry: { ownerId: string; promise: Promise<void> } = {
+      ownerId,
+      promise: Promise.resolve(),
+    };
+    entry.promise = (async () => {
+      try {
+        if ((await fetchAndStore(ownerId)) && activeUserRef.current === ownerId) {
+          setHasData(true);
+        }
+      } catch {
+        if (activeUserRef.current === ownerId) {
+          setLoadError('Showing saved Trips. Connect to refresh them.');
+        }
+      } finally {
+        // Release the guard on success and on failure alike.
+        if (refreshInFlightRef.current === entry) refreshInFlightRef.current = null;
+        if (activeUserRef.current === ownerId) setIsFetching(false);
+      }
+    })();
+    refreshInFlightRef.current = entry;
+    return entry.promise;
+  }, [fetchAndStore]);
+
+  // Ordinary refresh (focus, pull, startup): joins the refresh already running for this
+  // user, so overlapping requests share one full request sequence and one outcome.
+  const refresh = useCallback((): Promise<void> => {
+    const ownerId = activeUserRef.current;
+    if (!ownerId) return Promise.resolve();
+    const running = refreshInFlightRef.current;
+    if (running && running.ownerId === ownerId) return running.promise;
+    return startRefresh(ownerId);
+  }, [startRefresh]);
+
+  // For callers that have just changed Trips on the server by some route that does not go
+  // through storeAuthoritative (the import): a refresh already running may have read
+  // before that change, so joining it is not enough. Queue one refresh behind it instead.
+  const refreshAfterServerChange = useCallback((): Promise<void> => {
+    const ownerId = activeUserRef.current;
+    if (!ownerId) return Promise.resolve();
+    const running = refreshInFlightRef.current;
+    if (!running || running.ownerId !== ownerId) return startRefresh(ownerId);
+    const queued = followUpRef.current;
+    if (queued && queued.ownerId === ownerId) return queued.promise;
+    const followUp: { ownerId: string; promise: Promise<void> } = {
+      ownerId,
+      promise: Promise.resolve(),
+    };
+    followUp.promise = running.promise.then(() => {
+      if (followUpRef.current === followUp) followUpRef.current = null;
+      return activeUserRef.current === ownerId ? startRefresh(ownerId) : undefined;
+    });
+    followUpRef.current = followUp;
+    return followUp.promise;
+  }, [startRefresh]);
 
   useEffect(() => {
     let mounted = true;
     activeUserRef.current = userId;
+    // Another account never joins or waits on this one's refresh.
+    refreshInFlightRef.current = null;
+    followUpRef.current = null;
     apiTripsRef.current = [];
     deletedTripIdsRef.current = [];
     setTripsState([]);
@@ -255,11 +345,11 @@ export function MyTripsProvider({ children }: PropsWithChildren) {
       showLegacyRef.current = !result.journal.entries.every(
         (entry) => entry.state === 'COMPLETED'
       );
-      await refresh();
+      await refreshAfterServerChange();
     } finally {
       if (activeUserRef.current === ownerId) setIsImporting(false);
     }
-  }, [refresh]);
+  }, [refreshAfterServerChange]);
 
   const deferImport = useCallback(() => {
     const ownerId = activeUserRef.current;
