@@ -1,10 +1,20 @@
 import { Image } from 'expo-image';
-import { Link, Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { ScrollView, Text, useWindowDimensions, View } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BrandLogo } from '@/components/brand-logo';
+import {
+  WELCOME_BODY_TEXT_STYLE,
+  WELCOME_ICONS_GAP,
+  WELCOME_LOGO_MARGIN_BOTTOM,
+  WELCOME_TITLE_MARGIN_BOTTOM,
+  WelcomeEntryButtons,
+  welcomeButtonsBlockHeight,
+  welcomeTextTop,
+} from '@/components/welcome-entry-buttons';
+import { openFromWelcome } from '@/components/welcome-navigation';
 import { sanityClient } from '@/sanity/client';
 import { COVER_QUERY } from '@/sanity/queries';
 import type { CoverContent, CoverResponse } from '@/sanity/types';
@@ -16,6 +26,9 @@ type WelcomeScreenData = CoverContent & {
 };
 
 export default function CoverScreen() {
+  const router = useRouter();
+  const { height, width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const [cover, setCover] = useState<WelcomeScreenData | null>(null);
 
   useEffect(() => {
@@ -75,17 +88,15 @@ export default function CoverScreen() {
         }}
       />
 
-      <SafeAreaView style={{ flex: 1 }}>
-        <View
-          style={{
-            alignItems: 'center',
-            flex: 1,
-            justifyContent: 'center',
-            padding: 24,
-          }}>
+      <SafeAreaView edges={['top']} style={{ flex: 1 }}>
+        <ScrollView
+          bounces={false}
+          contentContainerStyle={{ alignItems: 'center', flexGrow: 1, paddingHorizontal: 24 }}
+          showsVerticalScrollIndicator={false}>
           <View
             style={{
               alignItems: 'center',
+              marginTop: welcomeTextTop(height, insets.top),
               maxWidth: 560,
               width: '100%',
             }}>
@@ -93,7 +104,7 @@ export default function CoverScreen() {
               tone="light"
               style={{
                 height: 72,
-                marginBottom: 32,
+                marginBottom: WELCOME_LOGO_MARGIN_BOTTOM,
               }}
             />
 
@@ -103,41 +114,30 @@ export default function CoverScreen() {
                 fontSize: 42,
                 fontWeight: '700',
                 lineHeight: 48,
-                marginBottom: 16,
+                marginBottom: WELCOME_TITLE_MARGIN_BOTTOM,
                 textAlign: 'center',
               }}>
               {cover?.title ?? 'Welcome to TripIdeas.nz'}
             </Text>
 
-            <Text
-              style={{
-                color: '#f2f2f2',
-                fontSize: 18,
-                lineHeight: 26,
-                marginBottom: 32,
-                maxWidth: 420,
-                textAlign: 'center',
-              }}>
+            <Text style={{ ...WELCOME_BODY_TEXT_STYLE, maxWidth: 420, textAlign: 'center' }}>
               {cover?.subtitle ?? cover?.fallbackSubtitle ?? 'Find memorable places, regions, and trip ideas around New Zealand.'}
             </Text>
-
-            <Link href="/discover" asChild>
-              <Pressable
-                style={{
-                  alignItems: 'center',
-                  alignSelf: 'stretch',
-                  backgroundColor: '#fff',
-                  borderRadius: 10,
-                  paddingVertical: 15,
-                }}>
-                <Text
-                  style={{ color: '#111', fontSize: 17, fontWeight: '700' }}>
-                  Start Exploring
-                </Text>
-              </Pressable>
-            </Link>
           </View>
-        </View>
+
+          {/* A fixed, short gap below the intro text, then the buttons with their labels. */}
+          <View
+            style={{
+              alignItems: 'center',
+              flex: 1,
+              justifyContent: 'flex-start',
+              minHeight: welcomeButtonsBlockHeight(width) + WELCOME_ICONS_GAP + 32,
+              paddingTop: WELCOME_ICONS_GAP,
+              width: '100%',
+            }}>
+            <WelcomeEntryButtons onOpen={(destination) => openFromWelcome(router, destination)} />
+          </View>
+        </ScrollView>
       </SafeAreaView>
     </View>
   );
