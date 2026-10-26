@@ -60,7 +60,13 @@ assert.ok(config.plugins.find((plugin) => Array.isArray(plugin) && plugin[0] ===
 console.log('✓ Region is immediate, Activity retains Apply, creation uses inline progress, and foreground permission remains configured');
 
 const discover = await read('app/(tabs)/(discover)/discover.tsx');
-const baselineDiscover = execFileSync('git', ['show', '3961aad6fe425d3c40ef521623f9303c9510f068:app/(tabs)/(discover)/discover.tsx'], { encoding: 'utf8' });
+const baselineDiscover = execFileSync('git', ['show', '3961aad6fe425d3c40ef521623f9303c9510f068:app/(tabs)/(discover)/discover.tsx'], { encoding: 'utf8' })
+  // Batch 2G deliberately moved the sub-region row into components/discover-subregion-row.tsx
+  // (its layout collapsed under Link asChild). Everything else must still match the baseline.
+  .replace("import { Link, useRouter } from 'expo-router';", "import { useRouter } from 'expo-router';")
+  .replace("import { CardSurface } from '@/components/ui/card-surface';", "import { SubRegionLink } from '@/components/discover-subregion-row';\nimport { CardSurface } from '@/components/ui/card-surface';")
+  .replace('  SubRegionSummary,\n', '')
+  .replace(/\n+function SubRegionLink[\s\S]*$/, '\n');
 assert.equal(discover
   .replace(/  const handleIslandPress = \(\) => \{[\s\S]*?\n  \};\n/, '')
   .replace(/      \{\/\* Image tap target:[\s\S]*?      \/> : null\}\n\n/, '')

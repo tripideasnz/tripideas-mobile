@@ -1,5 +1,5 @@
 import { Image } from 'expo-image';
-import { Link, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { RefObject, useCallback, useEffect, useRef, useState } from 'react';
 import {
   LayoutChangeEvent,
@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppBrandHeader } from '@/components/app-brand-header';
+import { SubRegionLink } from '@/components/discover-subregion-row';
 import { CardSurface } from '@/components/ui/card-surface';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { LoadingView } from '@/components/ui/loading-view';
@@ -28,7 +29,6 @@ import type {
   IslandsResponse,
   IslandSummary,
   Region,
-  SubRegionSummary,
 } from '@/sanity/types';
 
 export default function DiscoverScreen() {
@@ -384,72 +384,5 @@ function RegionSection({
         </View>
       ) : null}
     </View>
-  );
-}
-
-function SubRegionLink({ subRegion }: { subRegion: SubRegionSummary }) {
-  const placeCount =
-    typeof subRegion.placeCount === 'number' ? subRegion.placeCount : null;
-
-  return (
-    <Link
-      href={{
-        pathname: '/subregion/[slug]',
-        params: { slug: subRegion.slug?.current ?? '' },
-      }}
-      asChild>
-      <Pressable
-        disabled={!subRegion.slug?.current}
-        style={({ pressed }) => ({
-          alignItems: 'center',
-          borderBottomColor: Palette.border,
-          borderBottomWidth: 1,
-          flexDirection: 'row',
-          opacity: pressed ? 0.6 : 1,
-          paddingVertical: 14,
-        })}>
-        {subRegion.imageUrl ? (
-          <Image
-            accessibilityLabel={
-              subRegion.imageAlt ?? subRegion.name ?? 'Sub-region image'
-            }
-            contentFit="cover"
-            source={{ uri: subRegion.imageUrl }}
-            style={{
-              borderRadius: Radius.small,
-              height: 44,
-              marginRight: Space.md,
-              width: 44,
-            }}
-          />
-        ) : null}
-        <View style={{ flex: 1 }}>
-          <Text style={Type.bodyStrong}>
-            {subRegion.name}
-          </Text>
-          {subRegion.maori ? (
-            <Text
-              style={{
-                color: Palette.textMuted,
-                ...Type.caption,
-                marginTop: Space.xs,
-              }}>
-              {subRegion.maori}
-            </Text>
-          ) : null}
-        </View>
-        {placeCount !== null ? (
-          <Text
-            style={{
-              color: Palette.textMuted,
-              ...Type.label,
-              marginRight: Space.sm,
-            }}>
-            {placeCount}
-          </Text>
-        ) : null}
-        <IconSymbol color={Palette.textMuted} name="chevron.right" size={16} />
-      </Pressable>
-    </Link>
   );
 }
