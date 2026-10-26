@@ -47,7 +47,7 @@ export function PlaceCard({
 }: {
   disabled?: boolean;
   embedded?: boolean;
-  navigationOrigin?: 'favourites';
+  navigationOrigin?: 'favourites' | 'search';
   onPress?: () => void;
   onOpenPlace?: () => void;
   tripAction?: PlaceTripAction;

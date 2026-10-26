@@ -1,4 +1,3 @@
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -14,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useSession } from '@/auth/provider';
 import { AppButton } from '@/components/ui/app-button';
+import { clearHeaderRightAction, headerAddAction } from '@/components/ui/header-actions';
 import { HeaderBackButton } from '@/components/ui/header-back-button';
 import { AppText } from '@/components/ui/app-text';
 import { AppTextInput, AutoExpandingTextInput } from '@/components/ui/app-text-input';
@@ -164,22 +164,16 @@ export default function NotebookListScreen() {
       <Stack.Screen
         options={{
           headerLeft: () => <HeaderBackButton color={Palette.trip} fallbackHref="/saved" />,
-          headerRight: () => session ? (
-            <Pressable
-              accessibilityLabel="Add Notebook"
-              accessibilityRole="button"
-              disabled={showCreate}
-              hitSlop={12}
-              onPress={() => {
-                setFormError(null);
-                setShowCreate(true);
-              }}
-              style={({ pressed }) => ({
-                opacity: showCreate ? 0.35 : pressed ? 0.55 : 1,
-              })}>
-              <MaterialIcons color={Palette.trip} name="add" size={30} />
-            </Pressable>
-          ) : null,
+          ...(session
+            ? headerAddAction({
+                accessibilityLabel: 'Add Notebook',
+                disabled: showCreate,
+                onPress: () => {
+                  setFormError(null);
+                  setShowCreate(true);
+                },
+              })
+            : clearHeaderRightAction()),
         }}
       />
       {isLoadingSession ? (

@@ -36,24 +36,34 @@ export function openPlaceFromMap(
   return true;
 }
 
-type BackRouter = {
+type BackRouter<Tab extends string> = {
   back: () => void;
   canGoBack: () => boolean;
-  navigate: (href: '/map') => void;
+  navigate: (href: Tab) => void;
 };
 
+type Guard = Pick<ReturnType<typeof createNavigationGuard>, 'allow'>;
+
 /**
- * Back from a Place that was opened from the Map. The Place is popped off the
- * Discover stack it was pushed onto, then the Map tab is shown again. The Map
- * screen stays mounted, so its camera, filters and selection are exactly as the
- * user left them.
+ * Back from a Place that was opened from another tab (Map, Search). The Place
+ * lives on the Discover stack, so a plain back lands on Discover. Instead it is
+ * popped off that stack and the tab it came from is shown again. That tab's
+ * screen stays mounted, so its state (camera and filters, query and results) is
+ * exactly as the user left it.
  */
-export function returnToMapFromPlace(
-  router: BackRouter,
-  guard: Pick<ReturnType<typeof createNavigationGuard>, 'allow'> = placeNavigationGuard
+export function returnToOriginTab<Tab extends '/map' | '/search'>(
+  router: BackRouter<Tab>,
+  tab: Tab,
+  guard: Guard = placeNavigationGuard
 ): boolean {
-  if (!guard.allow('place-back:map')) return false;
+  if (!guard.allow(`place-back:${tab}`)) return false;
   if (router.canGoBack()) router.back();
-  router.navigate('/map');
+  router.navigate(tab);
   return true;
 }
+
+export const returnToMapFromPlace = (router: BackRouter<'/map'>, guard: Guard = placeNavigationGuard) =>
+  returnToOriginTab(router, '/map', guard);
+
+export const returnToSearchFromPlace = (router: BackRouter<'/search'>, guard: Guard = placeNavigationGuard) =>
+  returnToOriginTab(router, '/search', guard);

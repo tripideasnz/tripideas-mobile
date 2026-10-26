@@ -1,4 +1,3 @@
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Stack, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
@@ -7,6 +6,7 @@ import { useSession } from '@/auth/provider';
 import { AppButton } from '@/components/ui/app-button';
 import { AppText } from '@/components/ui/app-text';
 import { AppTextInput, AutoExpandingTextInput } from '@/components/ui/app-text-input';
+import { clearHeaderRightAction, headerAddAction } from '@/components/ui/header-actions';
 import { HeaderBackButton } from '@/components/ui/header-back-button';
 import { LoadingView } from '@/components/ui/loading-view';
 import { TripImageCollage } from '@/components/trip-image-collage';
@@ -45,7 +45,7 @@ export default function DiaryLibraryScreen() {
   return <SafeAreaView edges={['bottom']} style={{ flex: 1, backgroundColor: Palette.background }}>
     <Stack.Screen options={{
       headerLeft: () => <HeaderBackButton color={Palette.trip} fallbackHref="/saved" />,
-      headerRight: () => session && canEdit ? <Pressable accessibilityLabel="Add Diary" accessibilityRole="button" hitSlop={12} onPress={() => setCreating(true)}><MaterialIcons color={Palette.trip} name="add" size={30} /></Pressable> : null,
+      ...(session && canEdit ? headerAddAction({ accessibilityLabel: 'Add Diary', onPress: () => setCreating(true) }) : clearHeaderRightAction()),
     }} />
     {sessionLoading || isLoading ? <LoadingView /> : !session ?
       <View style={{ gap: Space.lg, padding: Screen.gutter }}><AppText color={Palette.textBody}>Sign in to view your private travel Diaries.</AppText><AppButton label="Sign in" onPress={signIn} /></View> :

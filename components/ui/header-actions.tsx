@@ -1,58 +1,27 @@
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+// Header action options for Saved screens. Every action is a fixed-size circular
+// control in the shared Saved header (see saved-header.tsx), never a native
+// bar-button item, so it cannot be resized by the system.
 import type { NativeStackNavigationOptions } from '@react-navigation/native-stack';
-import { Pressable } from 'react-native';
 
-import { Palette } from '@/constants/design';
+import { savedActionHeader, SavedHeaderActionButton, type SavedHeaderAction } from '@/components/ui/saved-header';
 
-type HeaderAction = { accessibilityLabel: string; disabled?: boolean; onPress: () => void };
-
-function HeaderActionFallback({
-  action,
-  icon,
-}: {
-  action: HeaderAction;
-  icon: 'add' | 'share';
-}) {
-  return (
-    <Pressable
-      accessibilityLabel={action.accessibilityLabel}
-      accessibilityRole="button"
-      accessibilityState={{ disabled: action.disabled }}
-      disabled={action.disabled}
-      hitSlop={12}
-      onPress={action.onPress}
-      style={({ pressed }) => ({
-        alignItems: 'center',
-        height: 44,
-        justifyContent: 'center',
-        opacity: action.disabled ? 0.35 : pressed ? 0.55 : 1,
-        width: 44,
-      })}>
-      <MaterialIcons
-        color={Palette.trip}
-        name={icon}
-        size={icon === 'add' ? 30 : 24}
-      />
-    </Pressable>
-  );
-}
-
-function fallback(icon: 'add' | 'share', action: HeaderAction) {
-  return function HeaderRightAction() {
-    return <HeaderActionFallback action={action} icon={icon} />;
+function actionOptions(icon: 'add' | 'share', action: SavedHeaderAction): NativeStackNavigationOptions {
+  return {
+    ...savedActionHeader,
+    headerRight: () => <SavedHeaderActionButton action={action} icon={icon} />,
   };
 }
 
-// Use the existing React header control on every platform. Native toolbar items
-// depend on the installed iOS binary and can leave beta builds without actions.
-export function headerAddAction(action: HeaderAction): NativeStackNavigationOptions {
-  return { headerRight: fallback('add', action) };
+export function headerAddAction(action: SavedHeaderAction): NativeStackNavigationOptions {
+  return actionOptions('add', action);
 }
 
-export function headerShareAction(action: HeaderAction): NativeStackNavigationOptions {
-  return { headerRight: fallback('share', action) };
+export function headerShareAction(action: SavedHeaderAction): NativeStackNavigationOptions {
+  return actionOptions('share', action);
 }
 
+// Screens with no action still use the shared header so the title and back
+// control sit in the same place as on their siblings.
 export function clearHeaderRightAction(): NativeStackNavigationOptions {
-  return { headerRight: () => null };
+  return { ...savedActionHeader, headerRight: () => null };
 }

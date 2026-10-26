@@ -145,7 +145,7 @@ console.log('✓ Trip picker and generic modal acknowledge immediately, guard re
 
 for (const [helper, label] of [['headerAddAction', 'Add Trip'], ['headerShareAction', 'Share Trip']]) {
   let presses = 0;
-  const options = mount('./ui/header-actions.tsx', helper, { accessibilityLabel: label, onPress: () => presses++ }, { '@expo/vector-icons/MaterialIcons': { default: 'MaterialIcons' } })();
+  const options = mount('./ui/header-actions.tsx', helper, { accessibilityLabel: label, onPress: () => presses++ }, { '@/components/ui/saved-header': { savedActionHeader: { header: 'shared-header' }, SavedHeaderActionButton: ({ action }) => ({ type: 'Pressable', props: { accessibilityLabel: action.accessibilityLabel, onPress: action.onPress } }) } })();
   assert.equal(typeof options.headerRight, 'function');
   const element = options.headerRight();
   const control = element.type(element.props);

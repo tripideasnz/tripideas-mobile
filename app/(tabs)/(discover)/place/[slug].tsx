@@ -9,7 +9,7 @@ import {
   getPlainText,
 } from '@/components/content-blocks';
 import { PlaceCardActions } from '@/components/place-card-actions';
-import { returnToMapFromPlace } from '@/components/map/place-navigation';
+import { returnToMapFromPlace, returnToSearchFromPlace } from '@/components/map/place-navigation';
 import { PlaceCard } from '@/components/place-card';
 import { PlaceDetailContent } from '@/components/place-detail-content';
 import { AppButton } from '@/components/ui/app-button';
@@ -160,6 +160,11 @@ export default function PlaceScreen() {
                 // filters and selection are exactly as the user left them.
                 if (selectedOrigin === 'map') {
                   returnToMapFromPlace(router);
+                  return;
+                }
+                // Same for Search: its query and results stay mounted in that tab.
+                if (selectedOrigin === 'search') {
+                  returnToSearchFromPlace(router);
                   return;
                 }
                 if (router.canGoBack()) {

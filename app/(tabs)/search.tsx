@@ -7,7 +7,7 @@ import { Palette, Space } from '@/constants/design';
 export default function SearchScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: Palette.background }}>
-      <PlaceSearch scrollable placeholder="Search now" header={<>
+      <PlaceSearch navigationOrigin="search" scrollable placeholder="Search now" header={<>
         <AppText style={{ marginBottom: Space.sm }} variant="display">
           Search
         </AppText>

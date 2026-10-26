@@ -14,7 +14,8 @@ const [mainMap, peek, diaryMap, selection] = await Promise.all([
 ]);
 
 assert.match(selection, /selectedId === nextId \? 'open' : 'select'/);
-assert.match(mainMap, /activatePlace\(id, place\)/);
+assert.match(mainMap, /if \(place\.slug\?\.current\) openMapPlace\(place\);/);
+assert.doesNotMatch(mainMap, /activatePlace/);
 assert.match(mainMap, /onPress=\{clearSelectedPlace\}/);
 assert.match(mainMap, /isSelected: featureId === selectedPlaceId/);
 assert.match(mainMap, /MapPinColors\.selected/);

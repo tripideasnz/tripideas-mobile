@@ -17,6 +17,7 @@ export function PlaceSearch({
   onPlacePress,
   onOpenPlace,
   getTripAction,
+  navigationOrigin,
   placeholder = 'Search TripIdeas Places',
 }: {
   disabled?: boolean;
@@ -25,6 +26,8 @@ export function PlaceSearch({
   onOpenPlace?: () => void;
   getTripAction?: (place: PlaceCardData) => PlaceTripAction;
   onPlacePress?: (place: PlaceCardData) => void;
+  /** Where Places opened from these results should return to (the Search tab). */
+  navigationOrigin?: 'search';
   placeholder?: string;
 }) {
   const [query, setQuery] = useState('');
@@ -77,6 +80,7 @@ export function PlaceSearch({
       : isSearching ? <StatusText>Searching...</StatusText>
       : results.length ? results.map((place, index) => <PlaceCard
         disabled={disabled}
+        navigationOrigin={navigationOrigin}
         onOpenPlace={onOpenPlace}
         tripAction={getTripAction?.(place)}
         showSaveButton={!onPlacePress}

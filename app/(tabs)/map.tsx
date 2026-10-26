@@ -178,7 +178,10 @@ export default function MapScreen() {
   // Every entry point opens the Place through one guarded helper, so rapid taps
   // cannot push the screen twice and the origin is always 'map'.
   const openMapPlace = useCallback((place: Pick<MapPlace, 'slug'>) => { openPlaceFromMap(router, place.slug?.current); }, [router]);
-  const { activate: activatePlace, clear: clearSelectedPlace, select: setSelectedPlaceId, selectedId: selectedPlaceId } = useMapSelection(openMapPlace);
+  const { clear: clearSelectedPlace, select: setSelectedPlaceId, selectedId: selectedPlaceId } = useMapSelection(openMapPlace);
+  // The selection (highlight and label) is transient: it never survives leaving
+  // the Map, so returning from a Place shows no stale pop-up.
+  useFocusEffect(useCallback(() => () => setSelectedPlaceId(null), [setSelectedPlaceId]));
   const [mapStyleId, setMapStyleId] = useState<MapStyleId>('streets');
   const [visibleBounds, setVisibleBounds] = useState<LngLatBounds | null>(null);
   // Latest viewport and map size, read without re-rendering (marker reveal).
@@ -530,7 +533,13 @@ export default function MapScreen() {
 
     const id = properties?.id as string | null;
     const place = displayedPlaces.find((candidate) => mapPlaceId(candidate) === id);
-    if (id && place && activatePlace(id, place) === 'select') revealSelectedMarker(place);
+    if (!id || !place) return;
+    // One tap, one outcome: a marker tap replaces the selection (highlight and
+    // label) and opens its Place straight away. Only a place that has no page
+    // to open stays selected, and is brought clear of the sheet.
+    setSelectedPlaceId(id);
+    if (place.slug?.current) openMapPlace(place);
+    else revealSelectedMarker(place);
   };
   // Thumbnails open the Place on the first tap. The place is selected first so
   // its marker is still highlighted when the user comes back.

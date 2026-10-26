@@ -14,11 +14,12 @@ const [headers, places, trips, tripDetail, editor, photos, photoReconciliation] 
   read('personal-place-cards/photo-reconciliation.ts'),
 ]);
 
-assert.match(headers, /headerRight: fallback\('add', action\)/);
-assert.match(headers, /headerRight: fallback\('share', action\)/);
+assert.match(headers, /actionOptions\('add', action\)/);
+assert.match(headers, /actionOptions\('share', action\)/);
+assert.match(headers, /headerRight: \(\) => <SavedHeaderActionButton action=\{action\} icon=\{icon\} \/>/);
 assert.doesNotMatch(headers, /unstable_headerRightItems/);
-assert.match(headers, /height: 44/);
-assert.match(headers, /width: 44/);
+// Fixed size lives in the shared header (verified at component level in ui/saved-header.test.js).
+assert.match(await read('components/ui/saved-header.tsx'), /SAVED_HEADER_CONTROL_SIZE = 44/);
 assert.match(places, /headerAddAction\(/);
 assert.match(places, /options=\{session \? headerAddAction/);
 assert.match(trips, /headerAddAction\(/);

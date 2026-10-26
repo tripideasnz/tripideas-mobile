@@ -90,9 +90,10 @@ test('thumbnail, marker label and Place list all use the same guarded opener', a
 
 // ── N05: marker selection remains a separate interaction ────────────────────
 
-test('markers keep select-first behaviour, the highlight and the preview', async () => {
+test('markers open the Place on the first tap and keep the highlight and the preview', async () => {
   const map = await read('app/(tabs)/map.tsx');
-  assert.match(map, /activatePlace\(id, place\) === 'select'\) revealSelectedMarker\(place\)/);
+  assert.match(map, /setSelectedPlaceId\(id\);\s*if \(place\.slug\?\.current\) openMapPlace\(place\);\s*else revealSelectedMarker\(place\);/);
+  assert.doesNotMatch(map, /activatePlace/);
   assert.match(map, /isSelected: featureId === selectedPlaceId/);
   assert.match(map, /MapPinColors\.selected/);
   assert.match(map, /selectedMapPlace \? <Marker/);
