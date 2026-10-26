@@ -55,12 +55,6 @@ export default function DiscoverLayout() {
           title: 'Sub-region',
         }}
       />
-      <Stack.Screen
-        name="place/[slug]"
-        options={{
-          title: 'Place',
-        }}
-      />
     </Stack>
   );
 }

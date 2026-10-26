@@ -473,7 +473,7 @@ a competing pattern.
 | Read-only long text | `components/ui/show-more-text.tsx` |
 | Editable collapsed text | `components/ui/expandable-text.tsx` |
 | Editorial/finished Place hierarchy | `components/place-detail-content.tsx` |
-| Editorial Place screen | `app/(tabs)/(discover)/place/[slug].tsx` |
+| Editorial Place screen | `app/place/[slug].tsx` |
 | Personal Place finished/editor | `app/personal-place-cards/[cardId].tsx` |
 | Map preview and shared pin | `components/place-map-preview.tsx`, `components/map/map-pin.tsx` |
 | Finished gallery/viewer | `components/place-photo-grid.tsx` |

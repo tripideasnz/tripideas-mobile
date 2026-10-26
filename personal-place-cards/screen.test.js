@@ -11,7 +11,7 @@ const [editor, list, tripDetail, tripEntry, personalCard, placeDetail, editorial
   read('components/trip-entry-card.tsx'),
   read('components/personal-place-card-view.tsx'),
   read('components/place-detail-content.tsx'),
-  read('app/(tabs)/(discover)/place/[slug].tsx'),
+  read('app/place/[slug].tsx'),
   read('photo-uploads/picker.ts'),
   read('components/ui/autosave-status.tsx'),
   read('components/ui/show-more-text.tsx'),

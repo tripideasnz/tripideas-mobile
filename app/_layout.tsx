@@ -61,6 +61,7 @@ export default function RootLayout() {
                     title: 'Trips',
                   }}
                 />
+                <Stack.Screen name="place/[slug]" options={{ ...savedActionHeader, title: 'Place' }} />
                 <Stack.Screen name="trips/[tripId]" options={{ title: 'My Trip' }} />
                 <Stack.Protected guard={personalContentFeatures.notebooks}>
                   <Stack.Screen name="notebooks/index" options={{ title: 'Notebooks' }} />

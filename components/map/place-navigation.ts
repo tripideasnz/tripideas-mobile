@@ -1,8 +1,11 @@
-// Opening an editorial Place from the Map, and returning to the Map.
+// Opening an editorial Place from the Map, and returning from a Place.
 //
-// Every entry point (marker label, peek-sheet thumbnail, full Place list) goes
+// Every Map entry point (marker label, peek-sheet thumbnail, full Place list) goes
 // through openPlaceFromMap, so the same Place route opens with the same origin,
-// and rapid repeat taps cannot push the screen twice.
+// and rapid repeat taps cannot push the screen twice. Place is a root-stack
+// route, so returning is an ordinary pop (see backFromPlace).
+
+import type { Href } from 'expo-router';
 
 /** Ignores repeat actions for the same key inside a short window. */
 export function createNavigationGuard({
@@ -36,34 +39,50 @@ export function openPlaceFromMap(
   return true;
 }
 
-type BackRouter<Tab extends string> = {
-  back: () => void;
-  canGoBack: () => boolean;
-  navigate: (href: Tab) => void;
+/** Where a Place was opened from, as carried in its route params. */
+export type PlaceOriginContext = {
+  date?: string;
+  diaryId?: string;
+  notebookId?: string;
+  origin?: string;
+  tripId?: string;
 };
 
-type Guard = Pick<ReturnType<typeof createNavigationGuard>, 'allow'>;
+type PlaceBackRouter = {
+  back: () => void;
+  canGoBack: () => boolean;
+  dismissTo: (href: Href) => void;
+  replace: (href: Href) => void;
+};
 
 /**
- * Back from a Place that was opened from another tab (Map, Search). The Place
- * lives on the Discover stack, so a plain back lands on Discover. Instead it is
- * popped off that stack and the tab it came from is shown again. That tab's
- * screen stays mounted, so its state (camera and filters, query and results) is
- * exactly as the user left it.
+ * The visible back arrow of the root-stack Place. The Place is an ordinary
+ * root-stack screen above the tabs, so with any history behind it, back simply
+ * pops it: the same operation as the iOS edge swipe, landing on the screen that
+ * opened it (Search, Map, Discover, Favourites, Trip, Notebook) exactly as it was.
+ *
+ * Only when there is no history (a direct link or cold start) is a destination
+ * chosen explicitly, from the origin recorded in the route params. Repeat taps are
+ * ignored for a moment. Returns what it did, for tests.
  */
-export function returnToOriginTab<Tab extends '/map' | '/search'>(
-  router: BackRouter<Tab>,
-  tab: Tab,
-  guard: Guard = placeNavigationGuard
-): boolean {
-  if (!guard.allow(`place-back:${tab}`)) return false;
-  if (router.canGoBack()) router.back();
-  router.navigate(tab);
-  return true;
+export function backFromPlace(
+  router: PlaceBackRouter,
+  context: PlaceOriginContext = {},
+  guard: Pick<ReturnType<typeof createNavigationGuard>, 'allow'> = placeNavigationGuard
+): 'back' | 'fallback' | 'ignored' {
+  // A repeat tap before the screen has gone would pop the screen beneath as well.
+  if (!guard.allow('place-back')) return 'ignored';
+  if (router.canGoBack()) {
+    router.back();
+    return 'back';
+  }
+  const { date, diaryId, notebookId, origin, tripId } = context;
+  if (origin === 'favourites') router.dismissTo('/favourites');
+  else if (origin === 'trip-map' && tripId) router.dismissTo({ pathname: '/trips/[tripId]/map', params: { tripId } });
+  else if (origin === 'notebook' && notebookId) router.dismissTo({ pathname: '/notebooks/[notebookId]', params: { notebookId } });
+  else if (origin === 'diary' && diaryId && date) router.dismissTo({ pathname: '/diaries/[diaryId]/day', params: { date, diaryId } });
+  else if (origin === 'map') router.replace('/map');
+  else if (origin === 'search') router.replace('/search');
+  else router.replace('/discover');
+  return 'fallback';
 }
-
-export const returnToMapFromPlace = (router: BackRouter<'/map'>, guard: Guard = placeNavigationGuard) =>
-  returnToOriginTab(router, '/map', guard);
-
-export const returnToSearchFromPlace = (router: BackRouter<'/search'>, guard: Guard = placeNavigationGuard) =>
-  returnToOriginTab(router, '/search', guard);

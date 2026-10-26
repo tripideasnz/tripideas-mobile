@@ -9,7 +9,7 @@ import {
 import {
   createNavigationGuard,
   openPlaceFromMap,
-  returnToMapFromPlace,
+  backFromPlace,
 } from './place-navigation.ts';
 import { reuseIfSame } from './map-filters.ts';
 
@@ -166,46 +166,78 @@ test('revealing a marker never touches filters, clustering or the initial camera
   assert.match(map, /visibleBoundsRef\.current = event\.nativeEvent\.bounds/);
 });
 
-// ── N07/F09: back navigation by origin ──────────────────────────────────────
+// ── Back from the root-stack Place ──────────────────────────────────────────
 
-test('back from a Place opened on the Map pops it and shows the Map tab', () => {
-  const router = fakeRouter();
-  assert.equal(returnToMapFromPlace(router, createNavigationGuard()), true);
-  assert.deepEqual(router.actions, [['back'], ['navigate', '/map']]);
+const backRouter = ({ canGoBack = true } = {}) => {
+  const actions = [];
+  return {
+    actions,
+    back: () => actions.push(['back']),
+    canGoBack: () => canGoBack,
+    dismissTo: (href) => actions.push(['dismissTo', href]),
+    replace: (href) => actions.push(['replace', href]),
+  };
+};
+const origins = [
+  { origin: 'map' }, { origin: 'search' }, { origin: 'favourites' }, { origin: 'trip-map', tripId: 't1' },
+  { origin: 'notebook', notebookId: 'n1' }, { date: '2026-01-02', diaryId: 'd1', origin: 'diary' }, {}, { origin: 'place' },
+];
+
+test('with history, back from a Place is one plain pop for every origin (the same operation as the edge swipe)', () => {
+  for (const context of origins) {
+    const router = backRouter();
+    assert.equal(backFromPlace(router, context, createNavigationGuard()), 'back');
+    assert.deepEqual(router.actions, [['back']], JSON.stringify(context));
+  }
 });
 
-test('back still lands on the Map when the Place has nothing beneath it, and is not doubled by repeat taps', () => {
-  const router = fakeRouter({ canGoBack: false });
+test('without history, each origin falls back to a predictable destination and never calls back', () => {
+  const expected = [
+    [{ origin: 'map' }, ['replace', '/map']],
+    [{ origin: 'search' }, ['replace', '/search']],
+    [{ origin: 'favourites' }, ['dismissTo', '/favourites']],
+    [{ origin: 'trip-map', tripId: 't1' }, ['dismissTo', { params: { tripId: 't1' }, pathname: '/trips/[tripId]/map' }]],
+    [{ origin: 'notebook', notebookId: 'n1' }, ['dismissTo', { params: { notebookId: 'n1' }, pathname: '/notebooks/[notebookId]' }]],
+    [{ date: '2026-01-02', diaryId: 'd1', origin: 'diary' }, ['dismissTo', { params: { date: '2026-01-02', diaryId: 'd1' }, pathname: '/diaries/[diaryId]/day' }]],
+    [{}, ['replace', '/discover']],
+    [{ origin: 'place' }, ['replace', '/discover']],
+    [{ origin: 'trip-map' }, ['replace', '/discover']],
+  ];
+  for (const [context, action] of expected) {
+    const router = backRouter({ canGoBack: false });
+    assert.equal(backFromPlace(router, context, createNavigationGuard()), 'fallback');
+    assert.deepEqual(router.actions, [action], JSON.stringify(context));
+  }
+});
+
+test('a repeat tap on Back is ignored, so it cannot pop the screen beneath as well', () => {
   const time = clock();
   const guard = createNavigationGuard({ now: time.now });
-  returnToMapFromPlace(router, guard);
-  time.advance(50);
-  assert.equal(returnToMapFromPlace(router, guard), false);
-  assert.deepEqual(router.actions, [['navigate', '/map']]);
+  const router = backRouter();
+  assert.equal(backFromPlace(router, { origin: 'favourites' }, guard), 'back');
+  time.advance(60);
+  assert.equal(backFromPlace(router, { origin: 'favourites' }, guard), 'ignored');
+  assert.deepEqual(router.actions, [['back']]);
+  time.advance(1_000);
+  assert.equal(backFromPlace(router, { origin: 'favourites' }, guard), 'back');
 });
 
-test('the Place screen sends map-origin back to the Map before the generic back, and leaves other origins unchanged', async () => {
-  const place = await read('app/(tabs)/(discover)/place/[slug].tsx');
-  const handler = place.slice(place.indexOf('onPress={() => {', place.indexOf('headerLeft: () =>')), place.indexOf('title,\n        }}'));
-  const mapIndex = handler.indexOf("selectedOrigin === 'map'");
-  const backIndex = handler.indexOf('router.canGoBack()');
-  assert.ok(mapIndex > -1 && backIndex > -1);
-  assert.ok(mapIndex < backIndex, 'the Map origin is checked before the generic back');
-  assert.match(handler, /returnToMapFromPlace\(router\)/);
-  // Other origins keep their existing handling and ordering.
-  const order = ["selectedOrigin === 'favourites'", "selectedOrigin === 'trip-map'", "selectedOrigin === 'notebook'", "selectedOrigin === 'diary'"].map((needle) => handler.indexOf(needle));
-  assert.ok(order.every((index) => index > backIndex), 'other origins still follow the generic back');
-  assert.deepEqual([...order].sort((a, b) => a - b), order, 'their relative order is unchanged');
-  assert.match(handler, /router\.replace\('\/discover'\)/);
+test('the Place screen delegates Back to backFromPlace with its route params and does no tab switching', async () => {
+  const place = await read('app/place/[slug].tsx');
+  assert.match(place, /backFromPlace\(router, \{\s*date: selectedDate,\s*diaryId: selectedDiaryId,\s*notebookId: selectedNotebookId,\s*origin: selectedOrigin,\s*tripId: selectedTripId,\s*\}\)/);
+  assert.doesNotMatch(place, /useNavigation|popPlaceFromStack|returnTo(Map|Search)FromPlace/);
+  assert.doesNotMatch(place, /router\.navigate\(/, 'no cross-tab navigation from the Place');
+  // The Map link pops back to the tabs instead of pushing a second tab navigator.
+  assert.match(place, /router\.dismissTo\(\{\s*pathname: '\/map'/);
 });
 
-test('the Place screen needs no Map-specific duplicate routes', async () => {
-  const [layout, place] = await Promise.all([
-    read('app/(tabs)/(discover)/_layout.tsx'),
-    read('app/(tabs)/(discover)/place/[slug].tsx'),
-  ]);
-  assert.equal(layout.match(/name="place\/\[slug\]"/g)?.length, 1);
-  assert.doesNotMatch(place, /router\.push\('\/map'\)|router\.replace\('\/map'\)/);
+test('Place is registered once, on the root stack, and no longer on the Discover stack', async () => {
+  const [root, discover] = await Promise.all([read('app/_layout.tsx'), read('app/(tabs)/(discover)/_layout.tsx')]);
+  assert.equal(root.match(/name="place\/\[slug\]"/g)?.length, 1);
+  assert.match(root, /name="place\/\[slug\]" options=\{\{ \.\.\.savedActionHeader, title: 'Place' \}\}/);
+  assert.doesNotMatch(discover, /place\/\[slug\]/);
+  await assert.rejects(read('app/(tabs)/(discover)/place/[slug].tsx'), { code: 'ENOENT' });
+  assert.doesNotMatch(root, /gestureEnabled|fullScreenGestureEnabled|animation:/, 'native gestures and transitions are left at their defaults');
 });
 
 test('the Map place bar back button never silently does nothing', async () => {

@@ -9,7 +9,7 @@ import {
   getPlainText,
 } from '@/components/content-blocks';
 import { PlaceCardActions } from '@/components/place-card-actions';
-import { returnToMapFromPlace, returnToSearchFromPlace } from '@/components/map/place-navigation';
+import { backFromPlace } from '@/components/map/place-navigation';
 import { PlaceCard } from '@/components/place-card';
 import { PlaceDetailContent } from '@/components/place-detail-content';
 import { AppButton } from '@/components/ui/app-button';
@@ -131,7 +131,8 @@ export default function PlaceScreen() {
       return;
     }
 
-    router.navigate({
+    // Pops back to the tabs (rather than pushing a second tab navigator) and shows the Map.
+    router.dismissTo({
       pathname: '/map',
       params: {
         lat: String(coordinates.latitude),
@@ -154,42 +155,15 @@ export default function PlaceScreen() {
           headerLeft: () => (
             <HeaderBackButton
               color={selectedOrigin === 'favourites' || selectedOrigin === 'trip-map' ? Palette.trip : undefined}
-              onPress={() => {
-                // Opened from the Map: pop this screen off the Discover stack and
-                // show the Map tab again. The Map stays mounted, so its camera,
-                // filters and selection are exactly as the user left them.
-                if (selectedOrigin === 'map') {
-                  returnToMapFromPlace(router);
-                  return;
-                }
-                // Same for Search: its query and results stay mounted in that tab.
-                if (selectedOrigin === 'search') {
-                  returnToSearchFromPlace(router);
-                  return;
-                }
-                if (router.canGoBack()) {
-                  router.back();
-                  return;
-                }
-                if (selectedOrigin === 'favourites') {
-                  router.dismissTo('/favourites');
-                  return;
-                }
-                if (selectedOrigin === 'trip-map' && selectedTripId) {
-                  router.dismissTo({ pathname: '/trips/[tripId]/map', params: { tripId: selectedTripId } });
-                  return;
-                }
-                if (selectedOrigin === 'notebook' && selectedNotebookId) {
-                  router.dismissTo({ pathname: '/notebooks/[notebookId]', params: { notebookId: selectedNotebookId } });
-                  return;
-                }
-                if (selectedOrigin === 'diary' && selectedDiaryId && selectedDate) {
-                  router.dismissTo({ pathname: '/diaries/[diaryId]/day', params: { diaryId: selectedDiaryId, date: selectedDate } });
-                  return;
-                }
-                if (router.canGoBack()) router.back();
-                else router.replace('/discover');
-              }}
+              onPress={() =>
+                backFromPlace(router, {
+                  date: selectedDate,
+                  diaryId: selectedDiaryId,
+                  notebookId: selectedNotebookId,
+                  origin: selectedOrigin,
+                  tripId: selectedTripId,
+                })
+              }
             />
           ),
           title,

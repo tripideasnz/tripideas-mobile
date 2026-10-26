@@ -77,7 +77,7 @@ const routeBlock = /router.push\(\{\s*pathname: '\/place\/\[slug\]',\s*params: \
 assert.match(card, routeBlock);
 assert.match(baselineCard, routeBlock);
 assert.match(tripDetail, /pathname: '\/trips\/\[tripId\]\/map'/);
-for (const path of ['app/(tabs)/map.tsx', 'app/(tabs)/(discover)/place/[slug].tsx', 'app/trips/[tripId]/map.tsx']) {
+for (const path of ['app/(tabs)/map.tsx', 'app/place/[slug].tsx', 'app/trips/[tripId]/map.tsx']) {
   assert.match(await read(path), /export default function/);
 }
 console.log('✓ Discover baseline presentation, established place route, and Map tab registration are preserved');

@@ -8,7 +8,7 @@ const [detail, api, provider, types, toolbar, sharedToolbar, autosave, picker, s
   read('components/ui/object-toolbar.tsx'), read('components/ui/saved-autosave-field.tsx'),
   read('app/notebooks/location-picker.tsx'), read('notebooks/storage.ts'),
   read('app/notebooks/[notebookId]/sharing.tsx'),
-  read('app/(tabs)/(discover)/place/[slug].tsx'), read('sanity/queries.ts'),
+  read('app/place/[slug].tsx'), read('sanity/queries.ts'),
   read('components/ui/drag-reorder-row.tsx'),
   read('components/ui/floating-structural-add.tsx'),
   read('components/ui/saved-place-selector.tsx'),

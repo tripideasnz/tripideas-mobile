@@ -7,7 +7,7 @@ const [map, mapPeek, mapTile, notebook, place, privacy, profile, saved, tripEntr
   read('components/map/map-peek-sheet.tsx'),
   read('components/map/map-place-tile.tsx'),
   read('app/notebooks/[notebookId].tsx'),
-  read('app/(tabs)/(discover)/place/[slug].tsx'),
+  read('app/place/[slug].tsx'),
   read('app/privacy-policy.tsx'),
   read('app/(tabs)/profile.tsx'),
   read('app/(tabs)/saved.tsx'),
@@ -26,10 +26,10 @@ assert.match(placeNavigation, /params: \{ origin: 'map', slug \}/);
 assert.match(mapPeek, /onPress\(place\)/);
 assert.match(mapPeek, /onPress=\{onPlacePress\}/);
 assert.match(mapTile, /openPlaceFromMap\(router, place\.slug\?\.current\)/);
-assert.match(place, /selectedOrigin === 'map'/);
-assert.match(place, /returnToMapFromPlace\(router\)/);
-assert.match(placeNavigation, /router\.navigate\(tab\)/);
-assert.match(placeNavigation, /returnToOriginTab\(router, '\/map'/);
+// Place is a root-stack route: Back is a plain pop (same as the edge swipe), with explicit fallbacks only without history.
+assert.match(place, /backFromPlace\(router, \{/);
+assert.match(placeNavigation, /if \(router\.canGoBack\(\)\) \{\s*router\.back\(\);\s*return 'back';/);
+assert.match(placeNavigation, /origin === 'map'\) router\.replace\('\/map'\)/);
 assert.match(tripEntry, /icon="delete-outline"[\s\S]*size="compact"/);
 assert.match(notebook, /accessibilityLabel=\{`Delete Page/);
 assert.match(notebook, /icon="delete-outline"/);

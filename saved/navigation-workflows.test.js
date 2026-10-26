@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 const [back, root, notebooks, notebook, notebookPicker, diaryList, diaryCover, diaryIndex, diaryDay, diaryMap, diaryPicker, editorial, personal, personalPicker, mainMap, trip, tripMap] = await Promise.all([
-  read('components/ui/header-back-button.tsx'), read('app/_layout.tsx'), read('app/notebooks/index.tsx'), read('app/notebooks/[notebookId].tsx'), read('app/notebooks/location-picker.tsx'), read('app/diaries/index.tsx'), read('app/diaries/[diaryId].tsx'), read('app/diaries/[diaryId]/contents.tsx'), read('app/diaries/[diaryId]/day.tsx'), read('app/diaries/[diaryId]/map.tsx'), read('app/diaries/location-picker.tsx'), read('app/(tabs)/(discover)/place/[slug].tsx'), read('app/personal-place-cards/[cardId].tsx'), read('app/personal-place-cards/location-picker.tsx'), read('app/(tabs)/map.tsx'), read('app/trips/[tripId].tsx'), read('app/trips/[tripId]/map.tsx'),
+  read('components/ui/header-back-button.tsx'), read('app/_layout.tsx'), read('app/notebooks/index.tsx'), read('app/notebooks/[notebookId].tsx'), read('app/notebooks/location-picker.tsx'), read('app/diaries/index.tsx'), read('app/diaries/[diaryId].tsx'), read('app/diaries/[diaryId]/contents.tsx'), read('app/diaries/[diaryId]/day.tsx'), read('app/diaries/[diaryId]/map.tsx'), read('app/diaries/location-picker.tsx'), read('app/place/[slug].tsx'), read('app/personal-place-cards/[cardId].tsx'), read('app/personal-place-cards/location-picker.tsx'), read('app/(tabs)/map.tsx'), read('app/trips/[tripId].tsx'), read('app/trips/[tripId]/map.tsx'),
 ]);
 
 assert.match(back, /router\.canGoBack\(\)/);
@@ -18,13 +18,16 @@ for (const picker of [notebookPicker, diaryPicker, personalPicker]) {
 }
 console.log('✓ picker chevrons and Cancel share history-preserving dismissal');
 
-for (const detail of [editorial, mainMap]) {
-  assert.match(detail, /router\.canGoBack\(\)/);
-  assert.match(detail, /router\.back\(\)/);
-}
+// The editorial Place is a root-stack route: its back arrow is history-first through backFromPlace.
+const placeNavigation = await read('components/map/place-navigation.ts');
+assert.match(editorial, /backFromPlace\(router, \{/);
+assert.match(placeNavigation, /router\.canGoBack\(\)/);
+assert.match(placeNavigation, /router\.back\(\)/);
+assert.match(mainMap, /router\.canGoBack\(\)/);
+assert.match(mainMap, /router\.back\(\)/);
 assert.match(personal, /backOrFallback\(router, personalPlaceFallback\)/);
-assert.match(editorial, /selectedOrigin === 'notebook'/);
-assert.match(editorial, /selectedOrigin === 'diary'/);
+assert.match(placeNavigation, /origin === 'notebook'/);
+assert.match(placeNavigation, /origin === 'diary'/);
 assert.match(personal, /origin === 'notebook'/);
 assert.match(personal, /origin === 'diary'/);
 assert.match(mainMap, /placeContext\?\.slug/);

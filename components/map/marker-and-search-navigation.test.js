@@ -5,8 +5,7 @@ import { readFile } from 'node:fs/promises';
 import {
   createNavigationGuard,
   openPlaceFromMap,
-  returnToMapFromPlace,
-  returnToSearchFromPlace,
+  backFromPlace,
 } from './place-navigation.ts';
 import { nextMapSelectionAction } from './use-map-selection.ts';
 
@@ -95,10 +94,11 @@ test('tapping empty map clears the selection; leaving the Map clears it too', as
   assert.match(map, /from 'expo-router'/);
 });
 
-test('returning to the Map pops the Place and shows the Map tab, with camera state untouched', async () => {
-  const router = fakeRouter();
-  assert.equal(returnToMapFromPlace(router, createNavigationGuard()), true);
-  assert.deepEqual(router.actions, [['back'], ['navigate', '/map']]);
+test('returning from a Map-opened Place is a plain pop, with camera state untouched', async () => {
+  const actions = [];
+  const router = { back: () => actions.push('back'), canGoBack: () => true, dismissTo() {}, replace() {} };
+  assert.equal(backFromPlace(router, { origin: 'map' }, createNavigationGuard()), 'back');
+  assert.deepEqual(actions, ['back'], 'no tab switch: the Map tab is still mounted beneath the Place');
   const map = await read('app/(tabs)/map.tsx');
   // State is preserved because nothing resets it on return.
   assert.doesNotMatch(map, /useFocusEffect\([\s\S]{0,200}(setSelection|setQuery|setIsFitPending|lastCameraRef\.current = null)/);
@@ -124,23 +124,12 @@ test('Search results open the Place with the search origin', async () => {
   assert.match(card, /origin: navigationOrigin/);
 });
 
-test('Back from a Search-opened Place pops it and shows the Search tab again', () => {
-  const router = fakeRouter();
-  assert.equal(returnToSearchFromPlace(router, createNavigationGuard()), true);
-  assert.deepEqual(router.actions, [['back'], ['navigate', '/search']]);
-  // No replacement Search screen and no duplicate Place route are created.
-  assert.equal(router.actions.some(([kind]) => kind === 'push'), false);
-});
-
-test('repeat Back taps return once; a guard-free first return still works', () => {
-  const time = clock();
-  const guard = createNavigationGuard({ now: time.now });
-  const router = fakeRouter();
-  assert.equal(returnToSearchFromPlace(router, guard), true);
-  assert.equal(returnToSearchFromPlace(router, guard), false);
-  assert.equal(router.actions.length, 2);
-  time.advance(900);
-  assert.equal(returnToSearchFromPlace(router, guard), true);
+test('Back from a Search-opened Place is a plain pop, so the same Search screen is revealed', () => {
+  const actions = [];
+  const router = { back: () => actions.push(['back']), canGoBack: () => true, dismissTo: (h) => actions.push(['dismissTo', h]), replace: (h) => actions.push(['replace', h]) };
+  assert.equal(backFromPlace(router, { origin: 'search' }, createNavigationGuard()), 'back');
+  // No replacement Search screen, no duplicate Place and no tab navigation are created.
+  assert.deepEqual(actions, [['back']]);
 });
 
 test('Search query and results stay mounted: the Search screen holds its own state and is not reset on focus', async () => {
@@ -148,18 +137,6 @@ test('Search query and results stay mounted: the Search screen holds its own sta
   assert.match(placeSearch, /useState/);
   assert.doesNotMatch(search, /useFocusEffect|useIsFocused/);
   assert.doesNotMatch(placeSearch, /useFocusEffect[\s\S]{0,200}set(Query|Results)/);
-});
-
-test('other origins keep their own Back behaviour, after the Map and Search branches', async () => {
-  const place = await read('app/(tabs)/(discover)/place/[slug].tsx');
-  const at = (needle) => place.indexOf(needle);
-  assert.ok(at("selectedOrigin === 'map'") < at("selectedOrigin === 'search'"));
-  assert.ok(at("selectedOrigin === 'search'") < at('if (router.canGoBack()) {'));
-  for (const origin of ['favourites', 'trip-map', 'notebook', 'diary']) {
-    assert.ok(place.lastIndexOf(`selectedOrigin === '${origin}'`) > at("selectedOrigin === 'search'"), origin);
-  }
-  // Discover and others are not given a tab-return branch.
-  assert.doesNotMatch(place, /selectedOrigin === 'discover'/);
 });
 
 let failed = false;
