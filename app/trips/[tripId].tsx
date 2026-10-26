@@ -23,9 +23,10 @@ import { LoadingView } from '@/components/ui/loading-view';
 import { TripImageCollage } from '@/components/trip-image-collage';
 import { AutoExpandingTextInput } from '@/components/ui/app-text-input';
 import { Palette, Radius, Screen, Space, Type } from '@/constants/design';
-import { fetchPlaceCardsByIds } from '@/sanity/place-cards';
 import { getTripImages, type PersonalTripPhoto } from '@/trips/images';
 import { useMyTrips } from '@/trips/provider';
+import { tripDetailView } from '@/trips/detail-state';
+import { useTripPlaceCards } from '@/trips/use-trip-place-cards';
 import {
   buildPublicTripSnapshot,
   createPublicTripShare,
@@ -35,7 +36,6 @@ import {
   buildTripShareCardData,
   buildTripShareMessage,
 } from '@/trips/share';
-import type { PlaceCardData } from '@/types/content';
 
 export default function TripDetailScreen() {
   const { isLoading: isLoadingSession, session, signIn } = useSession();
@@ -47,6 +47,7 @@ export default function TripDetailScreen() {
   const {
     getTrip,
     isLoading: isLoadingTrips,
+    isRefreshing,
     refresh,
     removeTripEntry,
     renameTrip,
@@ -54,11 +55,9 @@ export default function TripDetailScreen() {
     updateTripNote,
   } = useMyTrips();
   const trip = getTrip(selectedTripId);
+  const view = tripDetailView({ hasTrip: Boolean(trip), isLoading: isLoadingTrips, isRefreshing });
   const [name, setName] = useState('');
   const [isEditingName, setIsEditingName] = useState(false);
-  const [places, setPlaces] = useState<PlaceCardData[]>([]);
-  const [isLoadingPlaces, setIsLoadingPlaces] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [highlightedEntryId, setHighlightedEntryId] = useState<string | null>(null);
   const [isSearchingPlaces, setIsSearchingPlaces] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
@@ -75,7 +74,9 @@ export default function TripDetailScreen() {
     () => trip?.places.map((place) => place.placeId) ?? [],
     [trip?.places]
   );
-  const placeIdsKey = placeIds.join('|');
+  // Editorial cards arrive from Sanity after the Trip is already on screen: entries render
+  // from the provider's data straight away and fill in as cards land.
+  const { cards: places, didFail: placesFailed, isPending: placesPending } = useTripPlaceCards(placeIds);
   const trimmedName = name.trim();
   const isNameDirty = Boolean(
     trip && trimmedName && trimmedName !== trip.name
@@ -129,46 +130,6 @@ export default function TripDetailScreen() {
     setName(trip?.name ?? '');
     setIsEditingName(false);
   }, [trip?.id, trip?.name]);
-
-  useEffect(() => {
-    if (!trip || placeIds.length === 0) {
-      setPlaces([]);
-      setErrorMessage(null);
-      setIsLoadingPlaces(false);
-      return;
-    }
-
-    let isMounted = true;
-
-    setIsLoadingPlaces(true);
-    setErrorMessage(null);
-
-    fetchPlaceCardsByIds(placeIds)
-      .then((data) => {
-        if (isMounted) {
-          setPlaces(data);
-        }
-      })
-      .catch((error) => {
-        console.error(error);
-
-        if (isMounted) {
-          setPlaces([]);
-          setErrorMessage('Unable to load places for this trip.');
-        }
-      })
-      .finally(() => {
-        if (isMounted) {
-          setIsLoadingPlaces(false);
-        }
-      });
-
-    return () => {
-      isMounted = false;
-    };
-    // A stable string prevents refetches when note edits replace the trip object.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [placeIdsKey, selectedTripId]);
 
   useEffect(() => () => {
     if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
@@ -309,9 +270,13 @@ export default function TripDetailScreen() {
         }}
       />
 
-      {isLoadingTrips ? (
+      {/* One full-screen indicator, and only when there is nothing to show: no Trips data yet,
+          or this Trip is not known yet while a refresh might still find it. A known Trip
+          renders at once and stays interactive while the focus refresh and the editorial
+          cards load behind it. */}
+      {view === 'loading' ? (
         <LoadingView />
-      ) : !trip || !selectedTripId ? (
+      ) : view === 'notFound' || !trip || !selectedTripId ? (
         <Text style={{ color: '#717171', fontSize: 16 }}>
           This trip could not be found.
         </Text>
@@ -456,15 +421,12 @@ export default function TripDetailScreen() {
             onClose={() => setIsSearchingPlaces(false)}
           /> : null}
 
-          {isLoadingPlaces ? (
-            <LoadingView />
-          ) : errorMessage && orderedEntries.every(
-            (entry) => entry.type === 'editorialPlace'
-          ) ? (
-            <Text style={{ color: '#717171', fontSize: 16 }}>
-              {errorMessage}
+          {placesFailed && orderedEntries.some((entry) => entry.type === 'editorialPlace') ? (
+            <Text style={{ color: '#717171', fontSize: 16, marginBottom: Space.lg }}>
+              Unable to load place details for this trip. Your entries and notes are still here.
             </Text>
-          ) : orderedEntries.length > 0 ? (
+          ) : null}
+          {orderedEntries.length > 0 ? (
             orderedEntries.map((entry, index) => (
               <View
                 key={entry.id}
@@ -475,6 +437,11 @@ export default function TripDetailScreen() {
                   canMoveDown={index < orderedEntries.length - 1}
                   canMoveUp={index > 0}
                   entry={entry}
+                  editorialPending={
+                    placesPending &&
+                    entry.type === 'editorialPlace' &&
+                    !placesById.has(entry.editorialPlace.id)
+                  }
                   editorialPlace={
                     entry.type === 'editorialPlace'
                       ? placesById.get(entry.editorialPlace.id)

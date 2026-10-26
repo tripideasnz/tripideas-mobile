@@ -1,5 +1,5 @@
 import { Stack, useRouter } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, View } from 'react-native';
 
 import { TripIndexCard } from '@/components/trip-index-card';
@@ -12,11 +12,10 @@ import { AppText } from '@/components/ui/app-text';
 import { AutoExpandingTextInput } from '@/components/ui/app-text-input';
 import { StatusText } from '@/components/ui/status-text';
 import { Palette, Radius, Screen, Space } from '@/constants/design';
-import { fetchPlaceCardsByIds } from '@/sanity/place-cards';
 import { getTripImages } from '@/trips/images';
 import { tripRequestDiagnostic } from '@/trips/error-diagnostic';
 import { useMyTrips } from '@/trips/provider';
-import type { PlaceCardData } from '@/types/content';
+import { useTripPlaceCards } from '@/trips/use-trip-place-cards';
 
 export default function TripsScreen() {
   const { isLoading: isLoadingSession, session, signIn } = useSession();
@@ -39,39 +38,11 @@ export default function TripsScreen() {
   const [showCreate, setShowCreate] = useState(false);
   const [isCreatingTrip, setIsCreatingTrip] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
-  const [tripPlaces, setTripPlaces] = useState<PlaceCardData[]>([]);
-  const [isLoadingPlaces, setIsLoadingPlaces] = useState(false);
   const tripPlaceIds = useMemo(
     () => Array.from(new Set(trips.flatMap((trip) => trip.places.map((place) => place.placeId)))),
     [trips]
   );
-  const tripPlaceIdsKey = tripPlaceIds.join('|');
-
-  useEffect(() => {
-    if (isLoading || tripPlaceIds.length === 0) {
-      setTripPlaces([]);
-      setIsLoadingPlaces(false);
-      return;
-    }
-    let isMounted = true;
-    setIsLoadingPlaces(true);
-    fetchPlaceCardsByIds(tripPlaceIds)
-      .then((data) => {
-        if (isMounted) setTripPlaces(data);
-      })
-      .catch((error) => {
-        console.error(error);
-        if (isMounted) setTripPlaces([]);
-      })
-      .finally(() => {
-        if (isMounted) setIsLoadingPlaces(false);
-      });
-    return () => {
-      isMounted = false;
-    };
-    // Trip names and notes do not require place-card refetches.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoading, tripPlaceIdsKey]);
+  const { cards: tripPlaces, isLoadingCards: isLoadingPlaces } = useTripPlaceCards(tripPlaceIds);
 
   const submitCreate = async () => {
     if (!newTripName.trim() || creatingRef.current) return;
@@ -203,7 +174,7 @@ export default function TripsScreen() {
       ) : null}
       {createError ? <AppText color={Palette.danger} style={{ marginBottom: Space.lg }}>{createError}</AppText> : null}
 
-      {isLoading || isLoadingPlaces ? (
+      {isLoading || (isLoadingPlaces && tripPlaces.length === 0) ? (
         <StatusText>Loading trips...</StatusText>
       ) : trips.length ? (
         trips.map((trip) => {

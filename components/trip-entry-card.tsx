@@ -14,6 +14,7 @@ export function TripEntryCard({
   canMoveDown,
   canMoveUp,
   entry,
+  editorialPending = false,
   editorialPlace,
   highlighted,
   onNavigateDown,
@@ -23,6 +24,8 @@ export function TripEntryCard({
 }: {
   canMoveDown: boolean;
   canMoveUp: boolean;
+  /** The editorial card is still being fetched: show a placeholder, not "unavailable". */
+  editorialPending?: boolean;
   editorialPlace?: PlaceCardData;
   entry: TripEntry;
   highlighted: boolean;
@@ -56,7 +59,15 @@ export function TripEntryCard({
     }}>
       <View>
         {entry.type === 'editorialPlace' ? (
-          editorialPlace ? <PlaceCard embedded place={editorialPlace} /> : (
+          editorialPlace ? <PlaceCard embedded place={editorialPlace} /> : editorialPending ? (
+            // Same 4:3 image area as a loaded card, so nothing jumps when it arrives.
+            <View accessibilityLabel="Loading place" accessible>
+              <View style={{ aspectRatio: 4 / 3, backgroundColor: Palette.surfaceMuted }} />
+              <View style={{ padding: Space.lg }}>
+                <Text style={{ color: Palette.textMuted, ...Type.cardTitle }}>Loading place…</Text>
+              </View>
+            </View>
+          ) : (
             <View style={{ padding: Space.lg }}>
               <Text style={Type.cardTitle}>Editorial place unavailable</Text>
             </View>

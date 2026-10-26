@@ -52,7 +52,10 @@ type MyTripsContextValue = {
   importDecision: ImportDecision;
   importProgress: TripMigrationProgress;
   isImporting: boolean;
+  /** True only while there is no usable Trips data yet for the current user. */
   isLoading: boolean;
+  /** True while a refresh runs and the current user's Trips are already available. */
+  isRefreshing: boolean;
   loadError: string | null;
   refresh: () => Promise<void>;
   removePlaceFromTrip: (tripId: string, placeId: string) => Promise<void>;
@@ -110,7 +113,13 @@ export function MyTripsProvider({ children }: PropsWithChildren) {
   const deferredForSessionRef = useRef(new Set<string>());
   const enqueue = useRef(createQueue()).current;
   const [trips, setTripsState] = useState<MyTrip[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  // Whether any request is in flight (the initial load or a refresh).
+  const [isFetching, setIsFetching] = useState(true);
+  // Whether the current user already has usable Trips to show: cached or device
+  // Trips found at load, or a completed refresh. Reset for every user.
+  const [hasData, setHasData] = useState(false);
+  const isLoading = isFetching && !hasData;
+  const isRefreshing = isFetching && hasData;
   const [isImporting, setIsImporting] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [importDecision, setImportDecision] = useState<ImportDecision>(null);
@@ -137,7 +146,7 @@ export function MyTripsProvider({ children }: PropsWithChildren) {
   const refresh = useCallback(async () => {
     const ownerId = activeUserRef.current;
     if (!ownerId) return;
-    setIsLoading(true);
+    setIsFetching(true);
     setLoadError(null);
     try {
       const latest = await listTrips(
@@ -145,12 +154,13 @@ export function MyTripsProvider({ children }: PropsWithChildren) {
         deletedTripIdsRef.current
       );
       await storeAuthoritative(ownerId, latest);
+      if (activeUserRef.current === ownerId) setHasData(true);
     } catch {
       if (activeUserRef.current === ownerId) {
         setLoadError('Showing saved Trips. Connect to refresh them.');
       }
     } finally {
-      if (activeUserRef.current === ownerId) setIsLoading(false);
+      if (activeUserRef.current === ownerId) setIsFetching(false);
     }
   }, [storeAuthoritative]);
 
@@ -165,7 +175,9 @@ export function MyTripsProvider({ children }: PropsWithChildren) {
     journalRef.current = null;
     showLegacyRef.current = false;
     setLoadError(null);
-    setIsLoading(true);
+    // Previous-account data is gone before anything else, including its availability flag.
+    setHasData(false);
+    setIsFetching(true);
 
     void (async () => {
       const legacy = await getMyTrips();
@@ -176,7 +188,7 @@ export function MyTripsProvider({ children }: PropsWithChildren) {
         const claim = await tripStorage.getClaim();
         localMutationsAllowedRef.current = !claim;
         setTripsState(claim ? [] : legacy);
-        setIsLoading(false);
+        setIsFetching(false);
         return;
       }
       localMutationsAllowedRef.current = false;
@@ -208,7 +220,9 @@ export function MyTripsProvider({ children }: PropsWithChildren) {
         legacy.length > 0 &&
         (!claim || claim.userId === userId) &&
         !existingJournal?.entries.every((entry) => entry.state === 'COMPLETED');
-      setTripsState(visibleTrips(cached));
+      const visible = visibleTrips(cached);
+      setTripsState(visible);
+      setHasData(visible.length > 0);
       if (shouldOffer) {
         setImportDecision({
           accountLabel: user?.email ?? user?.name ?? 'this account',
@@ -219,7 +233,7 @@ export function MyTripsProvider({ children }: PropsWithChildren) {
     })().catch(() => {
       if (mounted) {
         setLoadError('Showing saved Trips. Connect to refresh them.');
-        setIsLoading(false);
+        setIsFetching(false);
       }
     });
 
@@ -583,6 +597,7 @@ export function MyTripsProvider({ children }: PropsWithChildren) {
     importProgress: migrationProgress(journal),
     isImporting,
     isLoading,
+    isRefreshing,
     loadError,
     refresh,
     removePlaceFromTrip,
@@ -595,7 +610,7 @@ export function MyTripsProvider({ children }: PropsWithChildren) {
     updateTripNote,
   }), [
     addPersonalCardToTrip, addPlaceToTrip, createTrip, createTripWithPlace, deferImport, deleteTrip,
-    getTrip, importDecision, isImporting, isLoading, journal, loadError,
+    getTrip, importDecision, isImporting, isLoading, isRefreshing, journal, loadError,
     refresh, removePlaceFromTrip, removeTripEntry, renameTrip, runImport, trips,
     updatePlaceNote, updateTripEntryNote, updateTripNote,
   ]);
