@@ -173,10 +173,15 @@ export function MapTileView({
             </Text>
           ) : null
         }
+        // A small first render window keeps opening the list cheap; the rest
+        // is rendered as it is scrolled to.
+        initialNumToRender={4}
+        maxToRenderPerBatch={4}
         numColumns={2}
         renderItem={({ item }) => <MapPlaceTile place={item} />}
         showsVerticalScrollIndicator={false}
         style={{ flex: 1 }}
+        windowSize={7}
       />
     </SafeAreaView>
   );

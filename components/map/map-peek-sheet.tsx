@@ -1,6 +1,6 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Image } from 'expo-image';
-import { memo, useCallback, useEffect, useRef } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import {
   FlatList,
   Keyboard,
@@ -8,6 +8,8 @@ import {
   Text,
   View,
 } from 'react-native';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 
 import {
   MapActiveFilters,
@@ -27,7 +29,17 @@ import {
   peekItemLayout,
   peekScrollOffset,
 } from '@/components/map/peek-list';
+import {
+  settledSheetHeight,
+  sheetHeightAtProgress,
+  sheetProgressTarget,
+  type MapTrayState,
+} from '@/components/map/tray-motion';
+import { TRAY_TIMING_CONFIG } from '@/components/map/tray-timing';
 import type { MapPlace } from '@/sanity/types';
+
+// Used for the first frame, before the tray's own content has been measured.
+const INITIAL_EXPANDED_HEIGHT = 289;
 
 const PeekSeparator = () => <View style={{ width: Space.md }} />;
 
@@ -105,6 +117,8 @@ type MapPeekSheetProps = {
   isMinimised: boolean;
   onHandlePress: () => void;
   onMinimise: () => void;
+  /** Called with the height the tray settles at, never during the transition. */
+  onSettledHeight?: (height: number) => void;
   onPlacePress: (place: MapPlace) => void;
   onQueryChange: (query: string) => void;
   onRemoveFilter: (filterId: string) => void;
@@ -120,6 +134,7 @@ export function MapPeekSheet({
   isMinimised,
   onHandlePress,
   onMinimise,
+  onSettledHeight,
   onPlacePress,
   onQueryChange,
   onRemoveFilter,
@@ -145,133 +160,207 @@ export function MapPeekSheet({
     [onPlacePress, selectedPlaceId]
   );
 
+  // ── Transition ────────────────────────────────────────────────────────────
+  // The tray's content stays mounted. Only its height (and the list's opacity)
+  // change, driven by one progress value on the UI thread: 0 minimised, 1 expanded.
+  // Retargeting that value mid-flight reverses smoothly from wherever it is, so rapid
+  // taps never queue animations. The rest of the screen is told the height only once
+  // it has settled, so camera padding is not recomputed on every frame.
+  const progress = useSharedValue(sheetProgressTarget(isMinimised ? 'minimised' : 'peek'));
+  const expandedHeight = useSharedValue(INITIAL_EXPANDED_HEIGHT);
+  const [naturalHeight, setNaturalHeight] = useState(0);
+  const animating = useRef(false);
+  const hasMounted = useRef(false);
+  const latest = useRef({ isMinimised, naturalHeight, onSettledHeight });
+  latest.current = { isMinimised, naturalHeight, onSettledHeight };
+
+  const reportSettled = useCallback(() => {
+    const { isMinimised: minimised, naturalHeight: height, onSettledHeight: report } = latest.current;
+    if (height > 0) report?.(settledSheetHeight((minimised ? 'minimised' : 'peek') as MapTrayState, height));
+  }, []);
+  const finishTransition = useCallback(() => {
+    animating.current = false;
+    reportSettled();
+  }, [reportSettled]);
+
+  useEffect(() => {
+    if (!hasMounted.current) {
+      hasMounted.current = true;
+      return;
+    }
+    animating.current = true;
+    progress.value = withTiming(
+      sheetProgressTarget(isMinimised ? 'minimised' : 'peek'),
+      TRAY_TIMING_CONFIG,
+      (finished) => {
+        // An interrupted transition never reports: the one that replaced it will.
+        if (finished) scheduleOnRN(finishTransition);
+      }
+    );
+  }, [isMinimised, finishTransition, progress]);
+
+  // Initial measurement and content changes (filters, results) while at rest.
+  useEffect(() => {
+    if (!animating.current) reportSettled();
+  }, [naturalHeight, isMinimised, reportSettled]);
+
+  const sheetStyle = useAnimatedStyle(() => ({ height: sheetHeightAtProgress(progress.value, expandedHeight.value) }));
+  const bodyStyle = useAnimatedStyle(() => ({ opacity: progress.value }));
+
   const countLabel = isLoading
     ? 'Loading...'
     : `${resultCount} ${resultCount === 1 ? 'place' : 'places'} in view`;
 
   return (
-    <View
-      style={{
-        ...Shadow.sheet,
-        backgroundColor: Palette.surface,
-        borderTopLeftRadius: Radius.sheet,
-        borderTopRightRadius: Radius.sheet,
-        paddingBottom: Space.md,
-        paddingHorizontal: Space.md,
-        paddingTop: Space.xs,
-      }}>
-      {/* Header row: [↓ or spacer] | count | [↑] */}
+    <Animated.View
+      style={[
+        {
+          ...Shadow.sheet,
+          backgroundColor: Palette.surface,
+          borderTopLeftRadius: Radius.sheet,
+          borderTopRightRadius: Radius.sheet,
+        },
+        sheetStyle,
+      ]}>
       <View
         style={{
-          alignItems: 'center',
-          flexDirection: 'row',
-          minHeight: isMinimised ? 48 : 44,
+          borderTopLeftRadius: Radius.sheet,
+          borderTopRightRadius: Radius.sheet,
+          flex: 1,
+          overflow: 'hidden',
         }}>
-        {isMinimised ? (
-          <View style={{ width: 44 }} />
-        ) : (
-          <Pressable
-            accessibilityLabel="Minimise map tray"
-            accessibilityRole="button"
-            hitSlop={8}
-            onPress={() => {
-              Keyboard.dismiss();
-              onMinimise();
-            }}
-            style={({ pressed }) => ({
-              alignItems: 'center',
-              justifyContent: 'center',
-              opacity: pressed ? 0.55 : 1,
-              width: 44,
-            })}>
-            <MaterialIcons
-              color={Palette.textMuted}
-              name="keyboard-arrow-down"
-              size={28}
-            />
-          </Pressable>
-        )}
-
-        <Text
-          style={{
-            color: Palette.text,
-            flex: 1,
-            textAlign: 'center',
-            ...Type.label,
-          }}>
-          {countLabel}
-        </Text>
-
-        <Pressable
-          accessibilityLabel={isMinimised ? 'Expand map tray' : 'Open full list view'}
-          accessibilityRole="button"
-          hitSlop={8}
-          onPress={() => {
-            Keyboard.dismiss();
-            onHandlePress();
+        <View
+          onLayout={(event) => {
+            const height = event.nativeEvent.layout.height;
+            expandedHeight.value = height;
+            setNaturalHeight(height);
           }}
-          style={({ pressed }) => ({
-            alignItems: 'center',
-            justifyContent: 'center',
-            opacity: pressed ? 0.55 : 1,
-            width: 44,
-          })}>
-          <MaterialIcons
-            color={Palette.textMuted}
-            name="keyboard-arrow-up"
-            size={28}
-          />
-        </Pressable>
-      </View>
-
-      {isMinimised ? null : (
-        <>
-          <AppTextInput
-            autoCapitalize="none"
-            autoCorrect={false}
-            onChangeText={onQueryChange}
-            placeholder="Search for trip ideas"
-            returnKeyType="search"
+          style={{
+            left: 0,
+            paddingBottom: Space.md,
+            paddingHorizontal: Space.md,
+            paddingTop: Space.xs,
+            position: 'absolute',
+            right: 0,
+            top: 0,
+          }}>
+          {/* Header row: [↓ or spacer] | count | [↑] */}
+          <View
             style={{
-              backgroundColor: Palette.surfaceMuted,
-              borderRadius: Radius.pill,
+              alignItems: 'center',
+              flexDirection: 'row',
               minHeight: 44,
-            }}
-            value={query}
-          />
+            }}>
+            {isMinimised ? (
+              <View style={{ width: 44 }} />
+            ) : (
+              <Pressable
+                accessibilityLabel="Minimise map tray"
+                accessibilityRole="button"
+                hitSlop={8}
+                onPress={() => {
+                  Keyboard.dismiss();
+                  onMinimise();
+                }}
+                style={({ pressed }) => ({
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  opacity: pressed ? 0.55 : 1,
+                  width: 44,
+                })}>
+                <MaterialIcons
+                  color={Palette.textMuted}
+                  name="keyboard-arrow-down"
+                  size={28}
+                />
+              </Pressable>
+            )}
 
-          {activeFilters.length > 0 ? (
-            <View style={{ paddingTop: Space.md }}>
-              <MapActiveFilters
-                filters={activeFilters}
-                onRemove={onRemoveFilter}
+            <Text
+              style={{
+                color: Palette.text,
+                flex: 1,
+                textAlign: 'center',
+                ...Type.label,
+              }}>
+              {countLabel}
+            </Text>
+
+            <Pressable
+              accessibilityLabel={isMinimised ? 'Expand map tray' : 'Open full list view'}
+              accessibilityRole="button"
+              hitSlop={8}
+              onPress={() => {
+                Keyboard.dismiss();
+                onHandlePress();
+              }}
+              style={({ pressed }) => ({
+                alignItems: 'center',
+                justifyContent: 'center',
+                opacity: pressed ? 0.55 : 1,
+                width: 44,
+              })}>
+              <MaterialIcons
+                color={Palette.textMuted}
+                name="keyboard-arrow-up"
+                size={28}
               />
-            </View>
-          ) : null}
+            </Pressable>
+          </View>
 
-          {places.length > 0 ? (
-            <FlatList
-              ref={placesRef}
-              contentContainerStyle={{ paddingTop: Space.md }}
-              data={places}
-              extraData={selectedPlaceId}
-              // Virtualised: only thumbnails near the viewport are mounted, so
-              // image requests follow what the user can actually scroll to.
-              getItemLayout={(_, index) => peekItemLayout(index, Space.md)}
-              horizontal
-              initialNumToRender={6}
-              ItemSeparatorComponent={PeekSeparator}
-              keyboardShouldPersistTaps="handled"
-              keyExtractor={placeKey}
-              maxToRenderPerBatch={6}
-              renderItem={renderPlace}
-              showsHorizontalScrollIndicator={false}
-              style={{ flexGrow: 0 }}
-              windowSize={5}
+          {/* Stays mounted while minimised: it is clipped away, faded out and inert. */}
+          <Animated.View
+            accessibilityElementsHidden={isMinimised}
+            importantForAccessibility={isMinimised ? 'no-hide-descendants' : 'auto'}
+            pointerEvents={isMinimised ? 'none' : 'auto'}
+            style={bodyStyle}>
+            <AppTextInput
+              autoCapitalize="none"
+              autoCorrect={false}
+              onChangeText={onQueryChange}
+              placeholder="Search for trip ideas"
+              returnKeyType="search"
+              style={{
+                backgroundColor: Palette.surfaceMuted,
+                borderRadius: Radius.pill,
+                minHeight: 44,
+              }}
+              value={query}
             />
-          ) : null}
-        </>
-      )}
-    </View>
+
+            {activeFilters.length > 0 ? (
+              <View style={{ paddingTop: Space.md }}>
+                <MapActiveFilters
+                  filters={activeFilters}
+                  onRemove={onRemoveFilter}
+                />
+              </View>
+            ) : null}
+
+            {places.length > 0 ? (
+              <FlatList
+                ref={placesRef}
+                contentContainerStyle={{ paddingTop: Space.md }}
+                data={places}
+                extraData={selectedPlaceId}
+                // Virtualised: only thumbnails near the viewport are mounted, so
+                // image requests follow what the user can actually scroll to.
+                getItemLayout={(_, index) => peekItemLayout(index, Space.md)}
+                horizontal
+                initialNumToRender={6}
+                ItemSeparatorComponent={PeekSeparator}
+                keyboardShouldPersistTaps="handled"
+                keyExtractor={placeKey}
+                maxToRenderPerBatch={6}
+                renderItem={renderPlace}
+                showsHorizontalScrollIndicator={false}
+                style={{ flexGrow: 0 }}
+                windowSize={5}
+              />
+            ) : null}
+          </Animated.View>
+        </View>
+      </View>
+    </Animated.View>
   );
 }

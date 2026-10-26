@@ -46,6 +46,8 @@ import {
   type ObscuredEdges,
 } from '@/components/map/marker-visibility';
 import { openPlaceFromMap } from '@/components/map/place-navigation';
+import { MapFullListOverlay } from '@/components/map/map-full-list-overlay';
+import { trayAfterDownArrow, trayAfterUpArrow, type MapTrayState } from '@/components/map/tray-motion';
 import { clearRegionScope, type MapContentSelection } from '@/components/map/map-selection';
 import { MapTileView } from '@/components/map/map-tile-view';
 import { useMapSelection } from '@/components/map/use-map-selection';
@@ -75,7 +77,6 @@ const PEEK_SHEET_FALLBACK = 289;
 // Room the selected-marker label needs above the marker pin.
 const SELECTED_MARKER_LABEL_ALLOWANCE = 80;
 
-type MapTrayState = 'minimised' | 'peek' | 'full';
 
 function parseCoordinate(value: string | undefined): number | null {
   const n = parseFloat(value ?? '');
@@ -680,9 +681,6 @@ export default function MapScreen() {
     setIsActivitiesSheetOpen(false);
     setIsRegionsSheetOpen(false);
     setIsSavedSheetOpen(false);
-    if (trayState === 'full') {
-      setIsMapReady(false);
-    }
     setTrayState('peek');
   };
 
@@ -721,7 +719,6 @@ export default function MapScreen() {
     setSelectedActivityTagIds(tagIds);
     setIsFitPending(true);
     setIsActivitiesSheetOpen(false);
-    if (trayState === 'full') setIsMapReady(false);
     setTrayState('peek');
   };
 
@@ -774,35 +771,6 @@ export default function MapScreen() {
       visible={Boolean(session) && isSavedSheetOpen}
     />
   );
-
-  if (trayState === 'full') {
-    return (
-      <>
-        <MapTileView
-          activeFilters={activeFilters}
-          isLoading={isLoading}
-          onCollapse={() => {
-            // Restore the map where the user left it: no refit, filters untouched.
-            setIsMapReady(false);
-            setTrayState('peek');
-          }}
-          onRegionsPress={() => setIsRegionsSheetOpen(true)}
-          onQueryChange={setQuery}
-          onRemoveFilter={removeActiveFilter}
-          places={visiblePlaces}
-          query={query}
-          selectedFilterCount={
-            selection.type === 'region' || selection.type === 'subregion'
-              ? 1
-              : 0
-          }
-        />
-        {regionSheet}
-        {activitiesSheet}
-        {savedSheet}
-      </>
-    );
-  }
 
   return (
     <View
@@ -1015,33 +983,42 @@ export default function MapScreen() {
         </View>
       ) : null}
 
-      <View
-        onLayout={(e) => setPeekSheetHeight(e.nativeEvent.layout.height)}
-        style={{ bottom: 0, left: 0, position: 'absolute', right: 0 }}>
+      <View style={{ bottom: 0, left: 0, position: 'absolute', right: 0 }}>
         <MapPeekSheet
           activeFilters={activeFilters}
           isLoading={isLoading}
           isMinimised={trayState === 'minimised'}
-          onHandlePress={() =>
-            setTrayState((current) => {
-              if (current === 'minimised') {
-                return 'peek';
-              }
-
-              setIsMapReady(false);
-              return 'full';
-            })
-          }
-          onMinimise={() => setTrayState('minimised')}
+          onHandlePress={() => setTrayState(trayAfterUpArrow)}
+          onMinimise={() => setTrayState(trayAfterDownArrow())}
           onPlacePress={handleThumbnailPress}
           onQueryChange={setQuery}
           onRemoveFilter={removeActiveFilter}
+          onSettledHeight={setPeekSheetHeight}
           places={visiblePlaces}
           query={query}
           resultCount={visiblePlaces.length}
           selectedPlaceId={selectedPlaceId}
         />
       </View>
+
+      {/* The full list slides over the Map; MapLibre stays mounted beneath it. */}
+      <MapFullListOverlay open={trayState === 'full'}>
+        <MapTileView
+          activeFilters={activeFilters}
+          isLoading={isLoading}
+          onCollapse={() => setTrayState('peek')}
+          onRegionsPress={() => setIsRegionsSheetOpen(true)}
+          onQueryChange={setQuery}
+          onRemoveFilter={removeActiveFilter}
+          places={visiblePlaces}
+          query={query}
+          selectedFilterCount={
+            selection.type === 'region' || selection.type === 'subregion'
+              ? 1
+              : 0
+          }
+        />
+      </MapFullListOverlay>
 
       {regionSheet}
       {activitiesSheet}

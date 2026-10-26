@@ -128,16 +128,14 @@ test('region events are recorded with bearing and pitch', () => {
 
 test('closing the list restores the camera: no refit, no filter changes', async () => {
   const source = await read('app/(tabs)/map.tsx');
-  const collapse = source.match(/onCollapse=\{\(\) => \{[\s\S]*?\n          \}\}/)?.[0] ?? '';
-  assert.ok(collapse, 'collapse handler found');
-  assert.doesNotMatch(collapse, /setIsFitPending/);
-  assert.doesNotMatch(collapse, /setSelection|setSelectedActivityTagIds|setQuery|clearPlaceContext/);
-  assert.match(collapse, /setTrayState\('peek'\)/);
+  const collapse = source.match(/onCollapse=\{\(\) => setTrayState\('peek'\)\}/)?.[0] ?? '';
+  assert.ok(collapse, 'the full list closes by returning the tray to peek, and does nothing else');
   assert.match(source, /lastCameraRef\.current = cameraStateFromRegion\(event\.nativeEvent\)/);
   assert.match(source, /initialViewState=\{resolveInitialCamera\(/);
-  // Opening the list does not alter filters either.
-  const open = source.match(/onHandlePress=\{\(\) =>\n[\s\S]*?\n          \}\}/)?.[0] ?? '';
-  assert.doesNotMatch(open, /setSelection|setSelectedActivityTagIds|setQuery|setIsFitPending/);
+  // Neither arrow touches filters, the query, the camera or the fit.
+  const arrows = source.match(/onHandlePress=\{[^\n]*\}\s*\n\s*onMinimise=\{[^\n]*\}/)?.[0] ?? '';
+  assert.ok(arrows, 'arrow handlers found');
+  assert.doesNotMatch(arrows, /setSelection|setSelectedActivityTagIds|setQuery|setIsFitPending|clearPlaceContext/);
 });
 
 // ── Personal-location control ────────────────────────────────────────────────
