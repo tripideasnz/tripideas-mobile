@@ -15,6 +15,7 @@ type MapActivitiesSheetProps = {
   activities: MapActivitySuperTag[];
   isLoading: boolean;
   onApply: (tagIds: string[]) => void;
+  onClearAll: () => void;
   onClose: () => void;
   selectedTagIds: string[];
   visible: boolean;
@@ -24,6 +25,7 @@ export function MapActivitiesSheet({
   activities,
   isLoading,
   onApply,
+  onClearAll,
   onClose,
   selectedTagIds,
   visible,
@@ -78,6 +80,24 @@ export function MapActivitiesSheet({
             <MaterialIcons color="#4a4a4a" name="close" size={22} />
           </Pressable>
         </View>
+
+        {pendingTagIds.length > 0 || selectedTagIds.length > 0 ? (
+          <View style={{ alignItems: 'flex-end', paddingHorizontal: 18, paddingTop: 10 }}>
+            <Pressable
+              accessibilityLabel="Clear all selected activities"
+              accessibilityRole="button"
+              hitSlop={8}
+              onPress={() => {
+                // Immediate: clear the applied filter and the staged picks together.
+                // The sheet stays open, and X afterwards cannot bring anything back.
+                setPendingTagIds([]);
+                onClearAll();
+              }}
+              style={({ pressed }) => ({ minHeight: 32, justifyContent: 'center', opacity: pressed ? 0.55 : 1 })}>
+              <Text style={{ color: '#0080C8', fontSize: 15, fontWeight: '600' }}>Clear All</Text>
+            </Pressable>
+          </View>
+        ) : null}
 
         <ScrollView
           contentContainerStyle={{ padding: 18, paddingBottom: 40 }}>

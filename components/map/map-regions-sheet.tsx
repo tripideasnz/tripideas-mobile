@@ -22,6 +22,7 @@ type MapRegionsSheetProps = {
     north?: MapNavigationIsland;
     south?: MapNavigationIsland;
   };
+  onClear: () => void;
   onClose: () => void;
   onSelect: (selection: MapContentSelection) => void;
   selection: MapContentSelection;
@@ -31,6 +32,7 @@ type MapRegionsSheetProps = {
 export function MapRegionsSheet({
   isLoading,
   navigation,
+  onClear,
   onClose,
   onSelect,
   selection,
@@ -45,7 +47,11 @@ export function MapRegionsSheet({
       presentationStyle="pageSheet"
       visible={visible}>
       <SafeAreaView style={{ backgroundColor: '#fff', flex: 1 }}>
-        <SheetHeader onDismiss={onClose} title="Regions" />
+        <SheetHeader
+          onClear={selection.type === 'region' || selection.type === 'subregion' ? onClear : undefined}
+          onDismiss={onClose}
+          title="Regions"
+        />
         <ScrollView
           contentContainerStyle={{ paddingBottom: 40, paddingHorizontal: 18 }}>
           {isLoading ? (
@@ -258,9 +264,11 @@ function SubRegionRow({
 }
 
 function SheetHeader({
+  onClear,
   onDismiss,
   title,
 }: {
+  onClear?: () => void;
   onDismiss: () => void;
   title: string;
 }) {
@@ -275,8 +283,20 @@ function SheetHeader({
         paddingHorizontal: 18,
         paddingVertical: 14,
       }}>
-      <View style={{ width: 42 }} />
+      <View style={{ alignItems: 'flex-start', width: 64 }}>
+        {onClear ? (
+          <Pressable
+            accessibilityLabel="Clear region selection"
+            accessibilityRole="button"
+            hitSlop={8}
+            onPress={onClear}
+            style={({ pressed }) => ({ justifyContent: 'center', minHeight: 32, opacity: pressed ? 0.55 : 1 })}>
+            <Text style={{ color: '#0080C8', fontSize: 17, fontWeight: '700' }}>Clear</Text>
+          </Pressable>
+        ) : null}
+      </View>
       <Text style={{ fontSize: 19, fontWeight: '800' }}>{title}</Text>
+      <View style={{ alignItems: 'flex-end', width: 64 }}>
       <Pressable
         accessibilityLabel="Close Region filters"
         accessibilityRole="button"
@@ -290,6 +310,7 @@ function SheetHeader({
         })}>
         <MaterialIcons color="#4a4a4a" name="close" size={22} />
       </Pressable>
+      </View>
     </View>
   );
 }

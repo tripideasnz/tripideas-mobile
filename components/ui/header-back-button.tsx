@@ -8,6 +8,12 @@ type HeaderBackButtonProps = {
   color?: string;
   fallbackHref?: Href;
   onPress?: () => void;
+  /**
+   * 'surface' (default) draws its own white circle, for controls rendered in
+   * JavaScript. 'native' is a bare glyph for use inside a native navigation
+   * header, where iOS draws the button background itself.
+   */
+  variant?: 'native' | 'surface';
 };
 
 type BackRouter = {
@@ -25,6 +31,7 @@ export function HeaderBackButton({
   color = Palette.text,
   fallbackHref,
   onPress,
+  variant = 'surface',
 }: HeaderBackButtonProps = {}) {
   const router = useRouter();
   return (
@@ -35,10 +42,14 @@ export function HeaderBackButton({
       onPress={onPress ?? (() => backOrFallback(router, fallbackHref))}
       style={({ pressed }) => ({
         alignItems: 'center',
-        backgroundColor: Palette.surface,
-        borderColor: Palette.border,
-        borderRadius: 22,
-        borderWidth: StyleSheet.hairlineWidth,
+        ...(variant === 'native'
+          ? null
+          : {
+              backgroundColor: Palette.surface,
+              borderColor: Palette.border,
+              borderRadius: 22,
+              borderWidth: StyleSheet.hairlineWidth,
+            }),
         height: 44,
         justifyContent: 'center',
         opacity: pressed ? 0.5 : 1,

@@ -47,7 +47,7 @@ export default function RootLayout() {
                 <Stack.Screen
                   name="favourites/index"
                   options={{
-                    headerLeft: () => <HeaderBackButton color={Palette.trip} fallbackHref="/saved" />,
+                    headerLeft: () => <HeaderBackButton color={Palette.trip} fallbackHref="/saved" variant="native" />,
                     title: 'Favourites',
                   }}
                 />

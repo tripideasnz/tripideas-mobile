@@ -46,7 +46,7 @@ import {
   type ObscuredEdges,
 } from '@/components/map/marker-visibility';
 import { openPlaceFromMap } from '@/components/map/place-navigation';
-import type { MapContentSelection } from '@/components/map/map-selection';
+import { clearRegionScope, type MapContentSelection } from '@/components/map/map-selection';
 import { MapTileView } from '@/components/map/map-tile-view';
 import { useMapSelection } from '@/components/map/use-map-selection';
 import { HeaderBackButton } from '@/components/ui/header-back-button';
@@ -686,6 +686,24 @@ export default function MapScreen() {
     setTrayState('peek');
   };
 
+  // Clears only the geographical selection. Activities, the search query and the
+  // camera are left alone: the result list follows from `selection` alone, and the
+  // viewport filter keeps working on the current view. Saved scopes (favourites,
+  // trip) are not regions, so they are untouched.
+  const clearRegionSelection = () => {
+    if (clearRegionScope(selection) === selection) return;
+    clearPlaceContext();
+    setSelection(clearRegionScope(selection));
+  };
+
+  // Immediate "Clear All" from the Activities sheet: drops the applied Activity
+  // filters now. The sheet stays open; Apply or X closes it, and X never undoes
+  // this. Regions, search, camera and tray are untouched.
+  const clearActivityFilters = () => {
+    clearPlaceContext();
+    setSelectedActivityTagIds([]);
+  };
+
   const toggleActivityTag = (tagId: string) => {
     // Exit rule 3: choosing a map filter clears the place context.
     clearPlaceContext();
@@ -729,6 +747,7 @@ export default function MapScreen() {
     <MapRegionsSheet
       isLoading={isLoadingNavigation}
       navigation={navigation2}
+      onClear={clearRegionSelection}
       onClose={() => setIsRegionsSheetOpen(false)}
       onSelect={applySelection}
       selection={selection}
@@ -740,6 +759,7 @@ export default function MapScreen() {
       activities={activities}
       isLoading={isLoadingActivities}
       onApply={applyActivityTags}
+      onClearAll={clearActivityFilters}
       onClose={() => setIsActivitiesSheetOpen(false)}
       selectedTagIds={selectedActivityTagIds}
       visible={isActivitiesSheetOpen}
