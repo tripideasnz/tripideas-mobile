@@ -1,4 +1,4 @@
-// Batch 2A: Activities "Clear All", Regions "Clear" and the native back variant.
+// Batch 2A: Activities "Clear All", Regions "Clear" and the shared back button.
 //
 // The two sheets are rendered to static markup (react-dom/server) with the React
 // Native modules replaced by thin host stand-ins, so visibility rules are checked
@@ -22,9 +22,9 @@ export async function load(url, context, next) {
     const flatten = (s) => (typeof s === 'function' ? s({ pressed: false }) : s);
     const h = (type) => ({ style, children, accessibilityLabel, onPress, ...rest }) => { if (onPress && accessibilityLabel) (globalThis.__presses ??= {})[accessibilityLabel] = onPress; return createElement('div', { 'data-type': type, 'data-label': accessibilityLabel, 'data-style': JSON.stringify(flatten(style) ?? {}) }, children); };\`;
   const sources = {
-    'react-native': host + \`export const View = h('View'); export const Text = h('Text'); export const Pressable = h('Pressable'); export const ScrollView = h('ScrollView'); export const Modal = ({ children, visible }) => createElement('div', { 'data-type': 'Modal' }, children); export const StyleSheet = { hairlineWidth: 1 };\`,
+    'react-native': host + \`export const View = h('View'); export const Text = h('Text'); export const Pressable = h('Pressable'); export const ScrollView = h('ScrollView'); export const Modal = ({ children, visible }) => createElement('div', { 'data-type': 'Modal' }, children); export const StyleSheet = { hairlineWidth: 1 }; export const Platform = { get OS() { return globalThis.__platformOS ?? 'ios'; }, get Version() { return globalThis.__platformVersion ?? '26.5'; } };\`,
     '@expo/vector-icons/MaterialIcons': \`import { createElement } from 'react'; export default ({ name }) => createElement('i', { 'data-icon': name });\`,
-    '@expo/vector-icons/Ionicons': \`import { createElement } from 'react'; export default ({ name }) => createElement('i', { 'data-icon': name });\`,
+    '@expo/vector-icons/Ionicons': \`import { createElement } from 'react'; export default ({ name, size, style }) => createElement('i', { 'data-icon': name, 'data-size': size, 'data-style': JSON.stringify(style ?? {}) });\`,
     'expo-router': \`export const useRouter = () => ({ back() {}, canGoBack: () => true, replace() {} });\`,
     'react-native-safe-area-context': \`import { createElement } from 'react'; export const SafeAreaView = ({ children }) => createElement('div', null, children); export const useSafeAreaInsets = () => ({ bottom: 0, left: 0, right: 0, top: 0 });\`,
   };
@@ -179,41 +179,31 @@ test('the Regions handler is dedicated and leaves Activities, search, camera and
 const back = (props) => renderToStaticMarkup(createElement(HeaderBackButton, props));
 const styleOf = (html) => JSON.parse(html.match(/data-style="([^"]*)"/)[1].replaceAll('&quot;', '"'));
 
-test('the default HeaderBackButton keeps its circle, border and size for every other caller', () => {
+test('HeaderBackButton keeps its circle, border and size for every caller', () => {
   const style = styleOf(back({ color: '#1473e6' }));
   assert.equal(style.width, 44);
   assert.equal(style.height, 44);
   assert.equal(style.borderRadius, 22);
   assert.equal(style.backgroundColor, '#ffffff');
   assert.equal(style.borderWidth, 1);
-  assert.deepEqual(styleOf(back({ variant: 'surface' })), style, "'surface' is the default");
+  });
+
+// ── Batch 2B: alignment, definition, size ───────────────────────────────────
+
+const glyph = (html) => ({
+  size: Number(html.match(/data-icon="chevron-back" data-size="(\d+)"/)?.[1]),
+  style: JSON.parse(html.match(/<i data-icon="chevron-back"[^>]*data-style="([^"]*)"/)[1].replaceAll('&quot;', '"')),
 });
 
-test('the native variant is a bare 44 pt glyph with no surface, border or shadow', () => {
-  const html = back({ variant: 'native', color: '#1473e6' });
-  const style = styleOf(html);
-  assert.equal(style.width, 44);
-  assert.equal(style.height, 44);
-  assert.equal(style.alignItems, 'center');
-  assert.equal(style.justifyContent, 'center');
-  for (const key of ['backgroundColor', 'borderColor', 'borderRadius', 'borderWidth', 'shadowColor', 'shadowOpacity', 'elevation']) {
-    assert.equal(style[key], undefined, key);
-  }
-  assert.match(html, /data-icon="chevron-back"/);
-  assert.match(html, /data-label="Go back"/);
-});
-
-test('only Favourites opts in to the native variant; the back action is unchanged', async () => {
-  const root = await read('app/_layout.tsx');
-  const uses = root.match(/variant="native"/g) ?? [];
-  assert.equal(uses.length, 1);
-  assert.match(root, /name="favourites\/index"\s*options=\{\{\s*headerLeft: \(\) => <HeaderBackButton color=\{Palette\.trip\} fallbackHref="\/saved" variant="native" \/>/);
-  const button = await read('components/ui/header-back-button.tsx');
-  assert.match(button, /onPress=\{onPress \?\? \(\(\) => backOrFallback\(router, fallbackHref\)\)\}/);
-  for (const file of ['app/(tabs)/(discover)/_layout.tsx', 'app/notebooks/[notebookId].tsx', 'app/personal-place-cards/[cardId].tsx', 'app/trips/[tripId]/map.tsx', 'app/diaries/[diaryId].tsx', 'app/(tabs)/(discover)/place/[slug].tsx']) {
-    assert.doesNotMatch(await read(file), /variant="native"/, file);
-  }
-  assert.doesNotMatch(await read('components/ui/saved-header.tsx'), /variant="native"/, 'Saved JS headers unchanged');
+test('the back button has a 26 pt chevron, no offset, and a defined 1 pt outline', () => {
+  const html = back({});
+  const { size, style } = glyph(html);
+  assert.equal(size, 26);
+  assert.equal(style.transform, undefined);
+  const circle = styleOf(html);
+  assert.equal(circle.borderWidth, 1);
+  assert.equal(circle.borderColor, '#c9c9c4');
+  assert.equal(circle.width, 44);
 });
 
 let failed = false;

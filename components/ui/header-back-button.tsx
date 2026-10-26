@@ -1,19 +1,18 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { type Href, useRouter } from 'expo-router';
-import { Pressable, StyleSheet } from 'react-native';
+import { Pressable } from 'react-native';
 
 import { Palette } from '@/constants/design';
+
+/** Outline of the JavaScript-rendered circular header controls (back, add, share). */
+export const HEADER_CONTROL_BORDER_COLOR = '#c9c9c4';
+export const HEADER_CONTROL_BORDER_WIDTH = 1;
+export const HEADER_CHEVRON_SIZE = 26;
 
 type HeaderBackButtonProps = {
   color?: string;
   fallbackHref?: Href;
   onPress?: () => void;
-  /**
-   * 'surface' (default) draws its own white circle, for controls rendered in
-   * JavaScript. 'native' is a bare glyph for use inside a native navigation
-   * header, where iOS draws the button background itself.
-   */
-  variant?: 'native' | 'surface';
 };
 
 type BackRouter = {
@@ -31,7 +30,6 @@ export function HeaderBackButton({
   color = Palette.text,
   fallbackHref,
   onPress,
-  variant = 'surface',
 }: HeaderBackButtonProps = {}) {
   const router = useRouter();
   return (
@@ -42,20 +40,16 @@ export function HeaderBackButton({
       onPress={onPress ?? (() => backOrFallback(router, fallbackHref))}
       style={({ pressed }) => ({
         alignItems: 'center',
-        ...(variant === 'native'
-          ? null
-          : {
-              backgroundColor: Palette.surface,
-              borderColor: Palette.border,
-              borderRadius: 22,
-              borderWidth: StyleSheet.hairlineWidth,
-            }),
+        backgroundColor: Palette.surface,
+        borderColor: HEADER_CONTROL_BORDER_COLOR,
+        borderRadius: 22,
+        borderWidth: HEADER_CONTROL_BORDER_WIDTH,
         height: 44,
         justifyContent: 'center',
         opacity: pressed ? 0.5 : 1,
         width: 44,
       })}>
-      <Ionicons color={color} name="chevron-back" size={24} />
+      <Ionicons color={color} name="chevron-back" size={HEADER_CHEVRON_SIZE} />
     </Pressable>
   );
 }

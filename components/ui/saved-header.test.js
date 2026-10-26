@@ -30,6 +30,7 @@ export async function load(url, context, next) {
       export const Text = host('Text');
       export const Pressable = host('Pressable');
       export const StyleSheet = { hairlineWidth: 1 };
+      export const Platform = { OS: 'ios', Version: '26.5' };
     \`,
     '@expo/vector-icons/MaterialIcons': \`import { createElement } from 'react'; export default (props) => createElement('Icon', props);\`,
     '@expo/vector-icons/Ionicons': \`import { createElement } from 'react'; export default (props) => createElement('Icon', props);\`,
@@ -44,6 +45,7 @@ register(`data:text/javascript,${encodeURIComponent(stubSource.replace('BASE_URL
 const { createElement } = await import('react');
 const { SavedActionHeader, SavedHeaderActionButton, SAVED_HEADER_CONTROL_SIZE, savedActionHeader, savedHeaderSlotStyle } = await import('./saved-header.tsx');
 const { clearHeaderRightAction, headerAddAction, headerShareAction } = await import('./header-actions.tsx');
+const { HeaderBackButton } = await import('./header-back-button.tsx');
 
 const read = (relativePath) => readFile(new URL(`../../${relativePath}`, import.meta.url), 'utf8');
 const tests = [];
@@ -77,6 +79,15 @@ test('the action is a fixed 44 pt circle that cannot grow or shrink', () => {
   assert.equal(style.flexGrow, 0);
   assert.equal(style.flexShrink, 0);
   assert.equal(style.flex, undefined, 'no flex shorthand that could stretch it');
+});
+
+test('the action circle uses the same outline as the back circle', () => {
+  const style = actionNode(header(addOptions(), { title: 'Saved' })).props.style;
+  assert.equal(style.borderColor, '#c9c9c4');
+  assert.equal(style.borderWidth, 1);
+  const back = find(header(addOptions(), { title: 'Saved' }), (n) => n.props?.accessibilityLabel === 'Go back');
+  assert.equal(back.props.style.borderColor, style.borderColor);
+  assert.equal(back.props.style.borderWidth, style.borderWidth);
 });
 
 test('the icon is centred in the circle', () => {
@@ -169,6 +180,43 @@ test('unrelated Discover, Search and Map headers are untouched', async () => {
   for (const file of ['app/(tabs)/map.tsx', 'app/(tabs)/search.tsx', 'app/(tabs)/(discover)/index.tsx']) {
     try { assert.doesNotMatch(await read(file), /saved-header|header-actions/, file); } catch (error) { if (error.code !== 'ENOENT') throw error; }
   }
+});
+
+// ── Shared header on the former native-header screens ───────────────────────
+const iconColour = (tree) => find(tree, (n) => n.type === 'Icon' && n.props.name === 'chevron-back').props.color;
+
+test('screens that pass their own back control keep its colour: black for Discover, blue for Saved', () => {
+  const discover = header({ headerLeft: () => createElement(HeaderBackButton, { fallbackHref: '/discover' }), title: 'Far North' }, { title: 'Discover' });
+  const saved = header({ headerLeft: () => createElement(HeaderBackButton, { color: '#1473e6' }), title: 'Favourites' }, { title: 'Saved' });
+  assert.equal(iconColour(discover), '#111111');
+  assert.equal(iconColour(saved), '#1473e6');
+});
+
+test('a custom return handler on the back control is the one that runs', () => {
+  const calls = [];
+  const tree = header({ headerLeft: () => createElement(HeaderBackButton, { onPress: () => calls.push('custom') }), title: 'Place' }, { title: 'Discover' });
+  find(tree, (n) => n.props?.accessibilityLabel === 'Go back').props.onPress();
+  assert.deepEqual(calls, ['custom']);
+});
+
+test('while a screen is still loading (no headerLeft yet) the same single circular back control is shown', () => {
+  const tree = header({ title: 'Personal Place' }, { title: 'Saved' });
+  const backs = flat(tree).filter((n) => n.props?.accessibilityLabel === 'Go back');
+  assert.equal(backs.length, 1);
+  assert.equal(backs[0].props.style.width, 44);
+  assert.equal(backs[0].props.style.borderRadius, 22);
+});
+
+test('a long title stays on one line between symmetric gutters and never squeezes the back control', () => {
+  const tree = header({ headerLeft: () => createElement(HeaderBackButton, {}), title: 'Akeake Point Historic Reserve' }, { title: 'Discover' });
+  const title = find(tree, (n) => n.type === 'Text');
+  assert.equal(title.props.numberOfLines, 1);
+  assert.deepEqual(title.children, ['Akeake Point Historic Reserve']);
+  const back = find(tree, (n) => n.props?.accessibilityLabel === 'Go back');
+  assert.equal(back.props.style.width, 44);
+  const slot = flat(tree).filter((n) => n.type === 'View' && n.children.includes(back)).at(-1);
+  assert.equal(slot.props.style.width, 44);
+  assert.equal(slot.props.style.flexShrink, 0, 'the slot, not the content, is what the row cannot squeeze');
 });
 
 let failed = false;

@@ -7,6 +7,7 @@ import { NotebookProvider } from '@/notebooks/provider';
 import { MyTripsProvider } from '@/trips/provider';
 import { PersonalPlaceCardProvider } from '@/personal-place-cards/provider';
 import { HeaderBackButton } from '@/components/ui/header-back-button';
+import { savedActionHeader } from '@/components/ui/saved-header';
 import { Palette } from '@/constants/design';
 import { DiaryProvider } from '@/diaries/provider';
 import { personalContentFeatures } from '@/config/personal-content-features';
@@ -40,14 +41,16 @@ export default function RootLayout() {
                 <Stack.Screen
                   name="personal-place-cards/[cardId]"
                   options={{
+                    ...savedActionHeader,
                     title: 'Personal Place',
                   }}
                 />
-                <Stack.Screen name="personal-place-cards/location-picker" options={{ title: 'Choose location' }} />
+                <Stack.Screen name="personal-place-cards/location-picker" options={{ ...savedActionHeader, title: 'Choose location' }} />
                 <Stack.Screen
                   name="favourites/index"
                   options={{
-                    headerLeft: () => <HeaderBackButton color={Palette.trip} fallbackHref="/saved" variant="native" />,
+                    ...savedActionHeader,
+                    headerLeft: () => <HeaderBackButton color={Palette.trip} fallbackHref="/saved" />,
                     title: 'Favourites',
                   }}
                 />
@@ -63,7 +66,7 @@ export default function RootLayout() {
                   <Stack.Screen name="notebooks/index" options={{ title: 'Notebooks' }} />
                   <Stack.Screen
                     name="notebooks/[notebookId]"
-                    options={{ title: 'Notebook' }}
+                    options={{ ...savedActionHeader, title: 'Notebook' }}
                   />
                   <Stack.Screen
                     name="notebooks/[notebookId]/sharing"
@@ -76,7 +79,7 @@ export default function RootLayout() {
                       sheetInitialDetentIndex: 1,
                     }}
                   />
-                  <Stack.Screen name="notebooks/location-picker" options={{ title: 'Choose location' }} />
+                  <Stack.Screen name="notebooks/location-picker" options={{ ...savedActionHeader, title: 'Choose location' }} />
                 </Stack.Protected>
                 <Stack.Protected guard={personalContentFeatures.diaries}>
                   <Stack.Screen name="diaries/index" options={{ title: 'Diaries' }} />
@@ -95,7 +98,7 @@ export default function RootLayout() {
                 />
                 <Stack.Screen
                   name="trips/[tripId]/map"
-                  options={{ title: 'Trip Map' }}
+                  options={{ ...savedActionHeader, title: 'Trip Map' }}
                 />
                 <Stack.Screen
                   name="trips/[tripId]/shared"

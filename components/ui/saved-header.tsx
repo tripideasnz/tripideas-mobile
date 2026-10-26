@@ -7,10 +7,10 @@
 // 44 pt slot, so nothing can expand, and title/back positions stay predictable.
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import type { NativeStackHeaderProps, NativeStackNavigationOptions } from '@react-navigation/native-stack';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { HeaderBackButton } from '@/components/ui/header-back-button';
+import { HEADER_CONTROL_BORDER_COLOR, HEADER_CONTROL_BORDER_WIDTH, HeaderBackButton } from '@/components/ui/header-back-button';
 import { Palette } from '@/constants/design';
 
 export const SAVED_HEADER_CONTROL_SIZE = 44;
@@ -42,9 +42,9 @@ export function SavedHeaderActionButton({ action, icon }: { action: SavedHeaderA
       style={({ pressed }) => ({
         ...savedHeaderSlotStyle,
         backgroundColor: Palette.surface,
-        borderColor: Palette.border,
+        borderColor: HEADER_CONTROL_BORDER_COLOR,
         borderRadius: SAVED_HEADER_CONTROL_SIZE / 2,
-        borderWidth: StyleSheet.hairlineWidth,
+        borderWidth: HEADER_CONTROL_BORDER_WIDTH,
         opacity: action.disabled ? 0.35 : pressed ? 0.55 : 1,
       })}>
       <MaterialIcons color={Palette.trip} name={icon} size={icon === 'add' ? 26 : 22} />

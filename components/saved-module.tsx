@@ -44,14 +44,22 @@ export function SavedModule({
         paddingVertical: Space.md,
       })}>
       <MaterialIcons color={Palette.text} name={icon} size={25} />
-      <View style={{ flex: 1, gap: Space.xs, marginLeft: Space.lg }}>
+      {/* The text column takes the remaining width and wraps naturally. */}
+      <View style={{ flex: 1, gap: Space.xs, marginLeft: Space.lg, minWidth: 0 }}>
         <AppText variant="bodyStrong">{title}</AppText>
-        {description ? <AppText color={Palette.textBody} variant="caption">{description}</AppText> : null}
+        {description ? (
+          <AppText color={Palette.textBody} style={{ fontSize: 15, lineHeight: 21 }} variant="body">
+            {description}
+          </AppText>
+        ) : null}
         <AppText color={Palette.textMuted} variant="caption">
           {stateText}
         </AppText>
       </View>
-      <MaterialIcons color={Palette.trip} name="chevron-right" size={26} />
+      {/* Dedicated chevron area: never overlapped by text, 16 pt clear of it. */}
+      <View style={{ alignItems: 'center', justifyContent: 'center', marginLeft: Space.lg, width: 28 }}>
+        <MaterialIcons color={Palette.trip} name="chevron-right" size={30} />
+      </View>
     </Pressable>
   );
 }

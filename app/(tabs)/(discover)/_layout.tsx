@@ -2,6 +2,7 @@ import { Stack, useNavigation } from 'expo-router';
 import React, { useEffect } from 'react';
 
 import { HeaderBackButton } from '@/components/ui/header-back-button';
+import { savedActionHeader } from '@/components/ui/saved-header';
 
 export default function DiscoverLayout() {
   const navigation = useNavigation();
@@ -19,6 +20,7 @@ export default function DiscoverLayout() {
   return (
     <Stack
       screenOptions={{
+        ...savedActionHeader,
         headerBackVisible: false,
         headerLeft: () => <HeaderBackButton fallbackHref="/discover" />,
       }}>
