@@ -63,6 +63,13 @@ export default function RootLayout() {
                 />
                 <Stack.Screen name="place/[slug]" options={{ ...savedActionHeader, title: 'Place' }} />
                 <Stack.Screen name="trips/[tripId]" options={{ title: 'My Trip' }} />
+                <Stack.Screen
+                  name="trip/[shareId]"
+                  options={{
+                    headerLeft: () => <HeaderBackButton fallbackHref="/" />,
+                    title: 'Shared Trip',
+                  }}
+                />
                 <Stack.Protected guard={personalContentFeatures.notebooks}>
                   <Stack.Screen name="notebooks/index" options={{ title: 'Notebooks' }} />
                   <Stack.Screen

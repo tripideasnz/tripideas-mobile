@@ -6,6 +6,7 @@ import type {
   MyTripPlace,
 } from '@/trips/types';
 import { parsePersonalPlaceCard, object } from '@/personal-place-cards/api';
+import type { ImportTripRequest } from '@/trips/shared-trip';
 import type { TripEntry } from '@/personal-place-cards/types';
 
 function isStringArray(value: unknown): value is string[] {
@@ -221,6 +222,20 @@ export async function createTripRequest(input: {
     throw new ApiError(500, 'malformed_response');
   }
   return response.id;
+}
+
+/** B1: creates a new Trip owned by the caller from shared-snapshot content; `id` is idempotent. */
+export async function importSharedTripRequest(
+  input: ImportTripRequest
+): Promise<{ created: boolean; id: string }> {
+  const response = await authenticatedApiFetch<{ created?: unknown; id?: unknown }>(
+    '/itinerary/import',
+    { body: JSON.stringify(input), method: 'POST' }
+  );
+  if (typeof response?.id !== 'string' || typeof response.created !== 'boolean') {
+    throw new ApiError(500, 'malformed_response');
+  }
+  return { created: response.created, id: response.id };
 }
 
 export async function updateTripRequest(

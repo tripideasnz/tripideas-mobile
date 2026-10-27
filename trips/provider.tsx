@@ -58,6 +58,8 @@ type MyTripsContextValue = {
   isRefreshing: boolean;
   loadError: string | null;
   refresh: () => Promise<void>;
+  /** Refreshes after the server's Trips changed outside this provider (e.g. a shared-Trip import). */
+  refreshAfterServerChange: () => Promise<void>;
   removePlaceFromTrip: (tripId: string, placeId: string) => Promise<void>;
   removeTripEntry: (tripId: string, entryId: string) => Promise<void>;
   renameTrip: (tripId: string, name: string) => Promise<void>;
@@ -690,6 +692,7 @@ export function MyTripsProvider({ children }: PropsWithChildren) {
     isRefreshing,
     loadError,
     refresh,
+    refreshAfterServerChange,
     removePlaceFromTrip,
     removeTripEntry,
     renameTrip,
@@ -701,7 +704,7 @@ export function MyTripsProvider({ children }: PropsWithChildren) {
   }), [
     addPersonalCardToTrip, addPlaceToTrip, createTrip, createTripWithPlace, deferImport, deleteTrip,
     getTrip, importDecision, isImporting, isLoading, isRefreshing, journal, loadError,
-    refresh, removePlaceFromTrip, removeTripEntry, renameTrip, runImport, trips,
+    refresh, refreshAfterServerChange, removePlaceFromTrip, removeTripEntry, renameTrip, runImport, trips,
     updatePlaceNote, updateTripEntryNote, updateTripNote,
   ]);
 
