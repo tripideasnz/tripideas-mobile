@@ -9,22 +9,29 @@
       "distribution": "internal",
       "channel": "development",
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://tripideas-api-integration-staging.up.railway.app"
+        "EXPO_PUBLIC_API_URL": "https://tripideas-api-integration-staging.up.railway.app",
+        "APP_VARIANT": "integration",
+        "EXPO_PUBLIC_TRIP_SHARE_API_URL": "https://staging.tripideas.nz/api/trips/share"
       }
     },
     "preview": {
       "distribution": "internal",
       "channel": "preview",
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://tripideas-api-integration-staging.up.railway.app"
+        "EXPO_PUBLIC_API_URL": "https://tripideas-api-integration-staging.up.railway.app",
+        "APP_VARIANT": "integration",
+        "EXPO_PUBLIC_TRIP_SHARE_API_URL": "https://staging.tripideas.nz/api/trips/share"
       }
     },
     "testflight-staging": {
       "distribution": "store",
       "channel": "preview",
       "autoIncrement": true,
+      "environment": "preview",
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://tripideas-api-integration-staging.up.railway.app"
+        "EXPO_PUBLIC_API_URL": "https://tripideas-api-integration-staging.up.railway.app",
+        "APP_VARIANT": "integration",
+        "EXPO_PUBLIC_TRIP_SHARE_API_URL": "https://staging.tripideas.nz/api/trips/share"
       }
     },
     "production": {

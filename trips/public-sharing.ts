@@ -6,6 +6,16 @@ const PUBLIC_TRIP_BASE_URL = 'https://www.tripideas.nz/trip';
 const PUBLIC_TRIP_SHARE_API_URL =
   process.env.EXPO_PUBLIC_TRIP_SHARE_API_URL ??
   'https://www.tripideas.nz/api/trips/share';
+const PRODUCTION_API_URL = 'https://api.tripideas.nz';
+
+// Public Trip links write permanent documents to the production Sanity dataset. Only builds
+// that talk to the production API may create them; internal and integration builds fall back
+// to text-only sharing.
+export function isPublicTripSharingEnabled(
+  apiUrl: string = process.env.EXPO_PUBLIC_API_URL ?? PRODUCTION_API_URL
+): boolean {
+  return apiUrl.trim().replace(/\/+$/, '') === PRODUCTION_API_URL;
+}
 
 export type PublicTripPlaceSnapshot = {
   coordinates?: {
@@ -45,7 +55,7 @@ export type CreatePublicTripShareResult =
       url: string;
     }
   | {
-      reason: 'backend-unavailable' | 'request-failed';
+      reason: 'backend-unavailable' | 'disabled' | 'request-failed';
       status: 'unavailable';
     };
 
@@ -122,6 +132,9 @@ export function buildPublicTripOpenGraphData(
 export async function createPublicTripShare(
   snapshot: PublicTripSnapshot
 ): Promise<CreatePublicTripShareResult> {
+  if (!isPublicTripSharingEnabled()) {
+    return { reason: 'disabled', status: 'unavailable' };
+  }
   try {
     const response = await fetch(PUBLIC_TRIP_SHARE_API_URL, {
       body: JSON.stringify(snapshot),

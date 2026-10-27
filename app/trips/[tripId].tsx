@@ -30,6 +30,7 @@ import { useTripPlaceCards } from '@/trips/use-trip-place-cards';
 import {
   buildPublicTripSnapshot,
   createPublicTripShare,
+  isPublicTripSharingEnabled,
 } from '@/trips/public-sharing';
 import { usePersonalPhotos } from '@/personal-place-cards/use-personal-photos';
 import {
@@ -264,7 +265,7 @@ export default function TripDetailScreen() {
           ...(trip ? headerShareAction({ accessibilityLabel: 'Share Trip', onPress: () => Alert.alert('Share trip', undefined, [
               { style: 'cancel', text: 'Cancel' },
               { onPress: () => router.push({ pathname: '/trips/[tripId]/shared', params: { tripId: trip.id } }), text: 'Preview' },
-              { onPress: () => void createPublicShare(), text: 'Share' },
+              { onPress: () => void (isPublicTripSharingEnabled() ? createPublicShare() : openShareSheet()), text: 'Share' },
             ]) }) : clearHeaderRightAction()),
           title: '',
         }}
