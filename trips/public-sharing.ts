@@ -1,7 +1,8 @@
 import type { MyTrip } from '@/trips/types';
 import type { PlaceCardData } from '@/types/content';
 
-const PUBLIC_TRIP_BASE_URL = 'https://tripideas.nz/trip';
+// www is the canonical host: the apex redirects to it, and Universal Links are associated with it.
+const PUBLIC_TRIP_BASE_URL = 'https://www.tripideas.nz/trip';
 const PUBLIC_TRIP_SHARE_API_URL =
   process.env.EXPO_PUBLIC_TRIP_SHARE_API_URL ??
   'https://www.tripideas.nz/api/trips/share';

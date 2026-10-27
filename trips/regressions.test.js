@@ -40,7 +40,7 @@ async function run() {
   assert.equal(snapshot.note, 'Trip note');
   assert.equal(snapshot.places[0].placeId, 'place-one');
   assert.equal(snapshot.places[0].note, 'Entry note');
-  assert.equal(buildPublicTripUrl('existing-share'), 'https://tripideas.nz/trip/existing-share');
+  assert.equal(buildPublicTripUrl('existing-share'), 'https://www.tripideas.nz/trip/existing-share');
   const mixed = {
     ...trip,
     entries: [
