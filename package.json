@@ -8,7 +8,10 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "validate:release": "node scripts/validate-release-config.js",
+    "verify:bundle": "node scripts/verify-bundle-endpoints.js",
+    "eas-build-post-install": "node scripts/validate-release-config.js --effective"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
