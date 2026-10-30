@@ -25,7 +25,7 @@ function makeWorld(overrides = {}) {
     failures: {},
     joined: true,
     list: [summary()],
-    owned: [{ id: 'itn_1', name: 'South Island', sharedCollectionId: 'fc_1' }],
+    owned: [{ id: 'itn_1', name: 'South Island', sharedCollectionId: 'fc_1', sharingActive: true }],
     ...overrides,
   };
   const record = (name, ...args) => world.calls.push([name, ...args]);
@@ -46,7 +46,8 @@ function makeWorld(overrides = {}) {
       if (!world.joined) throw new ApiError(403, 'not_joined');
       return clone(world.detail);
     },
-    joinSharedTrip: async (id) => { record('joinSharedTrip', id); maybeFail('joinSharedTrip'); world.joined = true; return { alreadyJoined: false }; },
+    getShareLink: async (id) => { record('getShareLink', id); maybeFail('getShareLink'); return { url: `https://web/collections/${id}?k=TOKEN` }; },
+    joinSharedTrip: async (id, token) => { record('joinSharedTrip', id, token); maybeFail('joinSharedTrip'); world.joined = true; return { alreadyJoined: false }; },
     leaveSharedTrip: async (id) => { record('leaveSharedTrip', id); maybeFail('leaveSharedTrip'); world.joined = false; world.list = []; },
     listOwnedTrips: async () => { record('listOwnedTrips'); maybeFail('listOwnedTrips'); return clone(world.owned); },
     listSharedTrips: async () => { record('listSharedTrips'); maybeFail('listSharedTrips'); return world.joined ? clone(world.list) : []; },
@@ -54,6 +55,7 @@ function makeWorld(overrides = {}) {
     saveCollectionNote: async (id, text) => { record('saveCollectionNote', id, text); maybeFail('saveCollectionNote'); return { id: 'cn_new' }; },
     savePlaceNote: async (id, text) => { record('savePlaceNote', id, text); maybeFail('savePlaceNote'); return { id: 'pn_new' }; },
     shareTrip: async (id) => { record('shareTrip', id); maybeFail('shareTrip'); return { collectionId: 'fc_new', created: true, url: 'https://web/x' }; },
+    stopSharing: async (id) => { record('stopSharing', id); maybeFail('stopSharing'); world.owned = world.owned.map((trip) => (trip.sharedCollectionId === id ? { ...trip, sharingActive: false } : trip)); },
     updateCollectionNote: async (id, text) => { record('updateCollectionNote', id, text); maybeFail('updateCollectionNote'); },
     updatePlaceNote: async (id, text) => { record('updatePlaceNote', id, text); maybeFail('updatePlaceNote'); },
   };
@@ -81,7 +83,7 @@ test('My Trips lists owned Trips with the collection that publishes each', async
   const world = makeWorld();
   const s = store(world);
   await s.loadMyTrips();
-  assert.deepEqual(s.getState().myTrips.data, [{ id: 'itn_1', name: 'South Island', sharedCollectionId: 'fc_1' }]);
+  assert.deepEqual(s.getState().myTrips.data, [{ id: 'itn_1', name: 'South Island', sharedCollectionId: 'fc_1', sharingActive: true }]);
   assert.equal(world.count('checkCapability'), 0); // the existing Trip list needs no capability
 });
 
@@ -325,12 +327,13 @@ test('leave whose answer was lost is confirmed by the server; a leave that faile
 
 // ---- sharing (owner) --------------------------------------------------------------------------
 test('sharing records the collection on the owned Trip; repeating changes nothing', async () => {
-  const world = makeWorld({ owned: [{ id: 'itn_2', name: 'Other', sharedCollectionId: null }] });
+  const world = makeWorld({ owned: [{ id: 'itn_2', name: 'Other', sharedCollectionId: null, sharingActive: false }] });
   const s = store(world);
   await s.loadMyTrips();
   const result = await s.share('itn_2');
   assert.deepEqual(result, { ok: true, value: { collectionId: 'fc_new', created: true, url: 'https://web/x' } });
   assert.equal(s.getState().myTrips.data[0].sharedCollectionId, 'fc_new');
+  assert.equal(s.getState().myTrips.data[0].sharingActive, true); // sharing turns the link on
   assert.equal(s.getState().sharing.itn_2.pending, false);
 });
 
@@ -348,6 +351,64 @@ test('sharing is refused clearly: unsupported API, Personal Places, offline', as
 });
 
 // ---- notes ------------------------------------------------------------------------------------
+test('join passes the link\'s token to the server, and nothing else identifies the joiner', async () => {
+  const w = makeWorld({ joined: false });
+  const store = createSharedTripsStore(w.deps);
+  store.setSession('user_a');
+  const result = await store.join('fc_1', 'TOKEN_FROM_LINK');
+  assert.equal(result.ok, true);
+  assert.deepEqual(w.calls.find(([name]) => name === 'joinSharedTrip'), ['joinSharedTrip', 'fc_1', 'TOKEN_FROM_LINK']);
+});
+
+test('a member passes the existing link on; the store never turns sharing on or hands out a link after a change of user', async () => {
+  const w = makeWorld();
+  const store = createSharedTripsStore(w.deps);
+  store.setSession('user_a');
+  const gate = deferred();
+  w.deps.getShareLink = async (id) => { await gate.promise; return { url: `https://web/collections/${id}?k=TOKEN` }; };
+  const pending = store.reshare('fc_1');
+  store.setSession('user_b'); // the account changes while the link is being fetched
+  gate.resolve();
+  const result = await pending;
+  assert.deepEqual([result.ok, result.error?.kind], [false, 'session-expired']); // the next account never receives it
+  store.setSession('user_a');
+  const ok = await store.reshare('fc_1');
+  assert.deepEqual([ok.ok, ok.value.url], [true, 'https://web/collections/fc_1?k=TOKEN']);
+});
+
+test('resharing a Trip whose creator has stopped sharing reports it and refreshes what the person sees', async () => {
+  const w = makeWorld({ failures: { getShareLink: { error: new ApiError(403, 'sharing_not_active') } } });
+  const store = createSharedTripsStore(w.deps);
+  store.setSession('user_a');
+  const result = await store.reshare('fc_1');
+  assert.deepEqual([result.ok, result.error.kind], [false, 'sharing-off']);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(w.count('getSharedTrip'), 1); // the Trip is re-read so the screen shows the truth
+});
+
+test('the creator stops sharing: My Trips stops showing it as shared, the Trip is re-read, members are untouched', async () => {
+  const w = makeWorld();
+  const store = createSharedTripsStore(w.deps);
+  store.setSession('user_owner');
+  await store.loadMyTrips();
+  assert.equal(store.getState().myTrips.data[0].sharingActive, true);
+  const result = await store.stopSharing('fc_1');
+  assert.equal(result.ok, true);
+  assert.deepEqual(store.getState().myTrips.data[0], { id: 'itn_1', name: 'South Island', sharedCollectionId: 'fc_1', sharingActive: false });
+  assert.equal(w.count('getSharedTrip'), 1);
+  assert.equal(w.count('leaveSharedTrip'), 0);
+});
+
+test('a refused Stop Sharing changes nothing the person sees', async () => {
+  const w = makeWorld({ failures: { stopSharing: { error: new ApiError(403, 'owner_only') } } });
+  const store = createSharedTripsStore(w.deps);
+  store.setSession('user_member');
+  await store.loadMyTrips();
+  const result = await store.stopSharing('fc_1');
+  assert.deepEqual([result.ok, result.error.kind], [false, 'owner-only']);
+  assert.equal(store.getState().myTrips.data[0].sharingActive, true);
+});
+
 test('a member creates, edits and deletes only their own notes, then sees the server\'s truth', async () => {
   const world = makeWorld();
   world.detail.notes = [note({ id: 'cn_owner' })]; // the member has no Trip note yet

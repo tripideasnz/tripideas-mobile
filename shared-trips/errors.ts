@@ -24,7 +24,11 @@ export type SharedTripsErrorKind =
   /** The server failed or sent something unreadable; trying again may help. */
   | 'server'
   /** The action is not allowed for this viewer (decided locally from the permissions). */
-  | 'forbidden';
+  | 'forbidden'
+  /** The Trip's share link is off: there is nothing to pass on. Only the creator can turn it on. */
+  | 'sharing-off'
+  /** Only the creator may do this (start or stop sharing). */
+  | 'owner-only';
 
 export type SharedTripsError = {
   /** The API's domain code when it sent one (for example personal_places_not_shareable). */
@@ -44,6 +48,8 @@ export function classifyError(error: unknown): SharedTripsError {
       ? { code, kind: 'not-found' }
       : { code, kind: 'unsupported' };
   }
+  if (error.status === 403 && code === 'sharing_not_active') return { code, kind: 'sharing-off' };
+  if (error.status === 403 && code === 'owner_only') return { code, kind: 'owner-only' };
   if (error.status === 409 && code === 'managed_by_trip') return { code, kind: 'managed-by-trip' };
   if (error.status === 408 || error.status === 429 || error.status >= 500) {
     return { code, kind: 'server' };

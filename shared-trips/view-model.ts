@@ -12,6 +12,7 @@ import type {
   CollectionPreview,
   OwnedTripSummary,
   SharedTripDetail,
+  PreviewNote,
   SharedTripNote,
   SharedTripSummary,
 } from '@/shared-trips/types';
@@ -25,6 +26,13 @@ export const ownerLabel = (owner: { displayName: string | null } | null | undefi
 
 export function authorLabel(note: SharedTripNote): string {
   if (note.mine) return 'You';
+  const name = note.author.displayName?.trim();
+  if (note.author.isCollectionOwner) return name ? `${name} (creator)` : 'Creator';
+  return name || 'Another traveller';
+}
+
+/** Who wrote a note on the public preview (there is no "You": the visitor may not be signed in). */
+export function previewAuthorLabel(note: PreviewNote): string {
   const name = note.author.displayName?.trim();
   if (note.author.isCollectionOwner) return name ? `${name} (creator)` : 'Creator';
   return name || 'Another traveller';
@@ -154,7 +162,10 @@ export function detailControls(detail: SharedTripDetail) {
   const { permissions, viewer } = detail;
   return {
     canLeave: permissions.canLeave && viewer.role === 'member',
+    // Anyone on an active Shared Trip may pass the link on; only the creator may stop sharing.
+    canReshare: detail.sharing.canReshare,
     canSaveCopy: permissions.canSaveCopy,
+    canStopSharing: detail.sharing.canStop,
     canWritePlaceNotes: permissions.canAddPlaceNote,
     canWriteTripNote: permissions.canAddCollectionNote,
     isCreator: viewer.role === 'owner',
@@ -165,6 +176,14 @@ export function detailControls(detail: SharedTripDetail) {
 export function membershipStatus(detail: SharedTripDetail, when: (iso: string) => string = (iso) => formatWhen(Date.parse(iso))) {
   if (detail.viewer.role === 'owner') return 'You created this Trip';
   return detail.viewer.joinedAt ? `You joined ${when(detail.viewer.joinedAt)}` : 'You are a member';
+}
+
+/** What the sharing state means to this viewer, when the link is off. */
+export function sharingCaption(detail: SharedTripDetail): string | null {
+  if (detail.sharing.active) return null;
+  return detail.viewer.role === 'owner'
+    ? 'Sharing is off. People who already joined keep their access. Share the Trip from My Trips to make a new link.'
+    : `${ownerLabel(detail.owner)} has stopped sharing this Trip. You keep your access and your notes.`;
 }
 
 /** Shown before leaving. It must name the consequence for the leaver's own notes. */
@@ -258,6 +277,9 @@ export const SHARE_CHOICES = {
     label: 'Share a copy',
     message: 'People who open it get their own Trip, separate from yours.',
   },
+  stop: {
+    label: 'Stop sharing live Trip',
+  },
   live: (alreadyShared: boolean) => ({
     label: alreadyShared ? 'Live Trip link' : 'Share live Trip',
     message: alreadyShared
@@ -268,6 +290,23 @@ export const SHARE_CHOICES = {
 
 export const liveShareMessage = (title: string, url: string) =>
   `Join my Trip "${title}" on TripIdeas: ${url}`;
+
+/** A member (or the creator) passing on someone's Trip: the creator stays the owner. */
+export const reshareMessage = (title: string, url: string) =>
+  `Have a look at the Trip "${title}" on TripIdeas: ${url}`;
+
+/** Shown before stopping. It must say what stays and what stops. */
+export function stopSharingConfirmation(title: string) {
+  return {
+    cancelLabel: 'Cancel',
+    confirmLabel: 'Stop sharing',
+    message:
+      `The current link to "${title}" will stop working for new people.\n\n` +
+      'People who already joined keep their access and their notes. You can share the Trip again later; ' +
+      'that makes a new link.',
+    title: 'Stop sharing this Trip?',
+  };
+}
 
 // ---- messages -----------------------------------------------------------------------------------
 export function errorMessage(error: SharedTripsError | null | undefined, doing: string): string {
@@ -297,10 +336,28 @@ export function shareErrorMessage(error: SharedTripsError): string {
 }
 
 export function membershipErrorMessage(action: 'joining' | 'leaving', error: SharedTripsError): string {
+  if (action === 'joining' && error.kind === 'not-found') {
+    return 'This link is no longer active. Ask the person who shared it for a new link.';
+  }
   if (action === 'joining' && error.kind === 'rejected') {
     return 'This Trip could not be joined. The link may be out of date, or it may be your own Trip.';
   }
   return errorMessage(error, action === 'joining' ? 'join this Trip' : 'leave this Trip');
+}
+
+/** Passing a link on, or stopping sharing. */
+export function linkErrorMessage(error: SharedTripsError, doing: 'reshare' | 'stop'): string {
+  switch (error.kind) {
+    case 'sharing-off':
+      return 'Sharing is turned off for this Trip. Only the creator can turn it on again.';
+    case 'owner-only':
+      return 'Only the creator can start or stop sharing this Trip.';
+    case 'not-joined':
+    case 'not-found':
+      return 'This Trip is no longer available to you.';
+    default:
+      return errorMessage(error, doing === 'reshare' ? 'get the link' : 'stop sharing');
+  }
 }
 
 export function noteErrorMessage(error: SharedTripsError): string {

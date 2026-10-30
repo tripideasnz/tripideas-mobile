@@ -12,8 +12,8 @@
 // Two sources are supported:
 //  - a joined member's Shared Trip (the consolidated read already carries every note and its author);
 //  - someone who has NOT joined, from the consolidated public preview (GET /collections/:id/preview),
-//    which carries the creator's Trip note and Place notes and nobody else's. An incomplete preview is
-//    refused as a whole: it never silently continues without the creator's notes.
+//    which shows everyone's notes with their authors; only the creator's are copied. An incomplete
+//    preview is refused as a whole: it never silently continues without the creator's notes.
 import { SharedTripsFailure } from '@/shared-trips/errors';
 import type { SharedTrip } from '@/trips/shared-trip';
 import {
@@ -23,6 +23,7 @@ import {
 } from '@/trips/shared-trip-save';
 import type {
   CollectionPreview,
+  PreviewNote,
   SharedTripDetail,
   SharedTripNote,
 } from '@/shared-trips/types';
@@ -72,19 +73,23 @@ export function saveCopyOfSharedTrip(
 }
 
 // ---- from the public preview -------------------------------------------------------------------
+/** The creator's own words among everyone's: the only notes a copy takes. */
+const creatorText = (notes: PreviewNote[]) =>
+  notes.find((note) => note.author.isCollectionOwner)?.text ?? '';
+
 /**
  * The copy source for someone who has not joined, from the consolidated preview: the creator's title,
- * Trip note, Places in order and the creator's note on each. The preview carries no one else's words,
- * so nothing but the creator's content can be copied. Throws SharedTripsFailure (never returns a
- * partial Trip) if the preview is not complete enough to copy faithfully.
+ * Trip note, Places in order and the creator's note on each. The preview shows everyone's notes (they are
+ * shared content), but a copy takes ONLY the creator's: no participant's note can reach it. Throws
+ * SharedTripsFailure (never returns a partial Trip) if the preview is not complete enough to copy.
  */
 export function toPreviewSnapshot(preview: CollectionPreview): SharedTrip {
   if (!preview.title.trim() || preview.places.some((place) => !place.placeId)) {
     throw new SharedTripsFailure({ code: 'incomplete_preview', kind: 'rejected' });
   }
   return {
-    note: preview.tripNote ?? '',
-    places: preview.places.map((place) => ({ note: place.note ?? '', placeId: place.placeId, title: '' })),
+    note: creatorText(preview.tripNotes),
+    places: preview.places.map((place) => ({ note: creatorText(place.notes), placeId: place.placeId, title: '' })),
     title: preview.title,
   };
 }

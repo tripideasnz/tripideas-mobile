@@ -42,7 +42,7 @@ export default function TripsScreen() {
   const [isRefreshingShared, setIsRefreshingShared] = useState(false);
   const shared = useSharedTripsState();
   const sharedLiveIds = useMemo(
-    () => new Set((shared.myTrips.data ?? []).filter((trip) => trip.sharedCollectionId).map((trip) => trip.id)),
+    () => new Set((shared.myTrips.data ?? []).filter((trip) => trip.sharedCollectionId && trip.sharingActive).map((trip) => trip.id)),
     [shared.myTrips.data]
   );
   const creatingRef = useRef(false);

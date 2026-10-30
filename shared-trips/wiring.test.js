@@ -20,18 +20,19 @@ test('both new routes exist and are registered, and the session binder sits insi
   assert.ok(layout.indexOf('<SharedTripsSessionBinder />') < layout.indexOf('<Stack'));
 });
 
-test('the web share link /collections/<id>?user=<ownerId>&type=shared opens the preview route', async () => {
-  // The API builds this link (buildShareUrl). Expo Router maps /collections/<id> to this file.
-  const link = new URL('https://staging.tripideas.nz/collections/fc_01abc?user=user_01xyz&type=shared');
+test('the share link /collections/<id>?k=<token> opens the preview route, and only the token is read from it', async () => {
+  // The API builds this link. Expo Router maps /collections/<id> to this file; the token is a capability.
+  const link = new URL('https://staging.tripideas.nz/collections/fc_01abc?k=AbC-_123');
   const [segment, id] = link.pathname.split('/').filter(Boolean);
   assert.equal(segment, 'collections');
   assert.ok(await exists(`app/${segment}/[collectionId].tsx`));
   assert.equal(id, 'fc_01abc');
+  assert.equal(link.searchParams.get('k'), 'AbC-_123');
   const screen = await read('app/collections/[collectionId].tsx');
-  assert.match(screen, /useLocalSearchParams<\{ collectionId\?: string \| string\[\] \}>/);
-  // The extra query parameters are ignored: access is decided by the server, never by the link.
+  assert.match(screen, /useLocalSearchParams<\{ collectionId\?: string \| string\[\]; k\?: string \| string\[\] \}>/);
+  // Nothing else in the link matters: no user id and no "type" decide who someone is or what they may do.
   const code = screen.split('\n').filter((line) => !line.trim().startsWith('//')).join('\n');
-  assert.doesNotMatch(code, /type=shared|searchParams|params\.user|user\?:/);
+  assert.doesNotMatch(code, /type=shared|searchParams|params\.user|user\?:|&type|ownerId/);
 });
 
 test('the preview screen is driven by the controller and the preview state, and works for members and the creator', async () => {
@@ -39,9 +40,10 @@ test('the preview screen is driven by the controller and the preview state, and 
   assert.match(screen, /createPreviewActions\(/);
   assert.match(screen, /previewState\(\{ access, accessPending, load, userId \}\)/);
   assert.match(screen, /if \(state\.kind === 'open-shared'\) router\.replace\(\{ pathname: '\/shared-trips\/\[collectionId\]'/);
-  assert.match(screen, /sharedTripsStore\.join\(id\)/);
+  assert.match(screen, /sharedTripsStore\.join\(id, shareKey\)/);
+  assert.match(screen, /token,\n      \}\),/); // the link's token goes to the controller
   assert.match(screen, /actions\.sessionChanged\(\)/);
-  assert.match(screen, /fetchCollectionPreview\(collectionId\)/);
+  assert.match(screen, /fetchCollectionPreview\(collectionId, token\)/);
   assert.match(screen, /This shared trip could not be found/);
   assert.match(screen, /can't show shared Trip previews yet/); // an API without the route is said so, not "not found"
   // The legacy public note endpoints are no longer used by the preview.
@@ -90,7 +92,10 @@ test('sharing from a Trip: two clearly different choices, live sharing guarded a
   assert.match(detail, /text: 'Preview'/);
   assert.match(detail, /Alert\.alert\('Share this Trip'/);
   assert.match(detail, /SHARE_CHOICES\.copy\.label/);
-  assert.match(detail, /SHARE_CHOICES\.live\(Boolean\(sharedCollectionId\)\)\.label/);
+  assert.match(detail, /SHARE_CHOICES\.live\(sharingActive\)\.label/);
+  // Stop sharing is offered only while the link is on, and only to the Trip's owner (this is My Trips).
+  assert.match(detail, /\.\.\.\(sharingActive \? \[\{ onPress: stopSharingLive/);
+  assert.match(detail, /sharedTripsStore\.stopSharing\(sharedCollectionId\)/);
   assert.match(detail, /if \(!trip \|\| isSharingLive\) return;/);
   assert.match(detail, /sharedTripsStore\.share\(trip\.id\)/);
   assert.match(detail, /Share\.share\(\{ message: liveShareMessage\(trip\.name, url\)/);
@@ -98,6 +103,34 @@ test('sharing from a Trip: two clearly different choices, live sharing guarded a
   assert.match(detail, /Shared live: people with the link can join and add notes/);
   // The existing public-snapshot share and text share are still wired.
   assert.match(detail, /isPublicTripSharingEnabled\(\) \? createPublicShare\(\) : openShareSheet\(\)/);
+});
+
+test('opening a link mutates nothing: no effect on the preview screen can join, save, create or sign in', async () => {
+  const screen = await read('app/collections/[collectionId].tsx');
+  const code = screen.split('\n').filter((line) => !line.trim().startsWith('//')).join('\n');
+  // Every useEffect body on the screen, up to its dependency list.
+  const effects = [...code.matchAll(/useEffect\(\(\) => \{([\s\S]*?)\}, \[[^\]]*\]\);/g)].map((m) => m[1]);
+  assert.ok(effects.length >= 3);
+  for (const body of effects) {
+    assert.doesNotMatch(body, /\.join\(|saveCopy|\.signIn|signInRef|importTrip|actions\.(join|saveCopy)/, body);
+  }
+  // The only things that start an action are the two button handlers; sign-in return only continues one.
+  assert.match(code, /onJoin=\{\(\) => void actions\.join\(\)\}/);
+  assert.match(code, /onSaveCopy=\{\(\) => void actions\.saveCopy\(\)\}/);
+  assert.match(code, /actions\.sessionChanged\(\)/);
+  // The preview shows who is signed in before either action.
+  assert.match(code, /account=\{user \? user\.name \|\| user\.email : null\}/);
+});
+
+test('the Shared Trip screen passes the link on through the store and stops sharing only on the creator\'s confirmation', async () => {
+  const screen = await read('app/shared-trips/[collectionId].tsx');
+  assert.match(screen, /sharedTripsStore\.reshare\(collectionId\)/);
+  assert.match(screen, /sharedTripsStore\.stopSharing\(collectionId\)/);
+  assert.match(screen, /Share\.share\(\{ message: reshareMessage\(detail\.collection\.title, result\.value\.url\) \}\)/);
+  const view = await read('components/shared-trip-detail-view.tsx');
+  assert.match(view, /stopSharingConfirmation\(detail\.collection\.title\)/);
+  assert.match(view, /controls\.canReshare && onReshare/);
+  assert.match(view, /controls\.canStopSharing && onStopSharing/);
 });
 
 test('the detail view has no way to change a Trip\'s structure', async () => {

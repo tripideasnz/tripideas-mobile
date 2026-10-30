@@ -39,6 +39,8 @@ export const detail = (overrides = {}) => ({
     { itemId: 'fci_b', notes: [], placeId: 'place-b', position: 1 },
     { itemId: 'fci_c', notes: [note({ id: 'pn_c_owner', text: 'Sunrise' })], placeId: 'place-c', position: 2 },
   ],
+  // The link is on: anyone on the Trip may pass it on; only the creator may stop it.
+  sharing: { active: true, canReshare: true, canStop: false },
   structure: { managedByTrip: true },
   viewer: { id: 'user_member', joinedAt: '2026-10-03T00:00:00.000Z', role: 'member' },
   ...overrides,
@@ -56,17 +58,24 @@ export const summary = (overrides = {}) => ({
 });
 
 /** A fetch that answers from a list of [matcher, responder] pairs and records every call. */
-/** GET /collections/:id/preview, as the API sends it (see shared-trip-api.md in the API repository). */
+/** A note on the public preview: the author's public name only, never an id. */
+export const previewNote = (text, { name = null, creator = false } = {}) => ({
+  author: { displayName: name, isCollectionOwner: creator },
+  text,
+  updatedAt: 'u',
+});
+
+/** GET /collections/:id/preview?k=, as the API sends it (see shared-trip-api.md in the API repository). */
 export const previewDto = (overrides = {}) => ({
   collection: { createdAt: '2026-10-01T00:00:00.000Z', id: 'fc_1', title: 'South Island', updatedAt: '2026-10-02T00:00:00.000Z' },
   creator: { displayName: 'Ana' },
   places: [
-    { note: { text: 'Book early', updatedAt: 'u' }, placeId: 'place-a', position: 0 },
-    { note: null, placeId: 'place-b', position: 1 },
-    { note: { text: 'Sunrise', updatedAt: 'u' }, placeId: 'place-c', position: 2 },
+    { notes: [previewNote('Book early', { creator: true, name: 'Ana' }), previewNote('Booked', { name: 'Ben' })], placeId: 'place-a', position: 0 },
+    { notes: [previewNote('Only a participant wrote here', { name: 'Ben' })], placeId: 'place-b', position: 1 },
+    { notes: [previewNote('Sunrise', { creator: true, name: 'Ana' })], placeId: 'place-c', position: 2 },
   ],
   sharing: { canJoin: true, canSaveCopy: true, kind: 'live_trip', status: 'shared' },
-  tripNote: { text: 'Pack warm', updatedAt: 'u' },
+  tripNotes: [previewNote('Pack warm', { creator: true, name: 'Ana' }), previewNote('Bring a hat', { name: 'Ben' })],
   ...overrides,
 });
 
@@ -74,7 +83,7 @@ export function fakeFetch(routes) {
   const calls = [];
   const fetcher = async (input, init = {}) => {
     const url = new URL(String(input));
-    const call = { body: init.body ? JSON.parse(init.body) : undefined, headers: init.headers ?? {}, method: init.method ?? 'GET', path: url.pathname };
+    const call = { body: init.body ? JSON.parse(init.body) : undefined, headers: init.headers ?? {}, method: init.method ?? 'GET', path: url.pathname, search: url.search };
     calls.push(call);
     for (const [matches, respond] of routes) {
       if (matches(call)) return respond(call);

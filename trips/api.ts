@@ -27,7 +27,8 @@ function parseSummary(value: unknown): ApiTripSummary {
       item.sharedCollectionId === undefined ||
       item.sharedCollectionId === null ||
       typeof item.sharedCollectionId === 'string'
-    )
+    ) ||
+    !(item.sharingActive === undefined || typeof item.sharingActive === 'boolean')
   ) {
     throw new ApiError(500, 'malformed_response');
   }
@@ -38,6 +39,7 @@ function parseSummary(value: unknown): ApiTripSummary {
     name: item.name,
     // Older APIs do not send the field; absence means "not shared".
     sharedCollectionId: item.sharedCollectionId ?? null,
+    sharingActive: item.sharingActive === true,
   };
 }
 

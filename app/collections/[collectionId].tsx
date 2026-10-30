@@ -1,6 +1,8 @@
-// A Shared Trip link opened in the app (/collections/<id>?user=<ownerId>&type=shared). Anyone can read
-// the preview (one request: GET /collections/<id>/preview); the creator and members go straight to the live Trip. Join Trip follows the creator's
-// Trip; Save a Copy makes a separate Trip of the recipient's own.
+// A Shared Trip link opened in the app (/collections/<id>?k=<token>). Opening it is READ-ONLY, signed in
+// or not: it never joins, saves or creates anything. Anyone with the link can read the preview (one
+// request: GET /collections/<id>/preview?k=); the creator and members go straight to the live Trip.
+// Join Trip follows the creator's Trip; Save a Copy makes a separate Trip of the recipient's own. Each
+// is a deliberate tap, and the tap survives sign-in (see preview-actions.ts).
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { View } from 'react-native';
@@ -27,10 +29,12 @@ import type { CollectionPreview } from '@/shared-trips/types';
 import { useTripPlaceCards } from '@/trips/use-trip-place-cards';
 
 export default function SharedTripPreviewScreen() {
-  const { collectionId: rawId } = useLocalSearchParams<{ collectionId?: string | string[] }>();
+  const { collectionId: rawId, k: rawToken } = useLocalSearchParams<{ collectionId?: string | string[]; k?: string | string[] }>();
   const collectionId = (Array.isArray(rawId) ? rawId[0] : rawId) ?? '';
+  // The link's token. It is a capability to read and to join, never an identity.
+  const token = (Array.isArray(rawToken) ? rawToken[0] : rawToken) || null;
   const router = useRouter();
-  const { session, signIn } = useSession();
+  const { session, signIn, user } = useSession();
   const userId = session?.userId ?? null;
   const store = useSharedTripsState();
   const copyDependencies = useCopyDependencies();
@@ -51,13 +55,13 @@ export default function SharedTripPreviewScreen() {
     }
     let active = true;
     setLoad('loading');
-    fetchCollectionPreview(collectionId)
+    fetchCollectionPreview(collectionId, token)
       .then((preview) => active && setLoad({ preview, status: 'ok' }))
       .catch((error) => active && setLoad(previewLoadFailure(error)));
     return () => {
       active = false;
     };
-  }, [collectionId, loadNonce]);
+  }, [collectionId, loadNonce, token]);
 
   // A signed-in visitor who has already joined (or created the Trip) is sent to the live Trip.
   useEffect(() => {
@@ -87,13 +91,14 @@ export default function SharedTripPreviewScreen() {
         copyDependencies,
         getPreview: () => previewRef.current,
         getUserId: () => userIdRef.current,
-        join: (id) => sharedTripsStore.join(id),
+        join: (id, shareKey) => sharedTripsStore.join(id, shareKey),
         onChange: setAction,
         onJoined: () => router.replace({ pathname: '/shared-trips/[collectionId]', params: { collectionId } }),
         onSaved: (tripId) => router.replace({ pathname: '/trips/[tripId]', params: { tripId } }),
         signIn: () => signInRef.current(),
+        token,
       }),
-    [collectionId, copyDependencies, router]
+    [collectionId, copyDependencies, router, token]
   );
   // Sign-in finished while an action was waiting for it: continue that same action.
   useEffect(() => {
@@ -119,7 +124,7 @@ export default function SharedTripPreviewScreen() {
 
   if (state.kind === 'loading' || state.kind === 'open-shared' || !preview) {
     if (state.kind === 'not-found') {
-      return notice('This shared trip could not be found. The link may be incorrect, or the trip may no longer be shared.');
+      return notice('This shared trip could not be found. The link may be incorrect, or the owner may have stopped sharing it.');
     }
     if (state.kind === 'unsupported') {
       return notice("This version of the TripIdeas service can't show shared Trip previews yet. Please try again later.");
@@ -134,10 +139,10 @@ export default function SharedTripPreviewScreen() {
     <>
       {options}
       <SharedTripPreviewView
+        account={user ? user.name || user.email : null}
         cardsById={cardsById}
         cardsPending={cardsPending}
         creator={ownerLabel({ displayName: preview.creatorName })}
-        creatorNote={preview.tripNote}
         isCopying={action.busy === 'copy'}
         isJoining={action.busy === 'join'}
         message={action.message}
@@ -145,9 +150,10 @@ export default function SharedTripPreviewScreen() {
         onOpenCopy={(tripId) => router.replace({ pathname: '/trips/[tripId]', params: { tripId } })}
         onSaveCopy={() => void actions.saveCopy()}
         placeIds={placeIds}
-        placeNotes={preview.places.map((place) => place.note)}
+        placeNotes={preview.places.map((place) => place.notes)}
         signInHint={state.kind === 'preview' ? state.signInHint : null}
         title={preview.title}
+        tripNotes={preview.tripNotes}
       />
     </>
   );

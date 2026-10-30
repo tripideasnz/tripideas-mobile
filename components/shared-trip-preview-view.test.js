@@ -7,13 +7,18 @@ const { SharedTripPreviewView } = await import('./shared-trip-preview-view.tsx')
 const tests = [];
 const test = (name, run) => tests.push({ name, run });
 
+const pn = (text, name, creator) => ({ author: { displayName: name, isCollectionOwner: creator }, text, updatedAt: 'u' });
+
+/** The text of every note shown, in order (notes are rendered by ShowMoreText). */
+const noteValues = (tree) => findAll(tree, (n) => n.type === 'ShowMoreText').map((n) => n.props.value);
+
 function view(overrides = {}) {
   const calls = { copy: 0, join: 0, open: [] };
   const props = {
     cardsById: new Map([['place-b', { _id: 'place-b', title: 'Museum' }], ['place-a', { _id: 'place-a', title: 'Harbour' }]]),
     cardsPending: false,
     creator: 'Ana',
-    creatorNote: 'Pack warm',
+    tripNotes: [pn('Pack warm', 'Ana', true), pn('Bring a hat', 'Ben', false)],
     isCopying: false,
     isJoining: false,
     message: null,
@@ -29,11 +34,14 @@ function view(overrides = {}) {
   return { calls, tree: render(createElement(SharedTripPreviewView, props)) };
 }
 
-test('shows the title, creator, place count and the creator\'s Trip note', () => {
+test('shows the title, creator and place count, and every Trip note with its author', () => {
   const text = textOf(view().tree);
   assert.match(text, /South Island/);
   assert.match(text, /By Ana · 3 places/);
-  assert.ok(find(view().tree, byLabel("Creator's Trip note")));
+  assert.ok(find(view().tree, byLabel('Trip notes')));
+  assert.ok(find(view().tree, byLabel('Note by Ana (creator)')));
+  assert.ok(find(view().tree, byLabel('Note by Ben')));
+  assert.deepEqual(noteValues(view().tree), ['Pack warm', 'Bring a hat']); // the creator's first, as the API orders them
 });
 
 test('Places are in the creator\'s order using the existing Place cards, with placeholders for unknown ones', () => {
@@ -44,15 +52,19 @@ test('Places are in the creator\'s order using the existing Place cards, with pl
   assert.match(textOf(view({ placeIds: [] }).tree), /no places yet/);
 });
 
-test('the creator\'s note on a Place appears under that Place, in order, and nothing else is shown as a note', () => {
-  const { tree } = view({ placeNotes: ['Book early', null, 'Sunrise'] });
-  const notes = findAll(tree, byLabel("Creator's note on this Place"));
-  assert.equal(notes.length, 2);
-  const text = textOf(tree);
-  assert.match(text, /Book early/);
-  assert.match(text, /Sunrise/);
-  assert.ok(text.indexOf('Book early') < text.indexOf('Sunrise'));
-  assert.equal(findAll(view().tree, byLabel("Creator's note on this Place")).length, 0); // no notes, no blocks
+test('every note on a Place appears under that Place with its author, in order; Places without notes show none', () => {
+  const placeNotes = [[pn('Book early', 'Ana', true), pn('Booked', 'Ben', false)], [], [pn('Sunrise', 'Ana', true)]];
+  const { tree } = view({ placeNotes });
+  // Trip notes first (Pack warm, Bring a hat), then each Place's notes in the creator's Place order.
+  assert.deepEqual(noteValues(tree), ['Pack warm', 'Bring a hat', 'Book early', 'Booked', 'Sunrise']);
+  assert.equal(findAll(tree, byLabel('Note by Ben')).length >= 1, true);
+  assert.equal(findAll(view({ placeNotes: [[], [], []], tripNotes: [] }).tree, (n) => String(n.props?.accessibilityLabel ?? '').startsWith('Note by')).length, 0);
+});
+
+test('the signed-in account is named before Join or Save, and nothing is named when signed out', () => {
+  assert.match(textOf(view({ account: 'sam@example.test' }).tree), /Signed in as sam@example\.test/);
+  assert.ok(find(view({ account: 'Sam' }).tree, byLabel('Signed in as Sam')));
+  assert.doesNotMatch(textOf(view({ account: null }).tree), /Signed in as/);
 });
 
 test('Join Trip and Save a Copy are two separate buttons that do different things', () => {
@@ -94,10 +106,11 @@ test('failures and the saved-copy shortcut appear next to the actions', () => {
   assert.deepEqual(existing.calls.open, ['itn_9']);
 });
 
-test('the preview shows no participant notes and no note editors', () => {
-  const { tree } = view();
+test('the preview is read-only: shared notes are shown, never edited, and no structure controls exist', () => {
+  const { tree } = view({ placeNotes: [[pn('x', 'Ben', false)], [], []] });
   assert.equal(findAll(tree, (n) => n.type === 'AutosaveNote').length, 0);
-  assert.equal(findAll(tree, (n) => n.type === 'ShowMoreText').length, 1); // only the creator's Trip note
+  assert.equal(findAll(tree, (n) => n.type === 'TextInput' || n.type === 'AppTextInput').length, 0);
+  assert.deepEqual(buttons(tree).map((b) => textOf(b)).sort(), ['Join Trip', 'Save a Copy']);
 });
 
 let failed = 0;

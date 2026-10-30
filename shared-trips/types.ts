@@ -43,6 +43,8 @@ export type SharedTripDetail = {
   owner: { displayName: string | null; id: string };
   permissions: SharedTripPermissions;
   places: SharedTripPlace[];
+  /** The share link: anyone may reshare an active one; only the creator may stop it. */
+  sharing: { active: boolean; canReshare: boolean; canStop: boolean };
   structure: { managedByTrip: boolean };
   viewer: { id: string; joinedAt: string | null; role: 'member' | 'owner' };
 };
@@ -58,29 +60,41 @@ export type SharedTripSummary = {
   updatedAt: string;
 };
 
+/** A note on the public preview: shared content, with its author's public name only. */
+export type PreviewNote = {
+  author: { displayName: string | null; isCollectionOwner: boolean };
+  text: string;
+  updatedAt: string;
+};
+
 /**
- * The public preview of a published Trip (GET /collections/:id/preview): what someone sees before
- * joining. It carries the creator's own words only, never a participant's note.
+ * The public preview of a Shared Trip (GET /collections/:id/preview?k=): what anyone with the link sees
+ * before joining. Every note is shared content, so every note is here with its author.
  */
 export type CollectionPreview = {
   /** The creator's public name; null when the account has none (never an email address). */
   creatorName: string | null;
   id: string;
-  /** The creator's Place notes sit on the Places, in the creator's order. */
-  places: { note: string | null; placeId: string }[];
+  /** In the creator's order; each Place carries everyone's notes on it. */
+  places: { notes: PreviewNote[]; placeId: string }[];
   title: string;
-  /** The creator's Trip-level note. */
-  tripNote: string | null;
+  /** Trip-level notes from everyone. */
+  tripNotes: PreviewNote[];
 };
 
 /** An owned Trip, with the collection it publishes once shared. */
 export type OwnedTripSummary = {
   id: string;
   name: string;
-  /** Null until the owner shares the Trip. */
+  /** Null until the owner shares the Trip; kept after Stop Sharing (its participants and notes stay). */
   sharedCollectionId: string | null;
+  /** The share link is on right now. */
+  sharingActive: boolean;
 };
 
 export type ShareTripResult = { collectionId: string; created: boolean; url: string };
 
 export type JoinResult = { alreadyJoined: boolean };
+
+/** The Trip's current share link, built by the server. */
+export type ShareLink = { url: string };

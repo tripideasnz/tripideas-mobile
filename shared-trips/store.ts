@@ -17,6 +17,7 @@ import { classifyError, SharedTripsFailure, type SharedTripsError } from '@/shar
 import type {
   JoinResult,
   OwnedTripSummary,
+  ShareLink,
   ShareTripResult,
   SharedTripDetail,
   SharedTripNote,
@@ -66,7 +67,8 @@ export type SharedTripsDeps = {
   deleteCollectionNote: (noteId: string) => Promise<void>;
   deletePlaceNote: (noteId: string) => Promise<void>;
   getSharedTrip: (collectionId: string) => Promise<SharedTripDetail>;
-  joinSharedTrip: (collectionId: string) => Promise<JoinResult>;
+  getShareLink: (collectionId: string) => Promise<ShareLink>;
+  joinSharedTrip: (collectionId: string, token?: string | null) => Promise<JoinResult>;
   leaveSharedTrip: (collectionId: string) => Promise<void>;
   listOwnedTrips: () => Promise<OwnedTripSummary[]>;
   listSharedTrips: () => Promise<SharedTripSummary[]>;
@@ -74,6 +76,7 @@ export type SharedTripsDeps = {
   saveCollectionNote: (collectionId: string, text: string) => Promise<{ id: string }>;
   savePlaceNote: (itemId: string, text: string) => Promise<{ id: string }>;
   shareTrip: (itineraryId: string) => Promise<ShareTripResult>;
+  stopSharing: (collectionId: string) => Promise<void>;
   updateCollectionNote: (noteId: string, text: string) => Promise<void>;
   updatePlaceNote: (noteId: string, text: string) => Promise<void>;
 };
@@ -346,12 +349,12 @@ export function createSharedTripsStore(deps: SharedTripsDeps) {
     value: SharedTripsState['membership'][string]
   ) => set({ ...state, membership: { ...state.membership, [collectionId]: value } });
 
-  async function join(collectionId: string): Promise<ActionResult<{ alreadyJoined: boolean }>> {
+  async function join(collectionId: string, token?: string | null): Promise<ActionResult<{ alreadyJoined: boolean }>> {
     setMembership(collectionId, { action: 'joining', error: null, pending: true });
     const startedIn = epoch;
     let result: ActionResult<{ alreadyJoined: boolean }>;
     try {
-      result = ok(await deps.joinSharedTrip(collectionId));
+      result = ok(await deps.joinSharedTrip(collectionId, token));
     } catch (error) {
       const failure = classifyError(error);
       if (failure.kind === 'session-expired') {
@@ -411,6 +414,54 @@ export function createSharedTripsStore(deps: SharedTripsDeps) {
     return result;
   }
 
+  // ---- passing the link on, and stopping it ---------------------------------------------------
+  /** The Trip's existing link, for the creator or a member to pass on. Never turns sharing on. */
+  async function reshare(collectionId: string): Promise<ActionResult<ShareLink>> {
+    const startedIn = epoch;
+    let result: ActionResult<ShareLink>;
+    try {
+      const blocked = await ensureSupported();
+      if (blocked) throw new SharedTripsFailure(blocked);
+      result = ok(await deps.getShareLink(collectionId));
+    } catch (error) {
+      result = fail(error instanceof SharedTripsFailure ? error.failure : classifyError(error));
+    }
+    // A link from a previous account must never be handed to the next one.
+    if (startedIn !== epoch) return fail({ kind: 'session-expired' });
+    // The server's refusal (sharing is off) is the truth: refresh what this person sees.
+    if (!result.ok && result.error.kind === 'sharing-off') void loadDetail(collectionId, { force: true });
+    return result;
+  }
+
+  /** Creator only. Members, notes and Places stay; the old link stops working for new people. */
+  async function stopSharing(collectionId: string): Promise<ActionResult> {
+    const startedIn = epoch;
+    let result: ActionResult;
+    try {
+      const blocked = await ensureSupported();
+      if (blocked) throw new SharedTripsFailure(blocked);
+      await deps.stopSharing(collectionId);
+      result = ok(undefined);
+    } catch (error) {
+      result = fail(error instanceof SharedTripsFailure ? error.failure : classifyError(error));
+    }
+    if (startedIn !== epoch) return result;
+    if (result.ok) {
+      const trips = state.myTrips.data;
+      if (trips) {
+        set({
+          ...state,
+          myTrips: {
+            ...state.myTrips,
+            data: trips.map((trip) => (trip.sharedCollectionId === collectionId ? { ...trip, sharingActive: false } : trip)),
+          },
+        });
+      }
+      await loadDetail(collectionId, { force: true });
+    }
+    return result;
+  }
+
   // ---- sharing (owner) --------------------------------------------------------------------
   async function share(itineraryId: string): Promise<ActionResult<ShareTripResult>> {
     set({ ...state, sharing: { ...state.sharing, [itineraryId]: { error: null, pending: true } } });
@@ -432,7 +483,7 @@ export function createSharedTripsStore(deps: SharedTripsDeps) {
           ? {
               ...state.myTrips,
               data: trips.map((trip) =>
-                trip.id === itineraryId ? { ...trip, sharedCollectionId: result.value.collectionId } : trip
+                trip.id === itineraryId ? { ...trip, sharedCollectionId: result.value.collectionId, sharingActive: true } : trip
               ),
             }
           : state.myTrips,
@@ -565,11 +616,13 @@ export function createSharedTripsStore(deps: SharedTripsDeps) {
     loadMyTrips,
     loadSharedWithMe,
     refreshAll,
+    reshare,
     reset,
     saveCollectionNote,
     savePlaceNote,
     setSession,
     share,
+    stopSharing,
     subscribe: (listener: () => void) => {
       listeners.add(listener);
       return () => {

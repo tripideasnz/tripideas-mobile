@@ -21,7 +21,9 @@ import {
   leaveConfirmation,
   membershipStatus,
   ownerLabel,
+  sharingCaption,
   splitNotes,
+  stopSharingConfirmation,
   type Freshness,
 } from '@/shared-trips/view-model';
 import type { SharedTripNote, SharedTripDetail } from '@/shared-trips/types';
@@ -122,10 +124,14 @@ export function SharedTripDetailView({
   handlers,
   isCopying,
   isLeaving,
+  isSharingBusy = false,
+  linkMessage = null,
   membershipMessage,
   onLeave,
   onOpenCopy,
+  onReshare,
   onSaveCopy,
+  onStopSharing,
   refreshControl,
 }: {
   cardsById: Map<string, PlaceCardData>;
@@ -136,10 +142,18 @@ export function SharedTripDetailView({
   handlers: NoteHandlers;
   isCopying: boolean;
   isLeaving: boolean;
+  /** Getting the link or stopping sharing is running. */
+  isSharingBusy?: boolean;
+  /** Why passing the link on, or stopping it, did not work. */
+  linkMessage?: string | null;
   membershipMessage: string | null;
   onLeave: () => void;
   onOpenCopy: (tripId: string) => void;
+  /** Pass the existing link on (the creator or a member). Never turns sharing on. */
+  onReshare?: () => void;
   onSaveCopy: () => void;
+  /** The creator stops sharing: the old link stops working for new people. */
+  onStopSharing?: () => void;
   refreshControl?: React.ReactElement<React.ComponentProps<typeof import('react-native').RefreshControl>>;
 }) {
   const controls = detailControls(detail);
@@ -151,6 +165,14 @@ export function SharedTripDetailView({
       { onPress: onLeave, style: 'destructive', text: dialog.confirmLabel },
     ]);
   };
+  const confirmStopSharing = () => {
+    const dialog = stopSharingConfirmation(detail.collection.title);
+    Alert.alert(dialog.title, dialog.message, [
+      { style: 'cancel', text: dialog.cancelLabel },
+      { onPress: () => onStopSharing?.(), style: 'destructive', text: dialog.confirmLabel },
+    ]);
+  };
+  const caption = sharingCaption(detail);
   const placeLabel = `${detail.places.length} ${detail.places.length === 1 ? 'place' : 'places'}`;
 
   return (
@@ -188,6 +210,28 @@ export function SharedTripDetailView({
             variant="secondary"
           />
         ) : null}
+        {controls.canReshare && onReshare ? (
+          <AppButton
+            accessibilityLabel="Share link"
+            accessibilityState={{ busy: isSharingBusy, disabled: isSharingBusy }}
+            disabled={isSharingBusy}
+            label="Share link"
+            onPress={onReshare}
+            size="compact"
+            variant="secondary"
+          />
+        ) : null}
+        {controls.canStopSharing && onStopSharing ? (
+          <AppButton
+            accessibilityLabel="Stop sharing"
+            accessibilityState={{ busy: isSharingBusy, disabled: isSharingBusy }}
+            disabled={isSharingBusy}
+            label="Stop sharing"
+            onPress={confirmStopSharing}
+            size="compact"
+            variant="danger"
+          />
+        ) : null}
         {controls.canLeave ? (
           <AppButton
             accessibilityState={{ busy: isLeaving, disabled: isLeaving }}
@@ -208,6 +252,16 @@ export function SharedTripDetailView({
           {detail.owner.displayName?.trim() ?? 'The creator'} decides which places are in this Trip. You can add your own notes.
         </AppText>
       )}
+      {caption ? (
+        <AppText accessibilityLabel={caption} color={Palette.textMuted} style={{ marginTop: Space.sm }} variant="caption">
+          {caption}
+        </AppText>
+      ) : null}
+      {linkMessage ? (
+        <AppText accessibilityLiveRegion="polite" color={Palette.danger} style={{ marginTop: Space.sm }} variant="caption">
+          {linkMessage}
+        </AppText>
+      ) : null}
       {membershipMessage ? (
         <AppText accessibilityLiveRegion="polite" color={Palette.danger} style={{ marginTop: Space.sm }} variant="caption">
           {membershipMessage}

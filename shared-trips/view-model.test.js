@@ -20,7 +20,12 @@ import {
   membershipStatus,
   noteErrorMessage,
   ownerLabel,
+  previewAuthorLabel,
   previewState,
+  linkErrorMessage,
+  reshareMessage,
+  sharingCaption,
+  stopSharingConfirmation,
   shareErrorMessage,
   sharedTripRows,
   splitNotes,
@@ -108,7 +113,7 @@ test('the detail screen state follows what the server said about access', () => 
 
 test('controls come from the server permissions: a member can leave and copy, the creator cannot leave', () => {
   const member = detailControls(detail());
-  assert.deepEqual(member, { canLeave: true, canSaveCopy: true, canWritePlaceNotes: true, canWriteTripNote: true, isCreator: false, structure: false });
+  assert.deepEqual(member, { canLeave: true, canReshare: true, canSaveCopy: true, canStopSharing: false, canWritePlaceNotes: true, canWriteTripNote: true, isCreator: false, structure: false });
   const creator = detail({ permissions: { ...detail().permissions, canLeave: false }, viewer: { id: 'user_owner', joinedAt: null, role: 'owner' } });
   const owner = detailControls(creator);
   assert.equal(owner.canLeave, false);
@@ -118,6 +123,45 @@ test('controls come from the server permissions: a member can leave and copy, th
   assert.equal(detailControls(odd).canLeave, false);
   const restricted = detailControls(detail({ permissions: { ...detail().permissions, canAddPlaceNote: false, canAddCollectionNote: false, canSaveCopy: false } }));
   assert.deepEqual([restricted.canWritePlaceNotes, restricted.canWriteTripNote, restricted.canSaveCopy], [false, false, false]);
+});
+
+test('anyone on an active Shared Trip may pass the link on; only the creator may stop sharing; nobody can once it is off', () => {
+  const creatorView = detail({ sharing: { active: true, canReshare: true, canStop: true }, viewer: { id: 'user_owner', joinedAt: null, role: 'owner' } });
+  assert.deepEqual([detailControls(creatorView).canReshare, detailControls(creatorView).canStopSharing], [true, true]);
+  assert.deepEqual([detailControls(detail()).canReshare, detailControls(detail()).canStopSharing], [true, false]);
+  const off = detail({ sharing: { active: false, canReshare: false, canStop: false } });
+  assert.deepEqual([detailControls(off).canReshare, detailControls(off).canStopSharing], [false, false]);
+});
+
+test('when sharing is off each viewer is told what it means for them (and an active Trip says nothing)', () => {
+  assert.equal(sharingCaption(detail()), null);
+  const off = { active: false, canReshare: false, canStop: false };
+  assert.match(sharingCaption(detail({ sharing: off })), /Ana has stopped sharing this Trip\. You keep your access and your notes\./);
+  assert.match(sharingCaption(detail({ sharing: off, viewer: { id: 'u', joinedAt: null, role: 'owner' } })), /Sharing is off\. People who already joined keep their access/);
+});
+
+test('stopping sharing says what stops and what stays', () => {
+  const dialog = stopSharingConfirmation('South Island');
+  assert.equal(dialog.cancelLabel, 'Cancel');
+  assert.match(dialog.message, /"South Island" will stop working for new people/);
+  assert.match(dialog.message, /already joined keep their access and their notes/);
+  assert.match(dialog.message, /new link/);
+});
+
+test('link and join errors are specific: a dead link, sharing off, creator-only', () => {
+  assert.match(membershipErrorMessage('joining', { kind: 'not-found' }), /no longer active\. Ask the person who shared it for a new link/);
+  assert.match(linkErrorMessage({ kind: 'sharing-off' }, 'reshare'), /Only the creator can turn it on again/);
+  assert.match(linkErrorMessage({ kind: 'owner-only' }, 'stop'), /Only the creator can start or stop sharing/);
+  assert.match(linkErrorMessage({ kind: 'offline' }, 'reshare'), /Check your connection/);
+  assert.match(reshareMessage('South Island', 'https://x/y?k=1'), /South Island.*https:\/\/x\/y\?k=1/);
+});
+
+test('preview notes are labelled by author, the creator marked, with no "You"', () => {
+  const note = (name, creator) => ({ author: { displayName: name, isCollectionOwner: creator }, text: 't', updatedAt: 'u' });
+  assert.equal(previewAuthorLabel(note('Ana', true)), 'Ana (creator)');
+  assert.equal(previewAuthorLabel(note(null, true)), 'Creator');
+  assert.equal(previewAuthorLabel(note('Ben', false)), 'Ben');
+  assert.equal(previewAuthorLabel(note('  ', false)), 'Another traveller');
 });
 
 test('participants are told the creator decides the Places: structure is false for a Trip-managed collection', () => {
@@ -152,7 +196,7 @@ test('the Exit confirmation names the consequence for the leaver\'s own notes', 
 });
 
 // ---- the preview ------------------------------------------------------------------------------------------
-const loaded = { preview: { creatorName: 'Ana', id: 'fc_1', places: [], title: 'South Island', tripNote: null }, status: 'ok' };
+const loaded = { preview: { creatorName: 'Ana', id: 'fc_1', places: [], title: 'South Island', tripNotes: [] }, status: 'ok' };
 test('the preview works signed out, with a sign-in hint, and signed in without one', () => {
   assert.deepEqual(previewState({ access: undefined, load: loaded, userId: null }), { kind: 'preview', signInHint: 'Sign in to join this Trip or save your own copy.' });
   assert.deepEqual(previewState({ access: 'not-joined', load: loaded, userId: 'user_x' }), { kind: 'preview', signInHint: null });

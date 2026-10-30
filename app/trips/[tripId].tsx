@@ -26,7 +26,13 @@ import { AutoExpandingTextInput } from '@/components/ui/app-text-input';
 import { Palette, Radius, Screen, Space, Type } from '@/constants/design';
 import { sharedTripsStore } from '@/shared-trips';
 import { useSharedTripsState } from '@/shared-trips/use-shared-trips';
-import { liveShareMessage, SHARE_CHOICES, shareErrorMessage } from '@/shared-trips/view-model';
+import {
+  linkErrorMessage,
+  liveShareMessage,
+  SHARE_CHOICES,
+  shareErrorMessage,
+  stopSharingConfirmation,
+} from '@/shared-trips/view-model';
 import { getTripImages, type PersonalTripPhoto } from '@/trips/images';
 import { useMyTrips } from '@/trips/provider';
 import { tripDetailView } from '@/trips/detail-state';
@@ -83,8 +89,11 @@ export default function TripDetailScreen() {
   // Whether this Trip is already shared live (its linked collection), and a guard against taps
   // while the share request is running.
   const sharedState = useSharedTripsState();
-  const sharedCollectionId =
-    sharedState.myTrips.data?.find((summary) => summary.id === selectedTripId)?.sharedCollectionId ?? null;
+  const sharedSummary = sharedState.myTrips.data?.find((summary) => summary.id === selectedTripId);
+  const sharedCollectionId = sharedSummary?.sharedCollectionId ?? null;
+  // The link is on right now. A Trip whose owner stopped sharing keeps its collection (and members)
+  // but is no longer "shared live".
+  const sharingActive = Boolean(sharedCollectionId && sharedSummary?.sharingActive);
   const isSharingLive = Boolean(selectedTripId && sharedState.sharing[selectedTripId]?.pending);
 
   const placeIds = useMemo(
@@ -226,6 +235,24 @@ export default function TripDetailScreen() {
     );
   };
 
+  // Stop sharing live: the old link stops working for new people; members, notes and Places stay.
+  const stopSharingLive = () => {
+    if (!trip || !sharedCollectionId || isSharingLive) return;
+    const dialog = stopSharingConfirmation(trip.name);
+    Alert.alert(dialog.title, dialog.message, [
+      { style: 'cancel', text: dialog.cancelLabel },
+      {
+        onPress: () => {
+          void sharedTripsStore.stopSharing(sharedCollectionId).then((result) => {
+            if (!result.ok) Alert.alert('Could not stop sharing', linkErrorMessage(result.error, 'stop'));
+          });
+        },
+        style: 'destructive',
+        text: dialog.confirmLabel,
+      },
+    ]);
+  };
+
   const createPublicShare = async () => {
     if (!trip) {
       return;
@@ -313,7 +340,8 @@ export default function TripDetailScreen() {
                 onPress: () => Alert.alert('Share this Trip', undefined, [
                   { style: 'cancel', text: 'Cancel' },
                   { onPress: () => void (isPublicTripSharingEnabled() ? createPublicShare() : openShareSheet()), text: SHARE_CHOICES.copy.label },
-                  { onPress: () => void shareLive(), text: SHARE_CHOICES.live(Boolean(sharedCollectionId)).label },
+                  { onPress: () => void shareLive(), text: SHARE_CHOICES.live(sharingActive).label },
+                  ...(sharingActive ? [{ onPress: stopSharingLive, style: 'destructive' as const, text: SHARE_CHOICES.stop.label }] : []),
                 ]),
                 text: 'Share',
               },
@@ -420,7 +448,7 @@ export default function TripDetailScreen() {
             </View>
           )}
 
-          {sharedCollectionId ? (
+          {sharingActive ? (
             <AppText accessibilityLabel="This Trip is shared live" color={Palette.textMuted} style={{ marginBottom: Space.xl, marginTop: -Space.lg }} variant="caption">
               Shared live: people with the link can join and add notes. They cannot change your Places.
             </AppText>

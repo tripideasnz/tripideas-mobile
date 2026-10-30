@@ -11,6 +11,7 @@ export const sharedTripsStore = createSharedTripsStore({
   deleteCollectionNote: api.deleteCollectionNote,
   deletePlaceNote: api.deletePlaceNote,
   getSharedTrip: api.getSharedTrip,
+  getShareLink: api.getShareLink,
   joinSharedTrip: api.joinSharedTrip,
   leaveSharedTrip: api.leaveSharedTrip,
   listOwnedTrips: api.listOwnedTrips,
@@ -19,6 +20,7 @@ export const sharedTripsStore = createSharedTripsStore({
   saveCollectionNote: api.saveCollectionNote,
   savePlaceNote: api.savePlaceNote,
   shareTrip: api.shareTrip,
+  stopSharing: api.stopSharingTrip,
   updateCollectionNote: api.updateCollectionNote,
   updatePlaceNote: api.updatePlaceNote,
 });

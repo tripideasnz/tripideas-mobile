@@ -3,6 +3,8 @@
 import { ApiError } from '@/lib/api-client';
 import type {
   CollectionPreview,
+  PreviewNote,
+  ShareLink,
   SharedTripAuthor,
   SharedTripDetail,
   SharedTripNote,
@@ -100,6 +102,7 @@ export function parseSharedTripDetail(value: unknown): SharedTripDetail {
     owner: person(v.owner),
     permissions: parsePermissions(v.permissions),
     places,
+    sharing: parseSharing(v.sharing),
     structure: { managedByTrip: bool(record(v.structure).managedByTrip) },
     viewer: {
       id: str(viewer.id),
@@ -126,6 +129,21 @@ export function parseSharedTripList(value: unknown): SharedTripSummary[] {
   return list(record(value).sharedTrips).map(parseSharedTripSummary);
 }
 
+function parseSharing(value: unknown) {
+  const v = record(value);
+  return { active: bool(v.active), canReshare: bool(v.canReshare), canStop: bool(v.canStop) };
+}
+
+function parsePreviewNote(value: unknown): PreviewNote {
+  const v = record(value);
+  const author = record(v.author);
+  return {
+    author: { displayName: nullableStr(author.displayName), isCollectionOwner: bool(author.isCollectionOwner) },
+    text: str(v.text),
+    updatedAt: str(v.updatedAt),
+  };
+}
+
 /**
  * The preview is all or nothing: a missing field, an out-of-order Place or a Place without an id means
  * the response is `malformed_response`, so a copy is never made from a half-read Trip.
@@ -140,7 +158,7 @@ export function parseCollectionPreview(value: unknown): CollectionPreview {
     if (int(place.position) !== index) bad(); // contiguous, in the creator's order
     const placeId = str(place.placeId);
     if (!placeId) bad();
-    return { note: previewNote(place.note), placeId };
+    return { notes: list(place.notes).map(parsePreviewNote), placeId };
   });
   const title = str(collection.title);
   if (!title.trim()) bad();
@@ -149,15 +167,15 @@ export function parseCollectionPreview(value: unknown): CollectionPreview {
     id: str(collection.id),
     places,
     title,
-    tripNote: previewNote(v.tripNote),
+    tripNotes: list(v.tripNotes).map(parsePreviewNote),
   };
 }
 
-/** A creator's note is `{ text, updatedAt }` or null; blank text means "no note". */
-function previewNote(value: unknown): string | null {
-  if (value === null) return null;
-  const note = record(value);
-  str(note.updatedAt);
-  const text = str(note.text);
-  return text.trim() ? text : null;
+/** The share link response: `{ active: true, url }`. */
+export function parseShareLink(value: unknown): ShareLink {
+  const v = record(value);
+  if (v.active !== true) bad();
+  const url = str(v.url);
+  if (!url) bad();
+  return { url };
 }

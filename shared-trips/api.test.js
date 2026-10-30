@@ -53,21 +53,44 @@ test('sharing a Trip sends a bodyless POST with no JSON content type', async () 
   assert.equal(fetcher.calls[0].body, undefined);
 });
 
-test('join and leave use the existing collection routes, joining as the signed-in user', async () => {
+test('join and leave use the existing collection routes, joining as the signed-in user, with the link\'s token', async () => {
   setActiveToken('t');
   const fetcher = fakeFetch([
     [on('POST', '/favourites-collection/share'), () => json({ alreadyShared: true, collectionId: 'fc_1', id: 's' })],
     [on('POST', '/favourites-collection/exit'), () => json({ success: true })],
   ]);
   await withFetch(fetcher, async () => {
-    assert.deepEqual(await api.joinSharedTrip('fc_1'), { alreadyJoined: true });
+    assert.deepEqual(await api.joinSharedTrip('fc_1', 'TOKEN_43_CHARS_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'), { alreadyJoined: true });
+    assert.deepEqual(await api.joinSharedTrip('fc_1'), { alreadyJoined: true }); // an existing member needs none
     await api.leaveSharedTrip('fc_1');
   });
   assert.deepEqual(fetcher.calls.map((c) => [c.method, c.path, c.body]), [
+    ['POST', '/favourites-collection/share', { collectionId: 'fc_1', shareKey: 'TOKEN_43_CHARS_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' }],
     ['POST', '/favourites-collection/share', { collectionId: 'fc_1' }],
     ['POST', '/favourites-collection/exit', { collectionId: 'fc_1' }],
   ]);
-  assert.equal(JSON.stringify(fetcher.calls[0].body).includes('shareToUserId'), false); // never names another user
+  for (const call of fetcher.calls) assert.equal(JSON.stringify(call.body).includes('shareToUserId'), false); // never names another user
+});
+
+test('passing the link on and stopping sharing use the share-link routes; the server builds the URL', async () => {
+  setActiveToken('t');
+  const fetcher = fakeFetch([
+    [on('POST', '/favourites-collection/fc_1/share-link'), () => json({ active: true, url: 'https://www.tripideas.nz/collections/fc_1?k=abc' })],
+    [on('DELETE', '/favourites-collection/fc_1/share-link'), () => new Response(null, { status: 204 })],
+  ]);
+  await withFetch(fetcher, async () => {
+    assert.deepEqual(await api.getShareLink('fc_1'), { url: 'https://www.tripideas.nz/collections/fc_1?k=abc' });
+    await api.stopSharingTrip('fc_1');
+  });
+  assert.deepEqual(fetcher.calls.map((c) => [c.method, c.path, c.body]), [
+    ['POST', '/favourites-collection/fc_1/share-link', undefined], // no body: the client never supplies a link
+    ['DELETE', '/favourites-collection/fc_1/share-link', undefined],
+  ]);
+  for (const bad of [{ active: false, url: 'x' }, { active: true }, { active: true, url: '' }, 'nope']) {
+    await withFetch(fakeFetch([[on('POST', '/favourites-collection/fc_1/share-link'), () => json(bad)]]), async () => {
+      await assert.rejects(api.getShareLink('fc_1'), (e) => e.code === 'malformed_response');
+    });
+  }
 });
 
 test('note calls create, edit and delete only by note id or item id', async () => {
@@ -99,36 +122,36 @@ test('note calls create, edit and delete only by note id or item id', async () =
   assert.equal(fetcher.calls[2].headers['Content-Type'], undefined); // bodyless DELETE
 });
 
-test('the public preview is one request, works signed out, and parses the creator\'s content', async () => {
+test('the public preview is one request, works signed out, carries the link\'s token, and parses everyone\'s notes with authors', async () => {
   setActiveToken(null);
   const fetcher = fakeFetch([[on('GET', '/collections/fc_1/preview'), () => json({ ...previewDto(), extra: 'ignored', creator: { displayName: 'Ana', email: 'x@y.z' } })]]);
   await withFetch(fetcher, async () => {
-    assert.deepEqual(await api.fetchCollectionPreview('fc_1'), {
-      creatorName: 'Ana',
-      id: 'fc_1',
-      places: [
-        { note: 'Book early', placeId: 'place-a' },
-        { note: null, placeId: 'place-b' },
-        { note: 'Sunrise', placeId: 'place-c' },
-      ],
-      title: 'South Island',
-      tripNote: 'Pack warm',
-    });
+    const preview = await api.fetchCollectionPreview('fc_1', 'TOK_en-1_x');
+    assert.equal(preview.creatorName, 'Ana');
+    assert.equal(preview.title, 'South Island');
+    assert.deepEqual(preview.places.map((p) => p.placeId), ['place-a', 'place-b', 'place-c']);
+    assert.deepEqual(preview.tripNotes.map((n) => [n.author.displayName, n.author.isCollectionOwner, n.text]), [
+      ['Ana', true, 'Pack warm'],
+      ['Ben', false, 'Bring a hat'],
+    ]);
+    assert.deepEqual(preview.places[0].notes.map((n) => n.text), ['Book early', 'Booked']);
+    assert.equal(JSON.stringify(preview).includes('x@y.z'), false);
   });
   assert.equal(fetcher.calls.length, 1); // no per-Place or per-note requests
+  assert.equal(fetcher.calls[0].search, '?k=TOK_en-1_x');
   assert.equal(fetcher.calls[0].headers.Authorization, undefined);
 });
 
-test('a preview with no creator name or notes is valid; blank notes mean "no note"', async () => {
+test('a preview with no creator name and no notes is valid', async () => {
   setActiveToken(null);
   const fetcher = fakeFetch([[on('GET', '/collections/fc_1/preview'), () => json(previewDto({
-    creator: { displayName: null }, places: [{ note: { text: '   ', updatedAt: 'u' }, placeId: 'p', position: 0 }], tripNote: null,
+    creator: { displayName: null }, places: [{ notes: [], placeId: 'p', position: 0 }], tripNotes: [],
   }))]]);
   await withFetch(fetcher, async () => {
-    const preview = await api.fetchCollectionPreview('fc_1');
+    const preview = await api.fetchCollectionPreview('fc_1', 't');
     assert.equal(preview.creatorName, null);
-    assert.equal(preview.tripNote, null);
-    assert.deepEqual(preview.places, [{ note: null, placeId: 'p' }]);
+    assert.deepEqual(preview.tripNotes, []);
+    assert.deepEqual(preview.places, [{ notes: [], placeId: 'p' }]);
   });
 });
 
@@ -136,10 +159,14 @@ test('an incomplete or inconsistent preview is refused as a whole (never a half-
   setActiveToken(null);
   const broken = {
     'no places list': (d) => { delete d.places; },
+    'no trip notes list': (d) => { delete d.tripNotes; },
     'no creator': (d) => { delete d.creator; },
     'a Place without an id': (d) => { d.places[1].placeId = ''; },
+    'a Place without notes': (d) => { delete d.places[1].notes; },
     'Places out of order': (d) => { d.places[1].position = 5; },
-    'a note without text': (d) => { d.places[0].note = { updatedAt: 'u' }; },
+    'a note without text': (d) => { delete d.places[0].notes[0].text; },
+    'a note without an author': (d) => { delete d.tripNotes[0].author; },
+    'a note without the creator flag': (d) => { delete d.tripNotes[0].author.isCollectionOwner; },
     'a blank title': (d) => { d.collection.title = '  '; },
     'not shared': (d) => { d.sharing.status = 'private'; },
     'not copyable': (d) => { d.sharing.canSaveCopy = false; },
@@ -149,7 +176,7 @@ test('an incomplete or inconsistent preview is refused as a whole (never a half-
     let body = previewDto();
     damage(body, (value) => { body = value; });
     await withFetch(fakeFetch([[on('GET', '/collections/fc_1/preview'), () => json(body)]]), async () => {
-      await assert.rejects(api.fetchCollectionPreview('fc_1'), (e) => e.code === 'malformed_response', label);
+      await assert.rejects(api.fetchCollectionPreview('fc_1', 't'), (e) => e.code === 'malformed_response', label);
     });
   }
 });
@@ -157,7 +184,7 @@ test('an incomplete or inconsistent preview is refused as a whole (never a half-
 test('the preview route\'s errors are told apart: unavailable Trip, invalid link, and an API without the route', async () => {
   setActiveToken(null);
   const fail = (status, body) => fakeFetch([[on('GET', '/collections/fc_1/preview'), () => json(body, status)]]);
-  const outcome = async (fetcher) => withFetch(fetcher, async () => { try { await api.fetchCollectionPreview('fc_1'); } catch (e) { outcome.last = e; } });
+  const outcome = async (fetcher) => withFetch(fetcher, async () => { try { await api.fetchCollectionPreview('fc_1', 't'); } catch (e) { outcome.last = e; } });
   await outcome(fail(404, { code: 'preview_unavailable', message: 'x' }));
   assert.equal(previewLoadFailure(outcome.last).status, 'not-found');
   await outcome(fail(400, { code: 'invalid_collection_id', message: 'x' }));
@@ -173,15 +200,15 @@ test('the preview route\'s errors are told apart: unavailable Trip, invalid link
 test('owned Trips carry the collection that publishes them; older APIs without the field mean "not shared"', async () => {
   setActiveToken('t');
   const fetcher = fakeFetch([[on('GET', '/itinerary'), () => json([
-    { description: null, entryOrder: [], id: 'itn_1', name: 'A', sharedCollectionId: 'fc_1' },
+    { description: null, entryOrder: [], id: 'itn_1', name: 'A', sharedCollectionId: 'fc_1', sharingActive: true },
     { description: 'n', entryOrder: ['e'], id: 'itn_2', name: 'B' },
     { description: null, entryOrder: [], id: 'itn_3', name: 'C', sharedCollectionId: null },
   ])]]);
   await withFetch(fetcher, async () => {
     assert.deepEqual(await api.listOwnedTrips(), [
-      { id: 'itn_1', name: 'A', sharedCollectionId: 'fc_1' },
-      { id: 'itn_2', name: 'B', sharedCollectionId: null },
-      { id: 'itn_3', name: 'C', sharedCollectionId: null },
+      { id: 'itn_1', name: 'A', sharedCollectionId: 'fc_1', sharingActive: true },
+      { id: 'itn_2', name: 'B', sharedCollectionId: null, sharingActive: false },
+      { id: 'itn_3', name: 'C', sharedCollectionId: null, sharingActive: false },
     ]);
   });
   const bad = fakeFetch([[on('GET', '/itinerary'), () => json([{ description: null, entryOrder: [], id: 'x', name: 'y', sharedCollectionId: 5 }])]]);
@@ -295,6 +322,8 @@ test('errors are classified so a missing route is never shown as a deleted Trip'
   assert.equal(classifyError(e(404, 'preview_unavailable')).kind, 'not-found');
   assert.equal(classifyError(e(404, 'NOT_FOUND')).kind, 'unsupported');
   assert.equal(classifyError(e(404, 'request_failed')).kind, 'unsupported');
+  assert.equal(classifyError(e(403, 'sharing_not_active')).kind, 'sharing-off');
+  assert.equal(classifyError(e(403, 'owner_only')).kind, 'owner-only');
   assert.equal(classifyError(e(409, 'managed_by_trip')).kind, 'managed-by-trip');
   assert.equal(classifyError(e(422, 'personal_places_not_shareable')).kind, 'rejected');
   assert.equal(classifyError(e(422, 'personal_places_not_shareable')).code, 'personal_places_not_shareable');

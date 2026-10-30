@@ -2,8 +2,8 @@
 // creator's order, and the two distinct choices. It works signed out; the actions ask to sign in.
 //
 // Join Trip follows the creator's live Trip. Save a Copy makes a separate Trip of the recipient's own.
-// The preview carries only the creator's own words (their Trip note and their note on each Place);
-// it never shows, and the API never sends, other people's notes.
+// Notes are shared content: everyone's Trip and Place notes are shown with their authors. Nothing here
+// changes anything: opening a link is read-only, and each action below is a deliberate tap.
 import { ScrollView, View } from 'react-native';
 
 import { PlaceCard } from '@/components/place-card';
@@ -11,15 +11,16 @@ import { AppButton } from '@/components/ui/app-button';
 import { AppText } from '@/components/ui/app-text';
 import { ShowMoreText } from '@/components/ui/show-more-text';
 import { Palette, Radius, Screen, Space } from '@/constants/design';
-import { PREVIEW_ACTIONS } from '@/shared-trips/view-model';
+import { PREVIEW_ACTIONS, previewAuthorLabel } from '@/shared-trips/view-model';
+import type { PreviewNote } from '@/shared-trips/types';
 import type { PlaceCardData } from '@/types/content';
 import type { SaveMessage } from '@/trips/shared-trip-messages';
 
 export function SharedTripPreviewView({
+  account,
   cardsById,
   cardsPending,
   creator,
-  creatorNote,
   isCopying,
   isJoining,
   message,
@@ -30,11 +31,13 @@ export function SharedTripPreviewView({
   placeNotes = [],
   signInHint,
   title,
+  tripNotes = [],
 }: {
+  /** The signed-in account, so the person knows whose Trips a Join or Save will go to. */
+  account?: string | null;
   cardsById: Map<string, PlaceCardData>;
   cardsPending: boolean;
   creator: string;
-  creatorNote: string | null;
   isCopying: boolean;
   isJoining: boolean;
   message: SaveMessage | null;
@@ -42,10 +45,12 @@ export function SharedTripPreviewView({
   onOpenCopy: (tripId: string) => void;
   onSaveCopy: () => void;
   placeIds: string[];
-  /** The creator's note on each Place, aligned with `placeIds`. */
-  placeNotes?: (string | null)[];
+  /** Everyone's notes on each Place, aligned with `placeIds`. */
+  placeNotes?: PreviewNote[][];
   signInHint: string | null;
   title: string;
+  /** Everyone's Trip-level notes. */
+  tripNotes?: PreviewNote[];
 }) {
   const busy = isJoining || isCopying;
   const placeLabel = `${placeIds.length} ${placeIds.length === 1 ? 'place' : 'places'}`;
@@ -58,9 +63,15 @@ export function SharedTripPreviewView({
       <AppText color={Palette.textMuted} style={{ marginTop: Space.xs }} variant="caption">
         By {creator} · {placeLabel}
       </AppText>
-      {creatorNote?.trim() ? (
-        <View style={{ marginTop: Space.lg }}>
-          <ShowMoreText accessibilityLabel="Creator's Trip note" value={creatorNote} />
+      {account ? (
+        <AppText accessibilityLabel={`Signed in as ${account}`} color={Palette.textMuted} style={{ marginTop: Space.xs }} variant="caption">
+          Signed in as {account}
+        </AppText>
+      ) : null}
+      {tripNotes.length > 0 ? (
+        <View accessibilityLabel="Trip notes" style={{ gap: Space.sm, marginTop: Space.lg }}>
+          <AppText variant="label">Trip notes</AppText>
+          <NoteList notes={tripNotes} />
         </View>
       ) : null}
 
@@ -122,12 +133,9 @@ export function SharedTripPreviewView({
                     </AppText>
                   </View>
                 )}
-                {placeNotes[index]?.trim() ? (
-                  <View
-                    accessibilityLabel="Creator's note on this Place"
-                    style={{ backgroundColor: Palette.surfaceMuted, borderRadius: Radius.control, marginTop: Space.sm, padding: Space.md }}>
-                    <AppText style={{ marginBottom: Space.xs }} variant="label">{"Creator's note"}</AppText>
-                    <AppText color={Palette.textBody}>{placeNotes[index]}</AppText>
+                {placeNotes[index]?.length ? (
+                  <View style={{ marginTop: Space.sm }}>
+                    <NoteList notes={placeNotes[index]} />
                   </View>
                 ) : null}
               </View>
@@ -136,5 +144,23 @@ export function SharedTripPreviewView({
         )}
       </View>
     </ScrollView>
+  );
+}
+
+/** Read-only notes with their authors: shared content, the creator's first. */
+function NoteList({ notes }: { notes: PreviewNote[] }) {
+  return (
+    <View style={{ gap: Space.sm }}>
+      {notes.map((note, index) => (
+        <View
+          accessibilityLabel={`Note by ${previewAuthorLabel(note)}`}
+          accessible
+          key={`${note.author.isCollectionOwner}-${index}`}
+          style={{ backgroundColor: Palette.surfaceMuted, borderRadius: Radius.control, gap: Space.xs, padding: Space.md }}>
+          <AppText variant="label">{previewAuthorLabel(note)}</AppText>
+          <ShowMoreText accessibilityLabel={`Note by ${previewAuthorLabel(note)}`} value={note.text} />
+        </View>
+      ))}
+    </View>
   );
 }

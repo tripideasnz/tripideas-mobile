@@ -9,6 +9,7 @@ import { checkApiCapability, type ApiCapabilityStatus } from '@/lib/api-compatib
 import { listTripSummaries } from '@/trips/api';
 import {
   parseCollectionPreview,
+  parseShareLink,
   parseSharedTripDetail,
   parseSharedTripList,
 } from '@/shared-trips/parse';
@@ -16,6 +17,7 @@ import type {
   CollectionPreview,
   JoinResult,
   OwnedTripSummary,
+  ShareLink,
   ShareTripResult,
   SharedTripDetail,
   SharedTripSummary,
@@ -37,6 +39,7 @@ export async function listOwnedTrips(): Promise<OwnedTripSummary[]> {
     id: trip.id,
     name: trip.name,
     sharedCollectionId: trip.sharedCollectionId ?? null,
+    sharingActive: trip.sharingActive === true,
   }));
 }
 
@@ -69,13 +72,28 @@ export async function shareTrip(itineraryId: string): Promise<ShareTripResult> {
   return { collectionId: response.collectionId, created: response.created, url: response.url };
 }
 
-/** Joins as the signed-in user. Joining twice is harmless. */
-export async function joinSharedTrip(collectionId: string): Promise<JoinResult> {
+/**
+ * Joins as the signed-in user. The link's token proves the person was given the link; someone who is
+ * already a member needs none. Joining twice is harmless.
+ */
+export async function joinSharedTrip(collectionId: string, token?: string | null): Promise<JoinResult> {
   const response = await authenticatedApiFetch<{ alreadyShared?: unknown } | undefined>(
     '/favourites-collection/share',
-    { body: json({ collectionId }), method: 'POST' }
+    { body: json(token ? { collectionId, shareKey: token } : { collectionId }), method: 'POST' }
   );
   return { alreadyJoined: response?.alreadyShared === true };
+}
+
+/** Re-displays the Trip's EXISTING link so a member or the creator can pass it on. Never turns sharing on. */
+export async function getShareLink(collectionId: string): Promise<ShareLink> {
+  return parseShareLink(
+    await authenticatedApiFetch<unknown>(`/favourites-collection/${enc(collectionId)}/share-link`, { method: 'POST' })
+  );
+}
+
+/** Creator only: the old link stops working for new people; members, notes and Places stay. */
+export async function stopSharingTrip(collectionId: string): Promise<void> {
+  await authenticatedApiFetch(`/favourites-collection/${enc(collectionId)}/share-link`, { method: 'DELETE' });
 }
 
 /** Leaves the Trip. The server also removes the user's own notes on it. */
@@ -136,9 +154,10 @@ export async function deletePlaceNote(noteId: string): Promise<void> {
 }
 
 /**
- * What anyone with the link may see before joining: the creator, the Places in order and the creator's
- * own notes, in one request and without a session. Participant notes are never part of it.
+ * What anyone with the link may see before joining: the creator, the Places in order and every note
+ * with its author, in one request and without a session. The link's token is required.
  */
-export async function fetchCollectionPreview(collectionId: string): Promise<CollectionPreview> {
-  return parseCollectionPreview(await apiFetch<unknown>(`/collections/${enc(collectionId)}/preview`));
+export async function fetchCollectionPreview(collectionId: string, token: string | null): Promise<CollectionPreview> {
+  const query = token ? `?k=${enc(token)}` : '';
+  return parseCollectionPreview(await apiFetch<unknown>(`/collections/${enc(collectionId)}/preview${query}`));
 }

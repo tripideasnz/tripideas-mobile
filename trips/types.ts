@@ -22,6 +22,8 @@ export type ApiTripSummary = {
   name: string;
   /** The collection that publishes this Trip once shared; null (or absent on older APIs) otherwise. */
   sharedCollectionId?: string | null;
+  /** The Trip's share link is on (the owner has not stopped sharing). Absent on older APIs. */
+  sharingActive?: boolean;
 };
 
 export type ApiEditorialTripEntry = {

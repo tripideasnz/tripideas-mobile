@@ -12,22 +12,24 @@ const test = (name, run) => tests.push({ name, run });
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 const deferred = () => { let resolve; const promise = new Promise((r) => { resolve = r; }); return { promise, resolve }; };
 
+const note = (text, { creator = false, name = null } = {}) => ({ author: { displayName: name, isCollectionOwner: creator }, text, updatedAt: 'u' });
+// The preview shows EVERYONE's notes (shared content); a copy takes only the creator's.
 const preview = {
   creatorName: 'Ana',
   id: 'fc_1',
   places: [
-    { note: 'Book early', placeId: 'place-a' },
-    { note: null, placeId: 'place-b' }, // the creator wrote nothing here (a participant may have: never public)
-    { note: 'Sunrise', placeId: 'place-c' },
+    { notes: [note('Book early', { creator: true, name: 'Ana' }), note('Booked', { name: 'Ben' })], placeId: 'place-a' },
+    { notes: [note('Only a participant wrote here', { name: 'Ben' })], placeId: 'place-b' },
+    { notes: [note('Sunrise', { creator: true, name: 'Ana' })], placeId: 'place-c' },
   ],
   title: 'South Island',
-  tripNote: 'Pack warm',
+  tripNotes: [note('Bring a hat', { name: 'Ben' }), note('Pack warm', { creator: true, name: 'Ana' })],
 };
 const copied = {
   note: 'Pack warm',
   places: [
     { note: 'Book early', placeId: 'place-a', title: '' },
-    { note: '', placeId: 'place-b', title: '' },
+    { note: '', placeId: 'place-b', title: '' }, // only a participant wrote here: nothing is copied
     { note: 'Sunrise', placeId: 'place-c', title: '' },
   ],
   title: 'South Island',
@@ -46,7 +48,7 @@ function saveDeps(overrides = {}) {
 }
 
 function controller(overrides = {}) {
-  const log = { changes: [], joined: 0, saved: [], signIns: 0, joins: [] };
+  const log = { changes: [], joined: 0, saved: [], signIns: 0, joins: [], tokens: [] };
   let userId = overrides.userId ?? null;
   const copyDependencies = overrides.copyDependencies ?? saveDeps();
   const actions = createPreviewActions({
@@ -54,11 +56,12 @@ function controller(overrides = {}) {
     copyDependencies,
     getPreview: () => (overrides.noPreview ? null : overrides.preview ?? preview),
     getUserId: () => userId,
-    join: overrides.join ?? (async (id) => { log.joins.push(id); return { ok: true, value: {} }; }),
+    join: overrides.join ?? (async (id, token) => { log.joins.push(id); log.tokens.push(token); return { ok: true, value: {} }; }),
     onChange: (state) => log.changes.push(state),
     onJoined: () => { log.joined += 1; },
     onSaved: (id) => log.saved.push(id),
     signIn: overrides.signIn ?? (async () => { log.signIns += 1; return true; }),
+    token: overrides.token === undefined ? 'TOKEN_FROM_LINK' : overrides.token,
   });
   return { actions, copyDependencies, log, setUser: (id) => { userId = id; actions.sessionChanged(); } };
 }
@@ -82,7 +85,7 @@ test('an incomplete preview is never turned into a copy source', () => {
 
 test('an empty Trip copies cleanly', () => {
   assert.deepEqual(toPreviewSnapshot({ ...preview, places: [] }), { note: 'Pack warm', places: [], title: 'South Island' });
-  assert.deepEqual(toPreviewSnapshot({ ...preview, places: [], tripNote: null }).note, '');
+  assert.deepEqual(toPreviewSnapshot({ ...preview, places: [], tripNotes: [] }).note, '');
 });
 
 // ---- Save a Copy ---------------------------------------------------------------------------------------------
@@ -163,6 +166,89 @@ test('nothing happens before the preview has loaded', async () => {
   await c.actions.saveCopy();
   assert.equal(c.log.changes.length, 0);
   assert.equal(c.copyDependencies.sent.length, 0);
+});
+
+// ---- consent -----------------------------------------------------------------------------------------------
+test('opening a link does nothing: no join, no copy, no sign-in, no request, whoever is looking', async () => {
+  for (const userId of [null, 'user_member', 'user_owner']) {
+    const c = controller({ userId });
+    c.actions.sessionChanged(); // the screen reports the session at open, and whenever it changes
+    c.setUser(userId);
+    await settle();
+    assert.deepEqual([c.log.joins.length, c.log.signIns, c.log.saved.length, c.copyDependencies.sent.length, c.log.changes.length], [0, 0, 0, 0, 0]);
+    assert.deepEqual(c.actions.getState(), { busy: null, message: null });
+  }
+});
+
+test('a copy takes only the creator\'s notes even though the preview shows everyone\'s', () => {
+  const source = toPreviewSnapshot(preview);
+  assert.deepEqual(source, copied);
+  const text = JSON.stringify(source);
+  for (const participantWords of ['Bring a hat', 'Booked', 'Only a participant wrote here', 'Ben']) assert.equal(text.includes(participantWords), false, participantWords);
+});
+
+test('Join Trip carries the link\'s token; a member without one is a different story for the server, not the app', async () => {
+  const c = controller({ userId: 'user_x' });
+  await c.actions.join();
+  assert.deepEqual(c.log.tokens, ['TOKEN_FROM_LINK']);
+  const noToken = controller({ token: null, userId: 'user_x' });
+  await noToken.actions.join();
+  assert.deepEqual(noToken.log.tokens, [null]);
+});
+
+test('signed out: the chosen action waits for sign-in, then completes without a second tap, for whichever account signs in', async () => {
+  for (const choose of ['join', 'saveCopy']) {
+    const c = controller({ userId: null });
+    await c.actions[choose]();
+    assert.equal(c.log.signIns >= 1, true);
+    assert.deepEqual([c.log.joins.length, c.copyDependencies.sent.length], [0, 0]); // nothing happens until the session arrives
+    c.setUser('user_new');
+    await settle(); await settle();
+    if (choose === 'join') assert.deepEqual([c.log.joins, c.log.tokens], [['fc_1'], ['TOKEN_FROM_LINK']]);
+    else assert.equal(c.copyDependencies.sent.length, 1);
+    assert.equal(c.log.joins.length + c.log.saved.length, 1); // exactly one action, once
+    c.setUser('user_new'); // the screen re-reporting the same session never repeats it
+    await settle();
+    assert.equal(c.log.joins.length + c.log.saved.length, 1);
+  }
+});
+
+test('a session that lapsed mid-Save and is renewed by a DIFFERENT account cancels the action: nothing is created for that account', async () => {
+  let c;
+  const deps = saveDeps({ importTrip: async () => { throw new ApiError(401, 'unauthorized'); } });
+  c = controller({ copyDependencies: deps, signIn: async () => { c.setUser('user_b'); return true; }, userId: 'user_a' });
+  await c.actions.saveCopy();
+  await settle();
+  assert.equal(c.log.saved.length, 0);
+  assert.equal(deps.sent.length, 0);
+  assert.equal(c.actions.getState().busy, null);
+  assert.match(c.actions.getState().message.text, /different account.*Choose Join Trip or Save a Copy again/);
+});
+
+test('the SAME account renewing its lapsed session completes the Save it chose, once', async () => {
+  let c;
+  let first = true;
+  const deps = saveDeps();
+  const importTrip = deps.importTrip;
+  deps.importTrip = async (body) => { if (first) { first = false; throw new ApiError(401, 'unauthorized'); } return importTrip(body); };
+  c = controller({ copyDependencies: deps, signIn: async () => { c.setUser('user_a'); return true; }, userId: 'user_a' });
+  await c.actions.saveCopy();
+  await settle(); await settle();
+  assert.equal(c.log.saved.length, 1);
+  assert.equal(deps.sent.length, 1);
+});
+
+test('cancelled or failed sign-in creates nothing and leaves a message', async () => {
+  for (const choose of ['join', 'saveCopy']) {
+    const c = controller({ signIn: async () => false, userId: null });
+    await c.actions[choose]();
+    assert.deepEqual([c.log.joins.length, c.log.saved.length, c.copyDependencies.sent.length], [0, 0, 0]);
+    assert.equal(c.actions.getState().busy, null);
+    assert.ok(c.actions.getState().message);
+    c.setUser('user_late'); // a session that arrives later does not resurrect the cancelled choice
+    await settle();
+    assert.deepEqual([c.log.joins.length, c.log.saved.length], [0, 0]);
+  }
 });
 
 // ---- Join Trip ----------------------------------------------------------------------------------------------------

@@ -2,7 +2,7 @@
 // Places; a participant reads them, adds their own notes and can leave.
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { Alert, RefreshControl, View } from 'react-native';
+import { Alert, RefreshControl, Share, View } from 'react-native';
 
 import { useSession } from '@/auth/provider';
 import { SharedTripDetailView } from '@/components/shared-trip-detail-view';
@@ -20,7 +20,9 @@ import {
   detailViewState,
   errorMessage,
   freshness,
+  linkErrorMessage,
   membershipErrorMessage,
+  reshareMessage,
   noteErrorMessage,
 } from '@/shared-trips/view-model';
 import { describeSaveFeedback, type SaveFeedback, type SaveMessage } from '@/trips/shared-trip-messages';
@@ -39,6 +41,8 @@ export default function SharedTripScreen() {
   const [copyMessage, setCopyMessage] = useState<SaveMessage | null>(null);
   const [isCopying, setIsCopying] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isSharingBusy, setIsSharingBusy] = useState(false);
+  const [linkMessage, setLinkMessage] = useState<string | null>(null);
   const copyingRef = useRef(false);
   const userId = session?.userId ?? null;
 
@@ -74,6 +78,38 @@ export default function SharedTripScreen() {
       return;
     }
     Alert.alert('Could not leave this Trip', membershipErrorMessage('leaving', result.error));
+  };
+
+  // Passing the link on: the EXISTING link only (the server never turns sharing on for a member), and the
+  // creator stays the owner. The link is requested on tap, so a stopped Trip shows its state, not a stale link.
+  const reshare = async () => {
+    if (!detail || isSharingBusy) return;
+    setIsSharingBusy(true);
+    setLinkMessage(null);
+    try {
+      const result = await sharedTripsStore.reshare(collectionId);
+      if (!result.ok) {
+        setLinkMessage(linkErrorMessage(result.error, 'reshare'));
+        return;
+      }
+      await Share.share({ message: reshareMessage(detail.collection.title, result.value.url) });
+    } catch {
+      setLinkMessage('Could not open the share sheet. Please try again.');
+    } finally {
+      setIsSharingBusy(false);
+    }
+  };
+
+  const stopSharing = async () => {
+    if (isSharingBusy) return;
+    setIsSharingBusy(true);
+    setLinkMessage(null);
+    try {
+      const result = await sharedTripsStore.stopSharing(collectionId);
+      if (!result.ok) setLinkMessage(linkErrorMessage(result.error, 'stop'));
+    } finally {
+      setIsSharingBusy(false);
+    }
   };
 
   const saveCopy = async () => {
@@ -167,6 +203,8 @@ export default function SharedTripScreen() {
         }}
         isCopying={isCopying}
         isLeaving={state.membership[collectionId]?.action === 'leaving'}
+        isSharingBusy={isSharingBusy}
+        linkMessage={linkMessage}
         membershipMessage={
           state.membership[collectionId]?.error
             ? membershipErrorMessage('leaving', state.membership[collectionId].error!)
@@ -174,7 +212,9 @@ export default function SharedTripScreen() {
         }
         onLeave={() => void leave()}
         onOpenCopy={(tripId) => router.push({ pathname: '/trips/[tripId]', params: { tripId } })}
+        onReshare={() => void reshare()}
         onSaveCopy={() => void saveCopy()}
+        onStopSharing={() => void stopSharing()}
         refreshControl={<RefreshControl onRefresh={() => void refresh()} refreshing={isRefreshing} tintColor={Palette.trip} />}
       />
     </>

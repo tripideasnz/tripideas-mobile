@@ -3,9 +3,12 @@
 //  Join Trip    - joins the creator's live Trip (membership only; no copy is made).
 //  Save a Copy  - a separate Trip owned by the recipient, through the existing Save workflow.
 //
-// Rules: one action at a time (a second tap while one runs is ignored); a signed-out tap opens
-// sign-in and, once the session arrives, continues that same action; Save a Copy never proceeds
-// without the creator's content; failures leave the person where they were with a message.
+// Consent: opening a link does nothing. The tap IS the consent. When sign-in is needed the chosen action is
+// remembered, sign-in runs, and the same action then completes (no second confirmation). That consent is
+// withdrawn if the account that signs in is not the account the action started from (a session that
+// lapsed for one person and was renewed by another), if sign-in is cancelled, or if the link changes
+// (a new controller is made for each link). Save a Copy never proceeds without the creator's content;
+// failures leave the person where they were with a message.
 import type { ActionResult } from '@/shared-trips/store';
 import { saveCopyFromSnapshot, toPreviewSnapshot } from '@/shared-trips/copy';
 import { membershipErrorMessage } from '@/shared-trips/view-model';
@@ -28,17 +31,20 @@ export type PreviewActionsDeps = {
   copyDependencies: SaveDependencies;
   getPreview: () => CollectionPreview | null;
   getUserId: () => string | null;
-  /** Joins the live Trip (the store's join). */
-  join: (collectionId: string) => Promise<ActionResult<unknown>>;
+  /** Joins the live Trip (the store's join) with the link's token. */
+  join: (collectionId: string, token: string | null) => Promise<ActionResult<unknown>>;
   onChange: (state: PreviewActionsState) => void;
   onJoined: () => void;
   onSaved: (tripId: string) => void;
   signIn: () => Promise<boolean>;
+  /** The link's token (?k=), carried so Join can prove the person was given the link. */
+  token: string | null;
 };
 
 export function createPreviewActions(deps: PreviewActionsDeps) {
   let state: PreviewActionsState = { busy: null, message: null };
-  let awaiting: 'copy' | 'join' | null = null;
+  // The action waiting for sign-in, and the account that was signed in when it started (if any).
+  let awaiting: { action: 'copy' | 'join'; from: string | null } | null = null;
 
   const set = (next: Partial<PreviewActionsState>) => {
     state = { ...state, ...next };
@@ -49,7 +55,7 @@ export function createPreviewActions(deps: PreviewActionsDeps) {
   async function join(): Promise<void> {
     if (state.busy) return;
     if (!deps.getUserId()) {
-      awaiting = 'join';
+      awaiting = { action: 'join', from: null }; // started signed out: any account that signs in is the person
       set({ busy: 'join', message: null });
       if (!(await deps.signIn())) {
         awaiting = null;
@@ -58,7 +64,7 @@ export function createPreviewActions(deps: PreviewActionsDeps) {
       return;
     }
     set({ busy: 'join', message: null });
-    const result = await deps.join(deps.collectionId);
+    const result = await deps.join(deps.collectionId, deps.token);
     if (result.ok) {
       idle(null);
       deps.onJoined();
@@ -96,7 +102,9 @@ export function createPreviewActions(deps: PreviewActionsDeps) {
       return;
     }
     if (outcome.kind === 'needs-sign-in') {
-      awaiting = 'copy';
+      // The Save workflow found no usable session. If an account was still showing as signed in, the
+      // session lapsed under it: only that same account may complete this action.
+      awaiting = { action: 'copy', from: deps.getUserId() };
       if (await deps.signIn()) return; // the session arriving continues this same Save
       awaiting = null;
       idle(describeSaveFeedback({ kind: 'sign-in-cancelled' }));
@@ -105,13 +113,24 @@ export function createPreviewActions(deps: PreviewActionsDeps) {
     idle(describeSaveFeedback(outcome as SaveFeedback));
   }
 
-  /** Call when the signed-in user changes: continues the action that was waiting for sign-in. */
+  /**
+   * Call when the signed-in user changes: completes the action that was waiting for sign-in, unless the
+   * account is not the one the action started from.
+   */
   function sessionChanged(): void {
     const waiting = awaiting;
-    if (!waiting || !deps.getUserId()) return;
+    const current = deps.getUserId();
+    if (!waiting || !current) return;
     awaiting = null;
+    if (waiting.from && waiting.from !== current) {
+      idle({
+        text: 'You signed in with a different account, so nothing was done. Choose Join Trip or Save a Copy again.',
+        tone: 'muted',
+      });
+      return;
+    }
     set({ busy: null });
-    void (waiting === 'join' ? join() : saveCopy());
+    void (waiting.action === 'join' ? join() : saveCopy());
   }
 
   return { getState: () => state, join, saveCopy, sessionChanged };

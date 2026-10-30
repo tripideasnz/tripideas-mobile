@@ -148,6 +148,67 @@ test('Leave Trip is offered to a member, and the confirmation says their notes w
   assert.equal(calls.leave, 1);
 });
 
+// ---- sharing the link: reshare, stop, and what an off link means --------------------------------------
+const withLinkHandlers = (calls) => ({
+  onReshare: () => { calls.reshare = (calls.reshare ?? 0) + 1; },
+  onStopSharing: () => { calls.stop = (calls.stop ?? 0) + 1; },
+});
+const creatorSharing = (active = true) => ({
+  ...creatorDetail(),
+  sharing: { active, canReshare: active, canStop: active },
+});
+
+test('a member of an active Shared Trip can pass the link on, but is never offered Stop sharing', () => {
+  const calls = { copy: 0, delete: [], leave: 0, open: [], save: [] };
+  const { tree } = view({ ...withLinkHandlers(calls) });
+  const share = buttonByText(tree, 'Share link');
+  assert.ok(share);
+  press(share);
+  assert.equal(calls.reshare, 1);
+  assert.equal(buttonByText(tree, 'Stop sharing'), undefined); // the server says canStop is false for a participant
+  assert.ok(buttonByText(tree, 'Leave Trip'));
+});
+
+test('even if a stop handler is supplied, a participant has no Stop sharing control', () => {
+  const calls = {};
+  const { tree } = view({ ...withLinkHandlers(calls), detail: detail({ sharing: { active: true, canReshare: true, canStop: false } }) });
+  assert.equal(buttonByText(tree, 'Stop sharing'), undefined);
+});
+
+test('the creator can pass the link on and stop sharing; stopping asks first and says what stays', () => {
+  const calls = {};
+  const { tree } = view({ ...withLinkHandlers(calls), detail: creatorSharing(true) });
+  assert.ok(buttonByText(tree, 'Share link'));
+  press(buttonByText(tree, 'Stop sharing'));
+  assert.equal(calls.stop, undefined); // nothing yet: a confirmation comes first
+  assert.equal(alerts.length, 1);
+  assert.equal(alerts[0].title, 'Stop sharing this Trip?');
+  assert.match(alerts[0].message, /already joined keep their access and their notes/);
+  assert.deepEqual(alerts[0].buttons.map((b) => b.text), ['Cancel', 'Stop sharing']);
+  alerts[0].buttons[0].onPress?.();
+  assert.equal(calls.stop, undefined); // cancelling changes nothing
+  alerts[0].buttons[1].onPress();
+  assert.equal(calls.stop, 1);
+});
+
+test('when sharing is off nobody can pass the link on or stop it, and each person is told what that means', () => {
+  const calls = {};
+  const member = view({ ...withLinkHandlers(calls), detail: detail({ sharing: { active: false, canReshare: false, canStop: false } }) });
+  assert.equal(buttonByText(member.tree, 'Share link'), undefined);
+  assert.equal(buttonByText(member.tree, 'Stop sharing'), undefined);
+  assert.match(textOf(member.tree), /Ana has stopped sharing this Trip\. You keep your access and your notes\./);
+  const creator = view({ ...withLinkHandlers(calls), detail: creatorSharing(false) });
+  assert.equal(buttonByText(creator.tree, 'Share link'), undefined);
+  assert.match(textOf(creator.tree), /Sharing is off\. People who already joined keep their access/);
+});
+
+test('a link problem is shown where the person is looking, and the buttons are disabled while it works', () => {
+  const calls = {};
+  const { tree } = view({ ...withLinkHandlers(calls), isSharingBusy: true, linkMessage: 'Only the creator can start or stop sharing this Trip.' });
+  assert.match(textOf(tree), /Only the creator can start or stop sharing this Trip\./);
+  assert.equal(buttonByText(tree, 'Share link').props.disabled, true);
+});
+
 test('the creator sees no Leave Trip, is told where to change Places, and has no membership prompt', () => {
   const { tree } = view({ detail: creatorDetail() });
   assert.equal(buttonByText(tree, 'Leave Trip'), undefined);
