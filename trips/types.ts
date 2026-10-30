@@ -20,6 +20,8 @@ export type ApiTripSummary = {
   entryOrder: string[];
   id: string;
   name: string;
+  /** The collection that publishes this Trip once shared; null (or absent on older APIs) otherwise. */
+  sharedCollectionId?: string | null;
 };
 
 export type ApiEditorialTripEntry = {

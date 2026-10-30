@@ -22,7 +22,12 @@ function parseSummary(value: unknown): ApiTripSummary {
     typeof item.id !== 'string' ||
     typeof item.name !== 'string' ||
     !(item.description === null || typeof item.description === 'string') ||
-    !isStringArray(item.entryOrder)
+    !isStringArray(item.entryOrder) ||
+    !(
+      item.sharedCollectionId === undefined ||
+      item.sharedCollectionId === null ||
+      typeof item.sharedCollectionId === 'string'
+    )
   ) {
     throw new ApiError(500, 'malformed_response');
   }
@@ -31,6 +36,8 @@ function parseSummary(value: unknown): ApiTripSummary {
     entryOrder: item.entryOrder,
     id: item.id,
     name: item.name,
+    // Older APIs do not send the field; absence means "not shared".
+    sharedCollectionId: item.sharedCollectionId ?? null,
   };
 }
 
