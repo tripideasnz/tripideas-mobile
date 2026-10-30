@@ -1,10 +1,12 @@
 // The app-wide Shared Trips store, wired to the real API clients. Screens (a later stage) use it through
 // use-shared-trips.ts; tests build their own store with fake dependencies.
 import { checkSharedTripsCapability } from '@/shared-trips/api';
+import { sharedTripsCache } from '@/shared-trips/cache';
 import * as api from '@/shared-trips/api';
 import { createSharedTripsStore } from '@/shared-trips/store';
 
 export const sharedTripsStore = createSharedTripsStore({
+  cache: sharedTripsCache,
   checkCapability: checkSharedTripsCapability,
   deleteCollectionNote: api.deleteCollectionNote,
   deletePlaceNote: api.deletePlaceNote,

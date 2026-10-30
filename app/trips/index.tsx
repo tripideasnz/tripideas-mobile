@@ -1,17 +1,22 @@
-import { Stack, useRouter } from 'expo-router';
-import { useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, View } from 'react-native';
+import { Stack, useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, RefreshControl, ScrollView, View } from 'react-native';
 
+import { SharedWithMeList } from '@/components/shared-with-me-list';
 import { TripIndexCard } from '@/components/trip-index-card';
+import { TripsViewSwitch } from '@/components/trips-view-switch';
 import { SignedOutFeature } from '@/components/signed-out-feature';
 import { useSession } from '@/auth/provider';
 import { IconAction } from '@/components/ui/icon-action';
-import { headerAddAction } from '@/components/ui/header-actions';
+import { clearHeaderRightAction, headerAddAction } from '@/components/ui/header-actions';
 import { AppButton } from '@/components/ui/app-button';
 import { AppText } from '@/components/ui/app-text';
 import { AutoExpandingTextInput } from '@/components/ui/app-text-input';
 import { StatusText } from '@/components/ui/status-text';
 import { Palette, Radius, Screen, Space } from '@/constants/design';
+import { sharedTripsStore } from '@/shared-trips';
+import { useSharedTripsState } from '@/shared-trips/use-shared-trips';
+import { sharedTripRows, type TripsView } from '@/shared-trips/view-model';
 import { getTripImages } from '@/trips/images';
 import { tripRequestDiagnostic } from '@/trips/error-diagnostic';
 import { useMyTrips } from '@/trips/provider';
@@ -33,6 +38,13 @@ export default function TripsScreen() {
     retryImport,
     trips,
   } = useMyTrips();
+  const [view, setView] = useState<TripsView>('mine');
+  const [isRefreshingShared, setIsRefreshingShared] = useState(false);
+  const shared = useSharedTripsState();
+  const sharedLiveIds = useMemo(
+    () => new Set((shared.myTrips.data ?? []).filter((trip) => trip.sharedCollectionId).map((trip) => trip.id)),
+    [shared.myTrips.data]
+  );
   const creatingRef = useRef(false);
   const [newTripName, setNewTripName] = useState('');
   const [showCreate, setShowCreate] = useState(false);
@@ -43,6 +55,21 @@ export default function TripsScreen() {
     [trips]
   );
   const { cards: tripPlaces, isLoadingCards: isLoadingPlaces } = useTripPlaceCards(tripPlaceIds);
+
+  // Opening the list (and coming back to it) fetches the latest Shared With Me and which of the
+  // user's own Trips are shared; saved copies stay on screen if the network is unavailable.
+  useFocusEffect(
+    useCallback(() => {
+      if (!session) return;
+      void sharedTripsStore.loadMyTrips({ force: true });
+      void sharedTripsStore.loadSharedWithMe({ force: true });
+    }, [session])
+  );
+  const refreshShared = async () => {
+    setIsRefreshingShared(true);
+    await sharedTripsStore.loadSharedWithMe({ force: true });
+    setIsRefreshingShared(false);
+  };
 
   const submitCreate = async () => {
     if (!newTripName.trim() || creatingRef.current) return;
@@ -79,6 +106,11 @@ export default function TripsScreen() {
   return (
     <ScrollView
       keyboardShouldPersistTaps="handled"
+      refreshControl={
+        view === 'shared'
+          ? <RefreshControl onRefresh={() => void refreshShared()} refreshing={isRefreshingShared} tintColor={Palette.trip} />
+          : undefined
+      }
       style={{ flex: 1, backgroundColor: Palette.background }}
       contentContainerStyle={{
         paddingBottom: Screen.bottom,
@@ -87,9 +119,19 @@ export default function TripsScreen() {
       }}>
       <Stack.Screen
         options={{
-          ...headerAddAction({ accessibilityLabel: 'Add Trip', disabled: showCreate, onPress: () => setShowCreate(true) }),
+          ...(view === 'mine'
+            ? headerAddAction({ accessibilityLabel: 'Add Trip', disabled: showCreate, onPress: () => setShowCreate(true) })
+            : clearHeaderRightAction()),
         }}
       />
+      <TripsViewSwitch onChange={setView} value={view} />
+      {view === 'shared' ? (
+        <SharedWithMeList
+          onOpen={(collectionId) => router.push({ pathname: '/shared-trips/[collectionId]', params: { collectionId } })}
+          resource={shared.sharedWithMe}
+          rows={sharedTripRows(shared.sharedWithMe.data ?? [], session.userId)}
+        />
+      ) : <>
       {importDecision ? (
         <View
           accessibilityLabel="Import Trips confirmation"
@@ -185,6 +227,7 @@ export default function TripsScreen() {
                 accessibilityLabel={`Open ${trip.name}`}
                 images={images}
                 onPress={() => router.push({ pathname: '/trips/[tripId]', params: { tripId: trip.id } })}
+                shared={sharedLiveIds.has(trip.id)}
                 trip={trip}
               />
               <View style={{ position: 'absolute', right: Space.md, top: 28 }}>
@@ -208,6 +251,7 @@ export default function TripsScreen() {
       ) : (
         <StatusText>No trips yet. Create one for places you want to group together.</StatusText>
       )}
+      </>}
     </ScrollView>
   );
 }

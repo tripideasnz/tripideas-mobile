@@ -37,6 +37,7 @@ import {
   setAuthenticatedSessionHandlers,
 } from '@/lib/api-client';
 import { clearNotebookCache } from '@/notebooks/storage';
+import { clearSharedTripsCache } from '@/shared-trips/cache';
 import { cancelPhotoUploadsForUser } from '@/photo-uploads/service';
 import type { AuthContextValue, AuthUser, SessionState } from '@/auth/session';
 import {
@@ -48,6 +49,12 @@ import {
 } from '@/auth/session';
 
 const AuthContext = createContext<AuthContextValue | null>(null);
+
+// Everything cached on the device for one account is cleared together when its session is cleared.
+async function clearUserCaches(userId: string): Promise<void> {
+  await clearNotebookCache(userId);
+  await clearSharedTripsCache(userId);
+}
 
 const MOBILE_REDIRECT_URI = 'tripideas://auth/callback';
 
@@ -161,7 +168,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       const restored = await restoreMobileSession({
         cacheUser,
         clearAuthStorage,
-        clearNotebookCache,
+        clearNotebookCache: clearUserCaches,
         loadRefreshToken,
         refresh: async (refreshToken) => {
           const result = await mobileRefresh(refreshToken);
@@ -358,7 +365,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     if (signedOutUserId) cancelPhotoUploadsForUser(signedOutUserId);
     const nextState = await clearMobileSession(signedOutUserId, {
       clearAuthStorage,
-      clearNotebookCache,
+      clearNotebookCache: clearUserCaches,
       setActiveToken,
     });
     hasAuthenticatedUserRef.current = false;
@@ -371,7 +378,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       const restored = await restoreMobileSession({
         cacheUser,
         clearAuthStorage,
-        clearNotebookCache,
+        clearNotebookCache: clearUserCaches,
         loadRefreshToken,
         refresh: async (refreshToken) => {
           const result = await mobileRefresh(refreshToken);
@@ -391,7 +398,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
         const signedOutUserId = state.session?.userId ?? state.user?.id;
         const signedOut = await clearMobileSession(signedOutUserId, {
           clearAuthStorage,
-          clearNotebookCache,
+          clearNotebookCache: clearUserCaches,
           setActiveToken,
         });
         hasAuthenticatedUserRef.current = false;

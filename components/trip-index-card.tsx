@@ -11,6 +11,7 @@ export function TripIndexCard({
   disabled = false,
   images,
   onPress,
+  shared = false,
   style,
   trip,
 }: {
@@ -18,6 +19,8 @@ export function TripIndexCard({
   disabled?: boolean;
   images: TripImage[];
   onPress?: () => void;
+  /** The Trip is shared live: others can join it. */
+  shared?: boolean;
   style?: ViewStyle;
   trip: MyTrip;
 }) {
@@ -28,7 +31,7 @@ export function TripIndexCard({
       <View style={{ flex: 1, justifyContent: 'center', padding: Space.lg, paddingRight: 60 }}>
         <Text numberOfLines={2} style={Type.cardTitle}>{trip.name}</Text>
         <Text style={{ color: Palette.textMuted, ...Type.label, marginTop: Space.xs }}>
-          {placeCount} {placeCount === 1 ? 'place' : 'places'}
+          {placeCount} {placeCount === 1 ? 'place' : 'places'}{shared ? ' · Shared' : ''}
         </Text>
       </View>
     </>

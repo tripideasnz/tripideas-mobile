@@ -19,10 +19,14 @@ import { TripPlacePicker } from '@/components/trip-place-picker';
 import { AutosaveNote } from '@/components/ui/autosave-note';
 import { IconAction } from '@/components/ui/icon-action';
 import { clearHeaderRightAction, headerShareAction } from '@/components/ui/header-actions';
+import { AppText } from '@/components/ui/app-text';
 import { LoadingView } from '@/components/ui/loading-view';
 import { TripImageCollage } from '@/components/trip-image-collage';
 import { AutoExpandingTextInput } from '@/components/ui/app-text-input';
 import { Palette, Radius, Screen, Space, Type } from '@/constants/design';
+import { sharedTripsStore } from '@/shared-trips';
+import { useSharedTripsState } from '@/shared-trips/use-shared-trips';
+import { liveShareMessage, SHARE_CHOICES, shareErrorMessage } from '@/shared-trips/view-model';
 import { getTripImages, type PersonalTripPhoto } from '@/trips/images';
 import { useMyTrips } from '@/trips/provider';
 import { tripDetailView } from '@/trips/detail-state';
@@ -70,6 +74,18 @@ export default function TripDetailScreen() {
       void refresh();
     }, [refresh])
   );
+  // Separate from the Trip's own refresh above: learns whether this Trip is shared live.
+  useFocusEffect(
+    useCallback(() => {
+      void sharedTripsStore.loadMyTrips({ force: true });
+    }, [])
+  );
+  // Whether this Trip is already shared live (its linked collection), and a guard against taps
+  // while the share request is running.
+  const sharedState = useSharedTripsState();
+  const sharedCollectionId =
+    sharedState.myTrips.data?.find((summary) => summary.id === selectedTripId)?.sharedCollectionId ?? null;
+  const isSharingLive = Boolean(selectedTripId && sharedState.sharing[selectedTripId]?.pending);
 
   const placeIds = useMemo(
     () => trip?.places.map((place) => place.placeId) ?? [],
@@ -183,6 +199,33 @@ export default function TripDetailScreen() {
     }
   };
 
+  // Live sharing: creates the Trip's linked collection, or returns the one it already has (sharing
+  // again never makes a second). Others who open the link can Join the live Trip or Save a Copy.
+  const shareLive = async () => {
+    if (!trip || isSharingLive) return;
+    const result = await sharedTripsStore.share(trip.id);
+    if (!result.ok) {
+      Alert.alert('Could not share this Trip', shareErrorMessage(result.error));
+      return;
+    }
+    const { url } = result.value;
+    Alert.alert(
+      result.value.created ? 'Trip shared' : SHARE_CHOICES.live(true).label,
+      `${SHARE_CHOICES.live(true).message}\n\n${url}`,
+      [
+        { style: 'cancel', text: 'Done' },
+        {
+          onPress: () => {
+            Share.share({ message: liveShareMessage(trip.name, url), title: trip.name, url }).catch(() => {
+              Alert.alert('Unable to share this trip right now.');
+            });
+          },
+          text: 'Share link',
+        },
+      ]
+    );
+  };
+
   const createPublicShare = async () => {
     if (!trip) {
       return;
@@ -265,7 +308,15 @@ export default function TripDetailScreen() {
           ...(trip ? headerShareAction({ accessibilityLabel: 'Share Trip', onPress: () => Alert.alert('Share trip', undefined, [
               { style: 'cancel', text: 'Cancel' },
               { onPress: () => router.push({ pathname: '/trips/[tripId]/shared', params: { tripId: trip.id } }), text: 'Preview' },
-              { onPress: () => void (isPublicTripSharingEnabled() ? createPublicShare() : openShareSheet()), text: 'Share' },
+              {
+                // Two different things: a live Trip others join, or a copy they keep for themselves.
+                onPress: () => Alert.alert('Share this Trip', undefined, [
+                  { style: 'cancel', text: 'Cancel' },
+                  { onPress: () => void (isPublicTripSharingEnabled() ? createPublicShare() : openShareSheet()), text: SHARE_CHOICES.copy.label },
+                  { onPress: () => void shareLive(), text: SHARE_CHOICES.live(Boolean(sharedCollectionId)).label },
+                ]),
+                text: 'Share',
+              },
             ]) }) : clearHeaderRightAction()),
           title: '',
         }}
@@ -368,6 +419,12 @@ export default function TripDetailScreen() {
               </Pressable>
             </View>
           )}
+
+          {sharedCollectionId ? (
+            <AppText accessibilityLabel="This Trip is shared live" color={Palette.textMuted} style={{ marginBottom: Space.xl, marginTop: -Space.lg }} variant="caption">
+              Shared live: people with the link can join and add notes. They cannot change your Places.
+            </AppText>
+          ) : null}
 
           {tripImages.length > 0 ? (
             <TripImageCollage

@@ -12,6 +12,7 @@
 //    forbidden action is refused locally without a request, and the server enforces it again;
 //  - Join and Leave are reconciled with the server's truth when the answer is lost or ambiguous.
 import type { ApiCapabilityStatus } from '@/lib/api-compatibility';
+import type { CachedSnapshot, SharedTripsCache } from '@/shared-trips/cache';
 import { classifyError, SharedTripsFailure, type SharedTripsError } from '@/shared-trips/errors';
 import type {
   JoinResult,
@@ -28,6 +29,11 @@ export type Resource<T> = {
   loadedAt: number | null;
   /** A request is running while `data` (possibly empty) is shown. */
   refreshing: boolean;
+  /**
+   * Where `data` came from: the server in this session, or the on-device copy of the last answer
+   * the server gave (readable offline, not necessarily current).
+   */
+  source: 'cache' | 'server' | null;
   status: 'error' | 'idle' | 'loading' | 'ready';
 };
 
@@ -54,6 +60,8 @@ export type ActionResult<T = void> =
   | { error: SharedTripsError; ok: false };
 
 export type SharedTripsDeps = {
+  /** Optional read-only on-device copy; without it nothing is persisted. */
+  cache?: SharedTripsCache;
   checkCapability: () => Promise<ApiCapabilityStatus>;
   deleteCollectionNote: (noteId: string) => Promise<void>;
   deletePlaceNote: (noteId: string) => Promise<void>;
@@ -75,6 +83,7 @@ const emptyResource = <T,>(): Resource<T> => ({
   error: null,
   loadedAt: null,
   refreshing: false,
+  source: null,
   status: 'idle',
 });
 const emptyDetail = (): DetailEntry => ({ ...emptyResource<SharedTripDetail>(), access: 'unknown' });
@@ -101,10 +110,80 @@ export function createSharedTripsStore(deps: SharedTripsDeps) {
   const sequence = new Map<string, number>();
 
   const emit = () => listeners.forEach((listener) => listener());
+
+  // ---- on-device copy (read-only) ---------------------------------------------------------
+  // What is written is exactly what the server last confirmed for this user: the Shared With Me
+  // list and the Trips opened and still accessible. It is rewritten whenever that data changes,
+  // so a Trip the user left or that was deleted also leaves the copy.
+  const snapshotOf = (): CachedSnapshot => ({
+    details: Object.fromEntries(
+      Object.entries(state.details)
+        .filter(([, entry]) => entry.data && entry.loadedAt !== null && entry.access !== 'not-joined' && entry.access !== 'gone')
+        .map(([id, entry]) => [id, { data: entry.data!, loadedAt: entry.loadedAt! }])
+    ),
+    sharedWithMe:
+      state.sharedWithMe.data && state.sharedWithMe.loadedAt !== null
+        ? { data: state.sharedWithMe.data, loadedAt: state.sharedWithMe.loadedAt }
+        : null,
+  });
+  const signatureOf = (value: SharedTripsState) =>
+    [value.sharedWithMe.data, ...Object.entries(value.details).flatMap(([id, d]) => [id, d.data])];
+  let persisted = signatureOf(state);
+  const sameSignature = (a: unknown[], b: unknown[]) =>
+    a.length === b.length && a.every((item, index) => Object.is(item, b[index]));
+
   const set = (next: SharedTripsState) => {
     state = next;
+    if (deps.cache && state.userId) {
+      const signature = signatureOf(state);
+      if (!sameSignature(signature, persisted)) {
+        persisted = signature;
+        void deps.cache.save(state.userId, snapshotOf()).catch(() => {
+          // The copy is a convenience; failing to write it never affects the live data.
+        });
+      }
+    }
     emit();
   };
+
+  /** Fills empty resources from the on-device copy; anything already loaded from the server wins. */
+  async function hydrate(userId: string) {
+    if (!deps.cache) return;
+    const startedIn = epoch;
+    let snapshot: CachedSnapshot | null = null;
+    try {
+      snapshot = await deps.cache.load(userId);
+    } catch {
+      snapshot = null;
+    }
+    if (!snapshot || startedIn !== epoch || state.userId !== userId) return;
+    let next = state;
+    if (snapshot.sharedWithMe && !state.sharedWithMe.data) {
+      next = {
+        ...next,
+        sharedWithMe: {
+          ...state.sharedWithMe,
+          data: snapshot.sharedWithMe.data,
+          loadedAt: snapshot.sharedWithMe.loadedAt,
+          source: 'cache',
+          status: 'ready',
+        },
+      };
+    }
+    const details = { ...next.details };
+    for (const [id, cached] of Object.entries(snapshot.details)) {
+      const current = details[id] ?? emptyDetail();
+      // `access` stays "unknown" until the server confirms it: a cached Trip is readable, but
+      // note actions need a confirmed membership.
+      if (!current.data) {
+        details[id] = { ...current, data: cached.data, loadedAt: cached.loadedAt, source: 'cache', status: 'ready' };
+      }
+    }
+    // Hydrated data is already on the device: do not write it straight back.
+    persisted = signatureOf({ ...next, details });
+    state = { ...next, details };
+    emit();
+  }
 
   // ---- gate -------------------------------------------------------------------------------
   /** The Shared Trips routes exist on this API build. Only a positive answer is remembered. */
@@ -171,7 +250,14 @@ export function createSharedTripsStore(deps: SharedTripsDeps) {
     outcome: { error: SharedTripsError } | { value: T }
   ): Resource<T> =>
     'value' in outcome
-      ? { data: outcome.value, error: null, loadedAt: deps.now(), refreshing: false, status: 'ready' }
+      ? {
+          data: outcome.value,
+          error: null,
+          loadedAt: deps.now(),
+          refreshing: false,
+          source: 'server',
+          status: 'ready',
+        }
       : {
           ...current,
           error: outcome.error,
@@ -457,12 +543,16 @@ export function createSharedTripsStore(deps: SharedTripsDeps) {
     epoch += 1;
     inflight.clear();
     sequence.clear();
-    set(initialState(userId));
+    state = initialState(userId);
+    persisted = signatureOf(state);
+    emit();
   }
 
   /** Call when the signed-in user changes; the same user keeps their cache. */
   function setSession(userId: string | null) {
-    if (userId !== state.userId) reset(userId);
+    if (userId === state.userId) return;
+    reset(userId);
+    if (userId) void hydrate(userId);
   }
 
   return {

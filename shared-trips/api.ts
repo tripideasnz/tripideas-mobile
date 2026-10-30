@@ -9,6 +9,7 @@ import { checkApiCapability, type ApiCapabilityStatus } from '@/lib/api-compatib
 import { listTripSummaries } from '@/trips/api';
 import {
   parseCollectionPreview,
+  parsePublicNotes,
   parseSharedTripDetail,
   parseSharedTripList,
 } from '@/shared-trips/parse';
@@ -16,6 +17,7 @@ import type {
   CollectionPreview,
   JoinResult,
   OwnedTripSummary,
+  PublicNote,
   ShareTripResult,
   SharedTripDetail,
   SharedTripSummary,
@@ -136,4 +138,21 @@ export async function deletePlaceNote(noteId: string): Promise<void> {
 /** What anyone with the link may see before joining: Places only, never notes. */
 export async function fetchCollectionPreview(collectionId: string): Promise<CollectionPreview> {
   return parseCollectionPreview(await apiFetch<unknown>(`/collections/${enc(collectionId)}`));
+}
+
+/**
+ * Trip-level notes as the existing public endpoint serves them (one request). The preview uses the
+ * creator's note and name from it; it is not a members-only read.
+ */
+export async function fetchPublicTripNotes(collectionId: string): Promise<PublicNote[]> {
+  return parsePublicNotes(
+    await apiFetch<unknown>(`/collection-comments/all?collectionId=${enc(collectionId)}`)
+  );
+}
+
+/** Notes on one Place, from the existing public endpoint (one request per Place). */
+export async function fetchPublicPlaceNotes(itemId: string): Promise<PublicNote[]> {
+  return parsePublicNotes(
+    await apiFetch<unknown>(`/collection-item-comments?collectionItemId=${enc(itemId)}`)
+  );
 }

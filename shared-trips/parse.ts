@@ -140,3 +140,11 @@ export function parseCollectionPreview(value: unknown): CollectionPreview {
     updatedAt: str(v.updatedAt),
   };
 }
+
+/** The public note endpoints return a bare array of notes. */
+export function parsePublicNotes(value: unknown): import('@/shared-trips/types').PublicNote[] {
+  return list(value).map((item) => {
+    const v = record(item);
+    return { authorId: str(v.userId), authorName: nullableStr(v.userName ?? null), text: str(v.text) };
+  });
+}

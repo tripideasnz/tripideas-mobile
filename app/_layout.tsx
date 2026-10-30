@@ -11,6 +11,7 @@ import { savedActionHeader } from '@/components/ui/saved-header';
 import { Palette } from '@/constants/design';
 import { DiaryProvider } from '@/diaries/provider';
 import { personalContentFeatures } from '@/config/personal-content-features';
+import { SharedTripsSessionBinder } from '@/shared-trips/session-binder';
 
 export default function RootLayout() {
   return (
@@ -20,6 +21,7 @@ export default function RootLayout() {
           <PersonalPlaceCardProvider>
             <MyTripsProvider>
             <DiaryProvider>
+            <SharedTripsSessionBinder />
             <Stack
                 screenOptions={{
                   headerBackButtonDisplayMode: 'minimal',
@@ -70,6 +72,8 @@ export default function RootLayout() {
                     title: 'Shared Trip',
                   }}
                 />
+                <Stack.Screen name="shared-trips/[collectionId]" options={{ title: '' }} />
+                <Stack.Screen name="collections/[collectionId]" options={{ title: 'Shared Trip' }} />
                 <Stack.Protected guard={personalContentFeatures.notebooks}>
                   <Stack.Screen name="notebooks/index" options={{ title: 'Notebooks' }} />
                   <Stack.Screen

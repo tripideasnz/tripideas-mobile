@@ -76,6 +76,9 @@ export type OwnedTripSummary = {
   sharedCollectionId: string | null;
 };
 
+/** A note as the public preview endpoints expose it (author id and display name only). */
+export type PublicNote = { authorId: string; authorName: string | null; text: string };
+
 export type ShareTripResult = { collectionId: string; created: boolean; url: string };
 
 export type JoinResult = { alreadyJoined: boolean };
