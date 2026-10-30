@@ -2,7 +2,8 @@
 // and from non-API failures (a request that never completed is "offline").
 //
 // A generic 404 means the API build lacks the route (environment or capability failure); only a 404 with
-// the domain code `collection_not_found` means the Trip itself is gone. They are never conflated.
+// the domain code `collection_not_found` (or `preview_unavailable` from the public preview) means the Trip
+// itself is gone or not shared. They are never conflated.
 import { ApiError } from '@/lib/api-client';
 
 export type SharedTripsErrorKind =
@@ -39,7 +40,7 @@ export function classifyError(error: unknown): SharedTripsError {
   }
   if (error.status === 403 && code === 'not_joined') return { code, kind: 'not-joined' };
   if (error.status === 404) {
-    return code === 'collection_not_found'
+    return code === 'collection_not_found' || code === 'preview_unavailable'
       ? { code, kind: 'not-found' }
       : { code, kind: 'unsupported' };
   }

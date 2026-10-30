@@ -7,7 +7,7 @@ import type {
   DetailEntry,
   Resource,
 } from '@/shared-trips/store';
-import type { SharedTripsError } from '@/shared-trips/errors';
+import { classifyError, type SharedTripsError } from '@/shared-trips/errors';
 import type {
   CollectionPreview,
   OwnedTripSummary,
@@ -192,6 +192,8 @@ export type PreviewLoad =
   | 'loading'
   | { preview: CollectionPreview; status: 'ok' }
   | { status: 'not-found' }
+  /** This API build has no preview route (a generic 404): never "the Trip was deleted". */
+  | { status: 'unsupported' }
   | { status: 'unavailable' };
 
 export type PreviewState =
@@ -199,22 +201,38 @@ export type PreviewState =
   | { kind: 'not-found' }
   | { kind: 'open-shared' }
   | { kind: 'preview'; signInHint: string | null }
-  | { kind: 'unavailable' };
+  | { kind: 'unavailable' }
+  | { kind: 'unsupported' };
+
+/** How a failed preview request is reported. A generic 404 is a missing capability, not a missing Trip. */
+export function previewLoadFailure(error: unknown): Exclude<PreviewLoad, 'loading' | { status: 'ok' }> {
+  const { kind, code } = classifyError(error);
+  if (kind === 'not-found' || code === 'invalid_collection_id') return { status: 'not-found' };
+  if (kind === 'unsupported') return { status: 'unsupported' };
+  return { status: 'unavailable' };
+}
 
 /**
  * The preview reacts to who is looking: the creator and anyone who has joined go straight to the live
- * Trip; everyone else sees the preview, signed in or not, with both actions available.
+ * Trip (the server decides: `access` is "granted" for both); everyone else sees the preview, signed in
+ * or not, with both actions available. While a signed-in visitor's access is still being checked the
+ * screen waits rather than offering Join Trip to someone who already belongs.
  */
 export function previewState(input: {
   access: DetailAccess | undefined;
+  /** The visitor's own Trip read is running. */
+  accessPending?: boolean;
   load: PreviewLoad;
   userId: string | null;
 }): PreviewState {
   if (input.userId && input.access === 'granted') return { kind: 'open-shared' };
   if (input.load === 'loading') return { kind: 'loading' };
   if (input.load.status === 'not-found') return { kind: 'not-found' };
+  if (input.load.status === 'unsupported') return { kind: 'unsupported' };
   if (input.load.status === 'unavailable') return { kind: 'unavailable' };
-  if (input.userId && input.load.preview.ownerId === input.userId) return { kind: 'open-shared' };
+  if (input.userId && (input.access === undefined || (input.access === 'unknown' && input.accessPending))) {
+    return { kind: 'loading' };
+  }
   return {
     kind: 'preview',
     signInHint: input.userId ? null : 'Sign in to join this Trip or save your own copy.',

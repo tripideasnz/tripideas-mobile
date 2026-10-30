@@ -58,14 +58,19 @@ export type SharedTripSummary = {
   updatedAt: string;
 };
 
-/** The note-free public preview of a collection (what someone sees before joining). */
+/**
+ * The public preview of a published Trip (GET /collections/:id/preview): what someone sees before
+ * joining. It carries the creator's own words only, never a participant's note.
+ */
 export type CollectionPreview = {
-  createdAt: string;
+  /** The creator's public name; null when the account has none (never an email address). */
+  creatorName: string | null;
   id: string;
-  items: { id: string; placeId: string }[];
-  name: string;
-  ownerId: string;
-  updatedAt: string;
+  /** The creator's Place notes sit on the Places, in the creator's order. */
+  places: { note: string | null; placeId: string }[];
+  title: string;
+  /** The creator's Trip-level note. */
+  tripNote: string | null;
 };
 
 /** An owned Trip, with the collection it publishes once shared. */
@@ -75,9 +80,6 @@ export type OwnedTripSummary = {
   /** Null until the owner shares the Trip. */
   sharedCollectionId: string | null;
 };
-
-/** A note as the public preview endpoints expose it (author id and display name only). */
-export type PublicNote = { authorId: string; authorName: string | null; text: string };
 
 export type ShareTripResult = { collectionId: string; created: boolean; url: string };
 

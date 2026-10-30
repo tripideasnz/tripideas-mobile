@@ -9,7 +9,6 @@ import { checkApiCapability, type ApiCapabilityStatus } from '@/lib/api-compatib
 import { listTripSummaries } from '@/trips/api';
 import {
   parseCollectionPreview,
-  parsePublicNotes,
   parseSharedTripDetail,
   parseSharedTripList,
 } from '@/shared-trips/parse';
@@ -17,13 +16,14 @@ import type {
   CollectionPreview,
   JoinResult,
   OwnedTripSummary,
-  PublicNote,
   ShareTripResult,
   SharedTripDetail,
   SharedTripSummary,
 } from '@/shared-trips/types';
 
 export const SHARED_TRIPS_CAPABILITY = 'shared-trips-v1';
+/** The public preview route (GET /collections/:id/preview). */
+export const SHARED_TRIP_PREVIEW_CAPABILITY = 'shared-trip-preview-v1';
 
 export const checkSharedTripsCapability = (): Promise<ApiCapabilityStatus> =>
   checkApiCapability(SHARED_TRIPS_CAPABILITY);
@@ -135,24 +135,10 @@ export async function deletePlaceNote(noteId: string): Promise<void> {
   await authenticatedApiFetch(`/collection-item-comments/${enc(noteId)}`, { method: 'DELETE' });
 }
 
-/** What anyone with the link may see before joining: Places only, never notes. */
-export async function fetchCollectionPreview(collectionId: string): Promise<CollectionPreview> {
-  return parseCollectionPreview(await apiFetch<unknown>(`/collections/${enc(collectionId)}`));
-}
-
 /**
- * Trip-level notes as the existing public endpoint serves them (one request). The preview uses the
- * creator's note and name from it; it is not a members-only read.
+ * What anyone with the link may see before joining: the creator, the Places in order and the creator's
+ * own notes, in one request and without a session. Participant notes are never part of it.
  */
-export async function fetchPublicTripNotes(collectionId: string): Promise<PublicNote[]> {
-  return parsePublicNotes(
-    await apiFetch<unknown>(`/collection-comments/all?collectionId=${enc(collectionId)}`)
-  );
-}
-
-/** Notes on one Place, from the existing public endpoint (one request per Place). */
-export async function fetchPublicPlaceNotes(itemId: string): Promise<PublicNote[]> {
-  return parsePublicNotes(
-    await apiFetch<unknown>(`/collection-item-comments?collectionItemId=${enc(itemId)}`)
-  );
+export async function fetchCollectionPreview(collectionId: string): Promise<CollectionPreview> {
+  return parseCollectionPreview(await apiFetch<unknown>(`/collections/${enc(collectionId)}/preview`));
 }

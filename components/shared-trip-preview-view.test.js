@@ -44,6 +44,17 @@ test('Places are in the creator\'s order using the existing Place cards, with pl
   assert.match(textOf(view({ placeIds: [] }).tree), /no places yet/);
 });
 
+test('the creator\'s note on a Place appears under that Place, in order, and nothing else is shown as a note', () => {
+  const { tree } = view({ placeNotes: ['Book early', null, 'Sunrise'] });
+  const notes = findAll(tree, byLabel("Creator's note on this Place"));
+  assert.equal(notes.length, 2);
+  const text = textOf(tree);
+  assert.match(text, /Book early/);
+  assert.match(text, /Sunrise/);
+  assert.ok(text.indexOf('Book early') < text.indexOf('Sunrise'));
+  assert.equal(findAll(view().tree, byLabel("Creator's note on this Place")).length, 0); // no notes, no blocks
+});
+
 test('Join Trip and Save a Copy are two separate buttons that do different things', () => {
   const { calls, tree } = view();
   const join = buttonByText(tree, 'Join Trip');

@@ -117,17 +117,31 @@ export async function restoreMobileSession(
   }
 }
 
+/**
+ * Why a session ended. Only the person choosing to sign out ('sign-out') discards what the device
+ * keeps for offline reading. A refresh that failed or a rejected token ('auth-failure') only ends
+ * the session: the same account can sign in again and read its saved Trips until they refresh.
+ */
+export type SessionEndReason = 'sign-out' | 'auth-failure';
+
 export async function clearMobileSession(
   userId: string | undefined,
   dependencies: Pick<
     MobileSessionDependencies,
     'clearAuthStorage' | 'clearNotebookCache' | 'setActiveToken'
-  >
+  > & {
+    /** Removes the account's saved Shared Trips; called only for an explicit sign-out. */
+    clearSharedTripsCache?: (userId: string) => Promise<void>;
+  },
+  reason: SessionEndReason = 'auth-failure'
 ): Promise<SessionState> {
   dependencies.setActiveToken(null);
   await Promise.allSettled([
     dependencies.clearAuthStorage(),
     ...(userId ? [dependencies.clearNotebookCache(userId)] : []),
+    ...(userId && reason === 'sign-out' && dependencies.clearSharedTripsCache
+      ? [dependencies.clearSharedTripsCache(userId)]
+      : []),
   ]);
   return signedOutSession();
 }

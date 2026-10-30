@@ -11,10 +11,10 @@
 //
 // Two sources are supported:
 //  - a joined member's Shared Trip (the consolidated read already carries every note and its author);
-//  - someone who has NOT joined, from the public preview. The preview contract has no notes, so the
-//    creator's notes are read from the existing public note endpoints. If any of those reads fails the
-//    copy is not made: it never silently continues without the creator's notes.
-import { classifyError, SharedTripsFailure } from '@/shared-trips/errors';
+//  - someone who has NOT joined, from the consolidated public preview (GET /collections/:id/preview),
+//    which carries the creator's Trip note and Place notes and nobody else's. An incomplete preview is
+//    refused as a whole: it never silently continues without the creator's notes.
+import { SharedTripsFailure } from '@/shared-trips/errors';
 import type { SharedTrip } from '@/trips/shared-trip';
 import {
   saveSharedTrip,
@@ -23,7 +23,6 @@ import {
 } from '@/trips/shared-trip-save';
 import type {
   CollectionPreview,
-  PublicNote,
   SharedTripDetail,
   SharedTripNote,
 } from '@/shared-trips/types';
@@ -73,53 +72,19 @@ export function saveCopyOfSharedTrip(
 }
 
 // ---- from the public preview -------------------------------------------------------------------
-export type PublicNoteReaders = {
-  fetchPlaceNotes: (itemId: string) => Promise<PublicNote[]>;
-  fetchTripNotes: (collectionId: string) => Promise<PublicNote[]>;
-};
-
-const CONCURRENCY = 6;
-const fromOwner = (notes: PublicNote[], ownerId: string) =>
-  notes.find((note) => note.authorId === ownerId)?.text ?? '';
-
 /**
- * Builds the copy source for someone who has not joined. Reads the creator's Trip note and the
- * creator's note on every Place; throws SharedTripsFailure (never returns a partial Trip) if any
- * read fails.
+ * The copy source for someone who has not joined, from the consolidated preview: the creator's title,
+ * Trip note, Places in order and the creator's note on each. The preview carries no one else's words,
+ * so nothing but the creator's content can be copied. Throws SharedTripsFailure (never returns a
+ * partial Trip) if the preview is not complete enough to copy faithfully.
  */
-export async function loadPreviewCopySource(
-  preview: CollectionPreview,
-  readers: PublicNoteReaders
-): Promise<SharedTrip> {
-  try {
-    const tripNote = fromOwner(await readers.fetchTripNotes(preview.id), preview.ownerId);
-    const placeNotes: string[] = new Array(preview.items.length).fill('');
-    let next = 0;
-    const worker = async () => {
-      while (next < preview.items.length) {
-        const index = next;
-        next += 1;
-        placeNotes[index] = fromOwner(
-          await readers.fetchPlaceNotes(preview.items[index].id),
-          preview.ownerId
-        );
-      }
-    };
-    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, preview.items.length) }, worker));
-    return {
-      note: tripNote,
-      places: preview.items.map((item, index) => ({
-        note: placeNotes[index],
-        placeId: item.placeId,
-        title: '',
-      })),
-      title: preview.name,
-    };
-  } catch (error) {
-    throw error instanceof SharedTripsFailure ? error : new SharedTripsFailure(classifyError(error));
+export function toPreviewSnapshot(preview: CollectionPreview): SharedTrip {
+  if (!preview.title.trim() || preview.places.some((place) => !place.placeId)) {
+    throw new SharedTripsFailure({ code: 'incomplete_preview', kind: 'rejected' });
   }
+  return {
+    note: preview.tripNote ?? '',
+    places: preview.places.map((place) => ({ note: place.note ?? '', placeId: place.placeId, title: '' })),
+    title: preview.title,
+  };
 }
-
-/** The creator's display name when the public Trip notes happen to carry it (only if they wrote one). */
-export const creatorNameFromPublicNotes = (notes: PublicNote[], ownerId: string): string | null =>
-  notes.find((note) => note.authorId === ownerId)?.authorName ?? null;

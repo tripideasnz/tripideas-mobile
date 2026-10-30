@@ -5,14 +5,9 @@
 //
 // Rules: one action at a time (a second tap while one runs is ignored); a signed-out tap opens
 // sign-in and, once the session arrives, continues that same action; Save a Copy never proceeds
-// without the creator's notes; failures leave the person where they were with a message.
+// without the creator's content; failures leave the person where they were with a message.
 import type { ActionResult } from '@/shared-trips/store';
-import {
-  loadPreviewCopySource,
-  saveCopyFromSnapshot,
-  type PublicNoteReaders,
-} from '@/shared-trips/copy';
-import { SharedTripsFailure } from '@/shared-trips/errors';
+import { saveCopyFromSnapshot, toPreviewSnapshot } from '@/shared-trips/copy';
 import { membershipErrorMessage } from '@/shared-trips/view-model';
 import type { CollectionPreview } from '@/shared-trips/types';
 import {
@@ -38,15 +33,12 @@ export type PreviewActionsDeps = {
   onChange: (state: PreviewActionsState) => void;
   onJoined: () => void;
   onSaved: (tripId: string) => void;
-  readers: PublicNoteReaders;
   signIn: () => Promise<boolean>;
 };
 
 export function createPreviewActions(deps: PreviewActionsDeps) {
   let state: PreviewActionsState = { busy: null, message: null };
   let awaiting: 'copy' | 'join' | null = null;
-  // The creator's content is read once per visit; retries reuse it.
-  let copySource: SharedTrip | null = null;
 
   const set = (next: Partial<PreviewActionsState>) => {
     state = { ...state, ...next };
@@ -80,19 +72,16 @@ export function createPreviewActions(deps: PreviewActionsDeps) {
     if (state.busy || !preview) return;
     set({ busy: 'copy', message: null });
 
-    if (!copySource) {
-      try {
-        copySource = await loadPreviewCopySource(preview, deps.readers);
-      } catch (error) {
-        const offline = error instanceof SharedTripsFailure ? error.failure.kind === 'offline' : true;
-        idle({
-          text: offline
-            ? "Couldn't read the creator's notes. Check your connection and try again; no copy was made."
-            : "Couldn't read the creator's notes right now, so no copy was made. Please try again.",
-          tone: 'danger',
-        });
-        return;
-      }
+    // The preview already holds the creator's notes; an incomplete one is refused, never copied.
+    let copySource: SharedTrip;
+    try {
+      copySource = toPreviewSnapshot(preview);
+    } catch {
+      idle({
+        text: "This Trip's details are incomplete right now, so no copy was made. Please try again later.",
+        tone: 'danger',
+      });
+      return;
     }
 
     const outcome = await saveCopyFromSnapshot(deps.copyDependencies, {

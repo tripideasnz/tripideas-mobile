@@ -4,7 +4,8 @@ import assert from 'node:assert/strict';
 import { ApiError, setActiveToken, setAuthenticatedSessionHandlers } from '../lib/api-client.ts';
 import * as api from './api.ts';
 import { classifyError } from './errors.ts';
-import { detail, fakeFetch, on, onPrefix, summary } from './fixtures.js';
+import { detail, fakeFetch, on, onPrefix, previewDto, summary } from './fixtures.js';
+import { previewLoadFailure } from './view-model.ts';
 
 const originalFetch = globalThis.fetch;
 const tests = [];
@@ -98,15 +99,75 @@ test('note calls create, edit and delete only by note id or item id', async () =
   assert.equal(fetcher.calls[2].headers['Content-Type'], undefined); // bodyless DELETE
 });
 
-test('the public preview works signed out and carries no notes', async () => {
+test('the public preview is one request, works signed out, and parses the creator\'s content', async () => {
   setActiveToken(null);
-  const fetcher = fakeFetch([[on('GET', '/collections/fc_1'), () => json({ createdAt: 'c', id: 'fc_1', items: [{ id: 'fci_a', placeId: 'place-a', favouriteId: 'x', collectionId: 'fc_1' }], name: 'South Island', updatedAt: 'u', userId: 'user_owner' })]]);
+  const fetcher = fakeFetch([[on('GET', '/collections/fc_1/preview'), () => json({ ...previewDto(), extra: 'ignored', creator: { displayName: 'Ana', email: 'x@y.z' } })]]);
+  await withFetch(fetcher, async () => {
+    assert.deepEqual(await api.fetchCollectionPreview('fc_1'), {
+      creatorName: 'Ana',
+      id: 'fc_1',
+      places: [
+        { note: 'Book early', placeId: 'place-a' },
+        { note: null, placeId: 'place-b' },
+        { note: 'Sunrise', placeId: 'place-c' },
+      ],
+      title: 'South Island',
+      tripNote: 'Pack warm',
+    });
+  });
+  assert.equal(fetcher.calls.length, 1); // no per-Place or per-note requests
+  assert.equal(fetcher.calls[0].headers.Authorization, undefined);
+});
+
+test('a preview with no creator name or notes is valid; blank notes mean "no note"', async () => {
+  setActiveToken(null);
+  const fetcher = fakeFetch([[on('GET', '/collections/fc_1/preview'), () => json(previewDto({
+    creator: { displayName: null }, places: [{ note: { text: '   ', updatedAt: 'u' }, placeId: 'p', position: 0 }], tripNote: null,
+  }))]]);
   await withFetch(fetcher, async () => {
     const preview = await api.fetchCollectionPreview('fc_1');
-    assert.deepEqual(preview.items, [{ id: 'fci_a', placeId: 'place-a' }]); // extra fields are dropped
-    assert.equal(preview.ownerId, 'user_owner');
+    assert.equal(preview.creatorName, null);
+    assert.equal(preview.tripNote, null);
+    assert.deepEqual(preview.places, [{ note: null, placeId: 'p' }]);
   });
-  assert.equal(fetcher.calls[0].headers.Authorization, undefined);
+});
+
+test('an incomplete or inconsistent preview is refused as a whole (never a half-read Trip)', async () => {
+  setActiveToken(null);
+  const broken = {
+    'no places list': (d) => { delete d.places; },
+    'no creator': (d) => { delete d.creator; },
+    'a Place without an id': (d) => { d.places[1].placeId = ''; },
+    'Places out of order': (d) => { d.places[1].position = 5; },
+    'a note without text': (d) => { d.places[0].note = { updatedAt: 'u' }; },
+    'a blank title': (d) => { d.collection.title = '  '; },
+    'not shared': (d) => { d.sharing.status = 'private'; },
+    'not copyable': (d) => { d.sharing.canSaveCopy = false; },
+    'not an object': (d, set) => set('nope'),
+  };
+  for (const [label, damage] of Object.entries(broken)) {
+    let body = previewDto();
+    damage(body, (value) => { body = value; });
+    await withFetch(fakeFetch([[on('GET', '/collections/fc_1/preview'), () => json(body)]]), async () => {
+      await assert.rejects(api.fetchCollectionPreview('fc_1'), (e) => e.code === 'malformed_response', label);
+    });
+  }
+});
+
+test('the preview route\'s errors are told apart: unavailable Trip, invalid link, and an API without the route', async () => {
+  setActiveToken(null);
+  const fail = (status, body) => fakeFetch([[on('GET', '/collections/fc_1/preview'), () => json(body, status)]]);
+  const outcome = async (fetcher) => withFetch(fetcher, async () => { try { await api.fetchCollectionPreview('fc_1'); } catch (e) { outcome.last = e; } });
+  await outcome(fail(404, { code: 'preview_unavailable', message: 'x' }));
+  assert.equal(previewLoadFailure(outcome.last).status, 'not-found');
+  await outcome(fail(400, { code: 'invalid_collection_id', message: 'x' }));
+  assert.equal(previewLoadFailure(outcome.last).status, 'not-found');
+  await outcome(fail(404, { message: 'Not found' })); // a generic route 404: this API build lacks the capability
+  assert.equal(previewLoadFailure(outcome.last).status, 'unsupported');
+  await outcome(fail(503, { message: 'down' }));
+  assert.equal(previewLoadFailure(outcome.last).status, 'unavailable');
+  assert.equal(previewLoadFailure(new TypeError('Network request failed')).status, 'unavailable');
+  assert.equal(api.SHARED_TRIP_PREVIEW_CAPABILITY, 'shared-trip-preview-v1');
 });
 
 test('owned Trips carry the collection that publishes them; older APIs without the field mean "not shared"', async () => {
@@ -231,6 +292,7 @@ test('errors are classified so a missing route is never shown as a deleted Trip'
   assert.equal(classifyError(e(401, 'mobile_session_required')).kind, 'session-expired');
   assert.equal(classifyError(e(403, 'not_joined')).kind, 'not-joined');
   assert.equal(classifyError(e(404, 'collection_not_found')).kind, 'not-found');
+  assert.equal(classifyError(e(404, 'preview_unavailable')).kind, 'not-found');
   assert.equal(classifyError(e(404, 'NOT_FOUND')).kind, 'unsupported');
   assert.equal(classifyError(e(404, 'request_failed')).kind, 'unsupported');
   assert.equal(classifyError(e(409, 'managed_by_trip')).kind, 'managed-by-trip');

@@ -56,6 +56,20 @@ export const summary = (overrides = {}) => ({
 });
 
 /** A fetch that answers from a list of [matcher, responder] pairs and records every call. */
+/** GET /collections/:id/preview, as the API sends it (see shared-trip-api.md in the API repository). */
+export const previewDto = (overrides = {}) => ({
+  collection: { createdAt: '2026-10-01T00:00:00.000Z', id: 'fc_1', title: 'South Island', updatedAt: '2026-10-02T00:00:00.000Z' },
+  creator: { displayName: 'Ana' },
+  places: [
+    { note: { text: 'Book early', updatedAt: 'u' }, placeId: 'place-a', position: 0 },
+    { note: null, placeId: 'place-b', position: 1 },
+    { note: { text: 'Sunrise', updatedAt: 'u' }, placeId: 'place-c', position: 2 },
+  ],
+  sharing: { canJoin: true, canSaveCopy: true, kind: 'live_trip', status: 'shared' },
+  tripNote: { text: 'Pack warm', updatedAt: 'u' },
+  ...overrides,
+});
+
 export function fakeFetch(routes) {
   const calls = [];
   const fetcher = async (input, init = {}) => {

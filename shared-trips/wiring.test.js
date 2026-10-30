@@ -37,12 +37,15 @@ test('the web share link /collections/<id>?user=<ownerId>&type=shared opens the 
 test('the preview screen is driven by the controller and the preview state, and works for members and the creator', async () => {
   const screen = await read('app/collections/[collectionId].tsx');
   assert.match(screen, /createPreviewActions\(/);
-  assert.match(screen, /previewState\(\{ access, load, userId \}\)/);
+  assert.match(screen, /previewState\(\{ access, accessPending, load, userId \}\)/);
   assert.match(screen, /if \(state\.kind === 'open-shared'\) router\.replace\(\{ pathname: '\/shared-trips\/\[collectionId\]'/);
   assert.match(screen, /sharedTripsStore\.join\(id\)/);
   assert.match(screen, /actions\.sessionChanged\(\)/);
   assert.match(screen, /fetchCollectionPreview\(collectionId\)/);
   assert.match(screen, /This shared trip could not be found/);
+  assert.match(screen, /can't show shared Trip previews yet/); // an API without the route is said so, not "not found"
+  // The legacy public note endpoints are no longer used by the preview.
+  assert.doesNotMatch(screen, /fetchPublic|collection-comments|collection-item-comments/);
 });
 
 test('the Shared Trip screen refreshes on focus and pull-down, leaves through the store, and handles lost access', async () => {
@@ -105,11 +108,13 @@ test('the detail view has no way to change a Trip\'s structure', async () => {
   assert.match(view, /accessibilityLabel=\{`Delete your note on \$\{subject\}`\}/); // the only delete control is for the viewer's own note
 });
 
-test('sign-out and a cleared session remove the saved copy with the other per-user caches', async () => {
+test('the notebook cache is still cleared wherever a session ends; saved Trips only on an explicit sign-out', async () => {
+  // The policy itself is exercised in cache-session.test.js; this pins the wiring that carries it.
   const provider = await read('auth/provider.tsx');
-  assert.match(provider, /async function clearUserCaches\(userId: string\)[\s\S]*clearNotebookCache\(userId\);[\s\S]*clearSharedTripsCache\(userId\);/);
-  assert.equal(provider.match(/clearNotebookCache: clearUserCaches/g).length, 4);
-  assert.equal(/\n\s+clearNotebookCache,\n/.test(provider), false); // no call site left that skips the new cache
+  assert.match(provider, /async function clearUserCaches\(userId: string\)[\s\S]*clearNotebookCache\(userId\);/);
+  assert.equal(provider.match(/clearNotebookCache: clearUserCaches/g).length, 4); // unchanged from before Shared Trips
+  assert.equal(/\n\s+clearNotebookCache,\n/.test(provider), false);
+  assert.match(provider, /clearSharedTripsCache,\n\s+setActiveToken,\n\s+\},\n\s+reason/);
 });
 
 test('the existing independent-copy workflow is untouched and shared by both copy entry points', async () => {

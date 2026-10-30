@@ -2,8 +2,8 @@
 // creator's order, and the two distinct choices. It works signed out; the actions ask to sign in.
 //
 // Join Trip follows the creator's live Trip. Save a Copy makes a separate Trip of the recipient's own.
-// The preview carries only what the public preview contract provides (Places, the creator's Trip
-// note when the creator wrote one); it never shows other people's notes.
+// The preview carries only the creator's own words (their Trip note and their note on each Place);
+// it never shows, and the API never sends, other people's notes.
 import { ScrollView, View } from 'react-native';
 
 import { PlaceCard } from '@/components/place-card';
@@ -27,6 +27,7 @@ export function SharedTripPreviewView({
   onOpenCopy,
   onSaveCopy,
   placeIds,
+  placeNotes = [],
   signInHint,
   title,
 }: {
@@ -41,6 +42,8 @@ export function SharedTripPreviewView({
   onOpenCopy: (tripId: string) => void;
   onSaveCopy: () => void;
   placeIds: string[];
+  /** The creator's note on each Place, aligned with `placeIds`. */
+  placeNotes?: (string | null)[];
   signInHint: string | null;
   title: string;
 }) {
@@ -119,6 +122,14 @@ export function SharedTripPreviewView({
                     </AppText>
                   </View>
                 )}
+                {placeNotes[index]?.trim() ? (
+                  <View
+                    accessibilityLabel="Creator's note on this Place"
+                    style={{ backgroundColor: Palette.surfaceMuted, borderRadius: Radius.control, marginTop: Space.sm, padding: Space.md }}>
+                    <AppText style={{ marginBottom: Space.xs }} variant="label">{"Creator's note"}</AppText>
+                    <AppText color={Palette.textBody}>{placeNotes[index]}</AppText>
+                  </View>
+                ) : null}
               </View>
             );
           })

@@ -152,7 +152,7 @@ test('the Exit confirmation names the consequence for the leaver\'s own notes', 
 });
 
 // ---- the preview ------------------------------------------------------------------------------------------
-const loaded = { preview: { id: 'fc_1', items: [], name: 'South Island', ownerId: 'user_owner' }, status: 'ok' };
+const loaded = { preview: { creatorName: 'Ana', id: 'fc_1', places: [], title: 'South Island', tripNote: null }, status: 'ok' };
 test('the preview works signed out, with a sign-in hint, and signed in without one', () => {
   assert.deepEqual(previewState({ access: undefined, load: loaded, userId: null }), { kind: 'preview', signInHint: 'Sign in to join this Trip or save your own copy.' });
   assert.deepEqual(previewState({ access: 'not-joined', load: loaded, userId: 'user_x' }), { kind: 'preview', signInHint: null });
@@ -162,7 +162,8 @@ test('the preview works signed out, with a sign-in hint, and signed in without o
 test('members and the creator go straight to the live Trip; signed-out visitors never do', () => {
   assert.equal(previewState({ access: 'granted', load: loaded, userId: 'user_member' }).kind, 'open-shared');
   assert.equal(previewState({ access: 'granted', load: 'loading', userId: 'user_member' }).kind, 'open-shared');
-  assert.equal(previewState({ access: undefined, load: loaded, userId: 'user_owner' }).kind, 'open-shared'); // the creator's own link
+  // The creator's own link: the server grants them access (role owner), so they too see the live Trip.
+  assert.equal(previewState({ access: 'granted', load: loaded, userId: 'user_owner' }).kind, 'open-shared');
   assert.equal(previewState({ access: 'granted', load: loaded, userId: null }).kind, 'preview'); // stale access without a session
 });
 
@@ -170,6 +171,17 @@ test('the preview reports loading, a missing Trip and an unavailable server sepa
   assert.equal(previewState({ access: undefined, load: 'loading', userId: null }).kind, 'loading');
   assert.equal(previewState({ access: undefined, load: { status: 'not-found' }, userId: null }).kind, 'not-found');
   assert.equal(previewState({ access: undefined, load: { status: 'unavailable' }, userId: null }).kind, 'unavailable');
+  assert.equal(previewState({ access: undefined, load: { status: 'unsupported' }, userId: null }).kind, 'unsupported');
+});
+
+test('a signed-in visitor\'s access is checked before Join Trip is offered, so members and the creator never see it', () => {
+  assert.equal(previewState({ access: undefined, load: loaded, userId: 'user_x' }).kind, 'loading');
+  assert.equal(previewState({ access: 'unknown', accessPending: true, load: loaded, userId: 'user_x' }).kind, 'loading');
+  // Once the check finished without an answer (offline) or said "not joined", the preview is shown.
+  assert.equal(previewState({ access: 'unknown', accessPending: false, load: loaded, userId: 'user_x' }).kind, 'preview');
+  assert.equal(previewState({ access: 'not-joined', accessPending: false, load: loaded, userId: 'user_x' }).kind, 'preview');
+  // Signed out there is nothing to check.
+  assert.equal(previewState({ access: undefined, load: loaded, userId: null }).kind, 'preview');
 });
 
 test('Join Trip and Save a Copy are described as different things', () => {

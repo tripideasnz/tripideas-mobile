@@ -126,25 +126,38 @@ export function parseSharedTripList(value: unknown): SharedTripSummary[] {
   return list(record(value).sharedTrips).map(parseSharedTripSummary);
 }
 
+/**
+ * The preview is all or nothing: a missing field, an out-of-order Place or a Place without an id means
+ * the response is `malformed_response`, so a copy is never made from a half-read Trip.
+ */
 export function parseCollectionPreview(value: unknown): CollectionPreview {
   const v = record(value);
+  const collection = record(v.collection);
+  const sharing = record(v.sharing);
+  if (sharing.status !== 'shared' || sharing.canSaveCopy !== true) bad();
+  const places = list(v.places).map((item, index) => {
+    const place = record(item);
+    if (int(place.position) !== index) bad(); // contiguous, in the creator's order
+    const placeId = str(place.placeId);
+    if (!placeId) bad();
+    return { note: previewNote(place.note), placeId };
+  });
+  const title = str(collection.title);
+  if (!title.trim()) bad();
   return {
-    createdAt: str(v.createdAt),
-    id: str(v.id),
-    items: list(v.items).map((item) => {
-      const i = record(item);
-      return { id: str(i.id), placeId: str(i.placeId) };
-    }),
-    name: str(v.name),
-    ownerId: str(v.userId),
-    updatedAt: str(v.updatedAt),
+    creatorName: nullableStr(record(v.creator).displayName),
+    id: str(collection.id),
+    places,
+    title,
+    tripNote: previewNote(v.tripNote),
   };
 }
 
-/** The public note endpoints return a bare array of notes. */
-export function parsePublicNotes(value: unknown): import('@/shared-trips/types').PublicNote[] {
-  return list(value).map((item) => {
-    const v = record(item);
-    return { authorId: str(v.userId), authorName: nullableStr(v.userName ?? null), text: str(v.text) };
-  });
+/** A creator's note is `{ text, updatedAt }` or null; blank text means "no note". */
+function previewNote(value: unknown): string | null {
+  if (value === null) return null;
+  const note = record(value);
+  str(note.updatedAt);
+  const text = str(note.text);
+  return text.trim() ? text : null;
 }

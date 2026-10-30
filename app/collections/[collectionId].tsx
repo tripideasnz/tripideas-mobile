@@ -1,5 +1,5 @@
 // A Shared Trip link opened in the app (/collections/<id>?user=<ownerId>&type=shared). Anyone can read
-// the preview; the creator and members go straight to the live Trip. Join Trip follows the creator's
+// the preview (one request: GET /collections/<id>/preview); the creator and members go straight to the live Trip. Join Trip follows the creator's
 // Trip; Save a Copy makes a separate Trip of the recipient's own.
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -13,21 +13,17 @@ import { HeaderBackButton } from '@/components/ui/header-back-button';
 import { LoadingView } from '@/components/ui/loading-view';
 import { Palette, Screen, Space } from '@/constants/design';
 import { sharedTripsStore } from '@/shared-trips';
-import {
-  fetchCollectionPreview,
-  fetchPublicPlaceNotes,
-  fetchPublicTripNotes,
-} from '@/shared-trips/api';
-import { creatorNameFromPublicNotes } from '@/shared-trips/copy';
+import { fetchCollectionPreview } from '@/shared-trips/api';
 import { createPreviewActions, type PreviewActionsState } from '@/shared-trips/preview-actions';
 import { useCopyDependencies } from '@/shared-trips/use-copy-dependencies';
 import { useSharedTripsState } from '@/shared-trips/use-shared-trips';
 import {
   ownerLabel,
+  previewLoadFailure,
   previewState,
   type PreviewLoad,
 } from '@/shared-trips/view-model';
-import type { CollectionPreview, PublicNote } from '@/shared-trips/types';
+import type { CollectionPreview } from '@/shared-trips/types';
 import { useTripPlaceCards } from '@/trips/use-trip-place-cards';
 
 export default function SharedTripPreviewScreen() {
@@ -41,7 +37,6 @@ export default function SharedTripPreviewScreen() {
 
   const [load, setLoad] = useState<PreviewLoad>('loading');
   const [loadNonce, setLoadNonce] = useState(0);
-  const [tripNotes, setTripNotes] = useState<PublicNote[]>([]);
   const [action, setAction] = useState<PreviewActionsState>({ busy: null, message: null });
   const userIdRef = useRef(userId);
   userIdRef.current = userId;
@@ -58,11 +53,7 @@ export default function SharedTripPreviewScreen() {
     setLoad('loading');
     fetchCollectionPreview(collectionId)
       .then((preview) => active && setLoad({ preview, status: 'ok' }))
-      .catch((error) => {
-        if (active) setLoad({ status: (error as { status?: number })?.status === 404 ? 'not-found' : 'unavailable' });
-      });
-    // The creator's name and Trip note come from the existing public Trip notes (best effort).
-    fetchPublicTripNotes(collectionId).then((notes) => active && setTripNotes(notes)).catch(() => undefined);
+      .catch((error) => active && setLoad(previewLoadFailure(error)));
     return () => {
       active = false;
     };
@@ -74,14 +65,15 @@ export default function SharedTripPreviewScreen() {
   }, [collectionId, userId]);
 
   const access = store.details[collectionId]?.access;
-  const state = previewState({ access, load, userId });
+  const accessPending = Boolean(store.details[collectionId]?.refreshing);
+  const state = previewState({ access, accessPending, load, userId });
   useEffect(() => {
     if (state.kind === 'open-shared') router.replace({ pathname: '/shared-trips/[collectionId]', params: { collectionId } });
   }, [collectionId, router, state.kind]);
 
   const preview = typeof load === 'object' && load.status === 'ok' ? load.preview : null;
   previewRef.current = preview;
-  const placeIds = useMemo(() => preview?.items.map((item) => item.placeId) ?? [], [preview]);
+  const placeIds = useMemo(() => preview?.places.map((place) => place.placeId) ?? [], [preview]);
   const { cards, isPending: cardsPending } = useTripPlaceCards(placeIds);
   const cardsById = useMemo(
     () => new Map(cards.filter((card) => card._id).map((card) => [card._id as string, card])),
@@ -99,7 +91,6 @@ export default function SharedTripPreviewScreen() {
         onChange: setAction,
         onJoined: () => router.replace({ pathname: '/shared-trips/[collectionId]', params: { collectionId } }),
         onSaved: (tripId) => router.replace({ pathname: '/trips/[tripId]', params: { tripId } }),
-        readers: { fetchPlaceNotes: fetchPublicPlaceNotes, fetchTripNotes: fetchPublicTripNotes },
         signIn: () => signInRef.current(),
       }),
     [collectionId, copyDependencies, router]
@@ -130,6 +121,9 @@ export default function SharedTripPreviewScreen() {
     if (state.kind === 'not-found') {
       return notice('This shared trip could not be found. The link may be incorrect, or the trip may no longer be shared.');
     }
+    if (state.kind === 'unsupported') {
+      return notice("This version of the TripIdeas service can't show shared Trip previews yet. Please try again later.");
+    }
     if (state.kind === 'unavailable') {
       return notice('This shared trip could not be loaded right now.', () => setLoadNonce((value) => value + 1));
     }
@@ -142,8 +136,8 @@ export default function SharedTripPreviewScreen() {
       <SharedTripPreviewView
         cardsById={cardsById}
         cardsPending={cardsPending}
-        creator={ownerLabel({ displayName: creatorNameFromPublicNotes(tripNotes, preview.ownerId) })}
-        creatorNote={tripNotes.find((note) => note.authorId === preview.ownerId)?.text ?? null}
+        creator={ownerLabel({ displayName: preview.creatorName })}
+        creatorNote={preview.tripNote}
         isCopying={action.busy === 'copy'}
         isJoining={action.busy === 'join'}
         message={action.message}
@@ -151,8 +145,9 @@ export default function SharedTripPreviewScreen() {
         onOpenCopy={(tripId) => router.replace({ pathname: '/trips/[tripId]', params: { tripId } })}
         onSaveCopy={() => void actions.saveCopy()}
         placeIds={placeIds}
+        placeNotes={preview.places.map((place) => place.note)}
         signInHint={state.kind === 'preview' ? state.signInHint : null}
-        title={preview.name}
+        title={preview.title}
       />
     </>
   );

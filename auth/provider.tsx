@@ -30,6 +30,7 @@ import {
   runCoalescedRefresh,
   selectRefreshUser,
 } from '@/auth/mobile-session';
+import type { SessionEndReason } from '@/auth/mobile-session';
 import { generateCodeChallenge, generateCodeVerifier } from '@/auth/pkce';
 import { clearAuthStorage } from '@/auth/storage';
 import {
@@ -50,10 +51,10 @@ import {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-// Everything cached on the device for one account is cleared together when its session is cleared.
+// Notebooks are cleared whenever a session ends. Saved Shared Trips are not: only an explicit
+// sign-out removes them (see SessionEndReason), so a failed refresh never costs offline reading.
 async function clearUserCaches(userId: string): Promise<void> {
   await clearNotebookCache(userId);
-  await clearSharedTripsCache(userId);
 }
 
 const MOBILE_REDIRECT_URI = 'tripideas://auth/callback';
@@ -357,21 +358,31 @@ export function AuthProvider({ children }: PropsWithChildren) {
     return attempt;
   }, [performSignIn]);
 
-  const signOut = useCallback(async () => {
+  const endSession = useCallback(async (reason: SessionEndReason) => {
     // TODO: Call POST /auth/mobile/logout once backend implements it.
     // Until then, sign-out is local-only. The WorkOS hosted session remains
     // active, so re-signing in immediately will skip the WorkOS UI.
     const signedOutUserId = state.session?.userId ?? state.user?.id;
     if (signedOutUserId) cancelPhotoUploadsForUser(signedOutUserId);
-    const nextState = await clearMobileSession(signedOutUserId, {
-      clearAuthStorage,
-      clearNotebookCache: clearUserCaches,
-      setActiveToken,
-    });
+    const nextState = await clearMobileSession(
+      signedOutUserId,
+      {
+        clearAuthStorage,
+        clearNotebookCache: clearUserCaches,
+        clearSharedTripsCache,
+        setActiveToken,
+      },
+      reason
+    );
     hasAuthenticatedUserRef.current = false;
     setAuthError(null);
     setState(nextState);
   }, [state.session?.userId, state.user?.id]);
+
+  // The person chose to sign out.
+  const signOut = useCallback(() => endSession('sign-out'), [endSession]);
+  // The server rejected the session even after a refresh: the session ends, saved Trips stay.
+  const invalidateSession = useCallback(() => endSession('auth-failure'), [endSession]);
 
   const refreshBearer = useCallback(() => {
     return runCoalescedRefresh(refreshInFlightRef, async () => {
@@ -415,11 +426,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     setAuthenticatedSessionHandlers({
-      invalidate: signOut,
+      invalidate: invalidateSession,
       refresh: refreshBearer,
     });
     return () => setAuthenticatedSessionHandlers(null);
-  }, [refreshBearer, signOut]);
+  }, [invalidateSession, refreshBearer]);
 
   const value = useMemo<AuthContextValue>(
     () => ({ ...state, acceptMobileTokens, authError, signIn, signOut }),

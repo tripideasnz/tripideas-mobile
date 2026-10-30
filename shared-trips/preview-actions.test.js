@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 
 import { ApiError } from '../lib/api-client.ts';
-import { loadPreviewCopySource, creatorNameFromPublicNotes } from './copy.ts';
+import { toPreviewSnapshot } from './copy.ts';
 import { createPreviewActions } from './preview-actions.ts';
 import { buildImportRequest } from '../trips/shared-trip.ts';
 
@@ -13,20 +13,25 @@ const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 const deferred = () => { let resolve; const promise = new Promise((r) => { resolve = r; }); return { promise, resolve }; };
 
 const preview = {
-  createdAt: 'c', id: 'fc_1', name: 'South Island', ownerId: 'user_owner', updatedAt: 'u',
-  items: [{ id: 'fci_a', placeId: 'place-a' }, { id: 'fci_b', placeId: 'place-b' }, { id: 'fci_c', placeId: 'place-c' }],
+  creatorName: 'Ana',
+  id: 'fc_1',
+  places: [
+    { note: 'Book early', placeId: 'place-a' },
+    { note: null, placeId: 'place-b' }, // the creator wrote nothing here (a participant may have: never public)
+    { note: 'Sunrise', placeId: 'place-c' },
+  ],
+  title: 'South Island',
+  tripNote: 'Pack warm',
 };
-const pub = (authorId, text, authorName = null) => ({ authorId, authorName, text });
-const publicNotes = {
-  trip: [pub('user_member', 'Bring a hat', 'Ben'), pub('user_owner', 'Pack warm', 'Ana')],
-  fci_a: [pub('user_member', 'Booked', 'Ben'), pub('user_owner', 'Book early', 'Ana')],
-  fci_b: [pub('user_member', 'Only a member wrote here', 'Ben')],
-  fci_c: [pub('user_owner', 'Sunrise', 'Ana')],
+const copied = {
+  note: 'Pack warm',
+  places: [
+    { note: 'Book early', placeId: 'place-a', title: '' },
+    { note: '', placeId: 'place-b', title: '' },
+    { note: 'Sunrise', placeId: 'place-c', title: '' },
+  ],
+  title: 'South Island',
 };
-const readers = (log = []) => ({
-  fetchPlaceNotes: async (id) => { log.push(['place', id]); return publicNotes[id]; },
-  fetchTripNotes: async (id) => { log.push(['trip', id]); return publicNotes.trip; },
-});
 
 function saveDeps(overrides = {}) {
   const attempts = new Map(); const sent = []; let n = 0;
@@ -41,64 +46,43 @@ function saveDeps(overrides = {}) {
 }
 
 function controller(overrides = {}) {
-  const log = { changes: [], joined: 0, saved: [], signIns: 0, joins: [], reads: [] };
+  const log = { changes: [], joined: 0, saved: [], signIns: 0, joins: [] };
   let userId = overrides.userId ?? null;
   const copyDependencies = overrides.copyDependencies ?? saveDeps();
   const actions = createPreviewActions({
     collectionId: 'fc_1',
     copyDependencies,
-    getPreview: () => (overrides.noPreview ? null : preview),
+    getPreview: () => (overrides.noPreview ? null : overrides.preview ?? preview),
     getUserId: () => userId,
     join: overrides.join ?? (async (id) => { log.joins.push(id); return { ok: true, value: {} }; }),
     onChange: (state) => log.changes.push(state),
     onJoined: () => { log.joined += 1; },
     onSaved: (id) => log.saved.push(id),
-    readers: overrides.readers ?? readers(log.reads),
     signIn: overrides.signIn ?? (async () => { log.signIns += 1; return true; }),
   });
   return { actions, copyDependencies, log, setUser: (id) => { userId = id; actions.sessionChanged(); } };
 }
 
 // ---- the copy source for someone who has not joined ----------------------------------------------------
-test('the copy source has the creator\'s notes only, in the creator\'s order, from existing public endpoints', async () => {
-  const reads = [];
-  const source = await loadPreviewCopySource(preview, readers(reads));
-  assert.deepEqual(source, {
-    note: 'Pack warm',
-    places: [
-      { note: 'Book early', placeId: 'place-a', title: '' },
-      { note: '', placeId: 'place-b', title: '' }, // only a participant wrote here: nothing is copied
-      { note: 'Sunrise', placeId: 'place-c', title: '' },
-    ],
-    title: 'South Island',
-  });
-  assert.equal(JSON.stringify(source).includes('Ben'), false);
-  assert.equal(JSON.stringify(source).includes('Booked'), false);
-  assert.equal(reads.length, 1 + preview.items.length); // one Trip read plus one per Place (a known cost)
+test('the copy source is the creator\'s content only, in the creator\'s order, with no further requests', () => {
+  const source = toPreviewSnapshot(preview);
+  assert.deepEqual(source, copied);
+  assert.equal(toPreviewSnapshot.length, 1); // takes the preview alone: there is nothing else to read
+  for (const forbidden of ['Ben', 'Booked', 'fc_1', 'user_', 'Ana']) assert.equal(JSON.stringify(source).includes(forbidden), false, forbidden);
 });
 
-test('a failed read means no copy source at all, never a copy without the creator\'s notes', async () => {
-  const flaky = { ...readers(), fetchPlaceNotes: async (id) => { if (id === 'fci_b') throw new TypeError('Network request failed'); return publicNotes[id]; } };
-  await assert.rejects(loadPreviewCopySource(preview, flaky), (e) => e.name === 'SharedTripsFailure' && e.failure.kind === 'offline');
-  const server = { ...readers(), fetchTripNotes: async () => { throw new ApiError(503, 'x'); } };
-  await assert.rejects(loadPreviewCopySource(preview, server), (e) => e.failure.kind === 'server');
+test('an incomplete preview is never turned into a copy source', () => {
+  for (const damaged of [
+    { ...preview, title: '  ' },
+    { ...preview, places: [{ note: 'x', placeId: '' }] },
+  ]) {
+    assert.throws(() => toPreviewSnapshot(damaged), (e) => e.name === 'SharedTripsFailure' && e.failure.code === 'incomplete_preview');
+  }
 });
 
-test('reads are bounded and an empty Trip copies cleanly', async () => {
-  let running = 0; let peak = 0;
-  const big = { ...preview, items: Array.from({ length: 30 }, (_, i) => ({ id: `fci_${i}`, placeId: `p${i}` })) };
-  await loadPreviewCopySource(big, {
-    fetchPlaceNotes: async () => { running += 1; peak = Math.max(peak, running); await settle(); running -= 1; return []; },
-    fetchTripNotes: async () => [],
-  });
-  assert.ok(peak <= 6);
-  assert.deepEqual(await loadPreviewCopySource({ ...preview, items: [] }, readers()), { note: 'Pack warm', places: [], title: 'South Island' });
-});
-
-test('the creator\'s name is used only when the public notes carry it', () => {
-  assert.equal(creatorNameFromPublicNotes(publicNotes.trip, 'user_owner'), 'Ana');
-  assert.equal(creatorNameFromPublicNotes([pub('user_member', 'x', 'Ben')], 'user_owner'), null);
-  assert.equal(creatorNameFromPublicNotes([], 'user_owner'), null);
+test('an empty Trip copies cleanly', () => {
+  assert.deepEqual(toPreviewSnapshot({ ...preview, places: [] }), { note: 'Pack warm', places: [], title: 'South Island' });
+  assert.deepEqual(toPreviewSnapshot({ ...preview, places: [], tripNote: null }).note, '');
 });
 
 // ---- Save a Copy ---------------------------------------------------------------------------------------------
@@ -108,7 +92,7 @@ test('Save a Copy signed in: the owner\'s content is imported as a new Trip, wit
   assert.equal(copyDependencies.sent.length, 1);
   const body = copyDependencies.sent[0];
   assert.deepEqual(Object.keys(body).sort(), ['description', 'entries', 'id', 'name']);
-  assert.deepEqual(body, buildImportRequest(body.id, { note: 'Pack warm', places: [{ note: 'Book early', placeId: 'place-a', title: '' }, { note: '', placeId: 'place-b', title: '' }, { note: 'Sunrise', placeId: 'place-c', title: '' }], title: 'South Island' }));
+  assert.deepEqual(body, buildImportRequest(body.id, copied));
   const sent = JSON.stringify(body);
   for (const forbidden of ['fc_1', 'fci_', 'user_', 'Ben', 'Booked', 'Bring a hat', 'collection']) assert.equal(sent.includes(forbidden), false, forbidden);
   assert.deepEqual(log.saved, [body.id]);
@@ -127,7 +111,6 @@ test('Save a Copy signed out: sign in opens, then the same Save continues with t
   await settle(); await settle();
   assert.equal(c.copyDependencies.sent.length, 1);
   assert.equal(c.log.saved.length, 1);
-  assert.equal(c.log.reads.length, 1 + preview.items.length); // the creator's notes were read once, not again
 });
 
 test('cancelling sign-in leaves everything untouched, with a message', async () => {
@@ -141,18 +124,14 @@ test('cancelling sign-in leaves everything untouched, with a message', async () 
   assert.equal(c.log.joins.length, 0);
 });
 
-test('Save a Copy does not proceed without the creator\'s notes, and a retry can succeed', async () => {
-  let failing = true;
-  const flaky = { fetchPlaceNotes: async (id) => { if (failing) throw new TypeError('offline'); return publicNotes[id]; }, fetchTripNotes: async () => publicNotes.trip };
-  const c = controller({ readers: flaky, userId: 'user_member' });
+test('Save a Copy does not proceed from an incomplete preview, and says so', async () => {
+  const c = controller({ preview: { ...preview, places: [{ note: 'x', placeId: '' }] }, userId: 'user_member' });
   await c.actions.saveCopy();
   assert.equal(c.copyDependencies.sent.length, 0);
-  assert.match(c.actions.getState().message.text, /no copy was made/);
+  assert.match(c.actions.getState().message.text, /incomplete.*no copy was made/);
   assert.equal(c.actions.getState().message.tone, 'danger');
   assert.equal(c.actions.getState().busy, null);
-  failing = false;
-  await c.actions.saveCopy();
-  assert.equal(c.copyDependencies.sent.length, 1);
+  assert.equal(c.log.saved.length, 0);
 });
 
 test('refusals from the existing Save workflow are reported, not hidden', async () => {
