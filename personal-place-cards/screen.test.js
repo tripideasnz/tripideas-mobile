@@ -94,6 +94,18 @@ assert.doesNotMatch(personalCard, /Ready for Trips|Needs details/);
 const editModeStart = editor.indexOf('const mainPreviewUrl');
 const attachmentControls = editor.indexOf("label={attached ? 'Added' : 'Add to Trip'}");
 assert.ok(attachmentControls > editModeStart);
+// 'Added' and 'Add to Trip' are one control in two states: one component, one width, one style. Only the
+// label and the disabled state depend on whether the Place is already in the Trip.
+const attachmentButton = editor.match(/<AppButton\s+disabled=\{attached \|\| busy\}[\s\S]*?variant="secondary"\s*\/>/)?.[0] ?? '';
+assert.ok(attachmentButton, 'the attachment button is one AppButton');
+assert.match(attachmentButton, /label=\{attached \? 'Added' : 'Add to Trip'\}/);
+assert.match(attachmentButton, /size="compact"/);
+assert.match(attachmentButton, /style=\{\{ width: TRIP_ACTION_WIDTH \}\}/);
+assert.match(editor, /const TRIP_ACTION_WIDTH = 120;/);
+assert.equal((attachmentButton.match(/attached/g) ?? []).length, 2, 'only disabled and label depend on the state');
+assert.equal((editor.match(/label=\{attached \?/g) ?? []).length, 1, 'no second button for the other state');
+assert.match(attachmentButton, /onPress=\{\(\) => void act\(\(\) => addPersonalCardToTrip\(trip\.id, card\.id\)\)\}/, 'membership logic untouched');
+console.log('✓ Added and Add to Trip share one button, one width and one style');
 assert.match(tripEntry, /icon="delete-outline"/);
 assert.match(tripEntry, /Remove \$\{title\} from Trip/);
 assert.match(tripEntry, /Delete from Trip Idea\?/);

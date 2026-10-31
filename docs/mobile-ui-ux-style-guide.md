@@ -345,10 +345,28 @@ Use `PlaceMapPreview` for editorial/finished Place maps:
 - do not add a `Map preview` label overlay;
 - retain MapLibre's standard information/attribution control where applicable.
 
-Map filter sheets place a prominent blue `Apply` action at top left. Ordinary
-region, activity, Favourite, and Trip rows use regular text weight; island and
-section headers carry the hierarchy through stronger type. Selection is shown
-by its check control rather than by changing the row label to bold.
+### Filter-sheet header convention
+
+Map filter sheets (Regions, Activities) share one frame,
+`components/map/filter-sheet.tsx`, and one header: **Cancel** at the left, the
+**title** in the centre, **Apply** at the right. Cancel and Apply use the map
+blue in the same size and weight, and there is no X.
+
+- **Clear** sits directly below the header, right-aligned, and is always
+  labelled `Clear`. It empties only the pending choice, never closes the sheet,
+  and is dimmed (not removed) when there is nothing to clear.
+- Choices are pending until **Apply**. Opening a sheet starts from the applied
+  state; Cancel (or a swipe down) discards pending changes; Apply commits them
+  together and closes the sheet. Apply is always available, including with
+  nothing selected. Applying what is already applied simply closes.
+- What may be selected is each filter's own rule: Regions is one region or
+  sub-region at a time, Activities is any number. The convention covers the
+  header, Clear and Apply/Cancel flow, not the selection rule.
+- Ordinary region, activity, Favourite, and Trip rows use regular text weight;
+  island and section headers carry the hierarchy through stronger type.
+  Selection is shown by the row's indicator (outlined circle when not selected,
+  filled check when selected) rather than by changing the row label to bold.
+  Expand/collapse chevrons share one column.
 
 Current action presentation varies by context: Trip title actions use icon
 controls, while editorial Place map destinations use clearly labelled buttons.
@@ -476,6 +494,7 @@ a competing pattern.
 | Editorial Place screen | `app/place/[slug].tsx` |
 | Personal Place finished/editor | `app/personal-place-cards/[cardId].tsx` |
 | Map preview and shared pin | `components/place-map-preview.tsx`, `components/map/map-pin.tsx` |
+| Map filter-sheet frame and rows | `components/map/filter-sheet.tsx`, `components/map/filter-pending.ts` |
 | Finished gallery/viewer | `components/place-photo-grid.tsx` |
 | Trip detail/actions/arrows | `app/trips/[tripId].tsx`, `components/trip-entry-card.tsx` |
 | Notebook adjacent-page navigation | `app/notebooks/[notebookId].tsx`, `notebooks/model.ts`, `content-blocks/pages.ts` |
@@ -492,6 +511,9 @@ These are current facts, not invitations to spread the variance:
    an explicitly scoped task changes it.
 3. Long-text editing wrappers and read-only content use different components,
    but share the same three-line wording and presentation intentionally.
+4. The Saved filter sheet (Favourites and Trips on the Map) predates the
+   filter-sheet header convention: it keeps its older header and applies as soon
+   as a row is chosen. It should adopt the convention when it is next changed.
 
 Do not fix recorded inconsistencies as incidental work. A task that changes
 canon should update this document only when explicitly authorised.

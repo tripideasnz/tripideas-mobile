@@ -59,6 +59,9 @@ type PendingPhotoPreview = {
   state: 'uploading' | 'retryable-error';
 };
 
+// 'Added' and 'Add to Trip' are one control in two states, so they share one width (the longer label fits).
+const TRIP_ACTION_WIDTH = 120;
+
 export default function PersonalPlaceCardScreen() {
   const params = useLocalSearchParams<{
     cardId?: string | string[];
@@ -801,6 +804,7 @@ export default function PersonalPlaceCardScreen() {
               label={attached ? 'Added' : 'Add to Trip'}
               size="compact"
               onPress={() => void act(() => addPersonalCardToTrip(trip.id, card.id))}
+              style={{ width: TRIP_ACTION_WIDTH }}
               variant="secondary"
             />
           </View>
