@@ -1,9 +1,10 @@
-// Batch 2A: Activities "Clear All", Regions "Clear" and the shared back button.
+// C5C (was Batch 2A): the Regions and Activities filters share one header and one Clear, and the shared back button.
 //
 // The two sheets are rendered to static markup (react-dom/server) with the React
 // Native modules replaced by thin host stand-ins, so visibility rules are checked
 // on the rendered output, not just the source.
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { register } from 'node:module';
 
@@ -39,6 +40,7 @@ const { MapActivitiesSheet } = await import('./map-activities-sheet.tsx');
 const { MapRegionsSheet } = await import('./map-regions-sheet.tsx');
 const { HeaderBackButton } = await import('../ui/header-back-button.tsx');
 const { clearRegionScope } = await import('./map-selection.ts');
+const { chooseRegion, clearPendingActivities, clearPendingRegions, toggleActivity } = await import('./filter-pending.ts');
 
 const read = (relativePath) => readFile(new URL(`../../${relativePath}`, import.meta.url), 'utf8');
 const tests = [];
@@ -48,130 +50,118 @@ const activities = [{ _id: 's1', name: 'Walks', tags: [{ _id: 'a', name: 'Hike' 
 const press = (label) => globalThis.__presses[label]();
 const activitiesHtml = (selectedTagIds, handlers = {}) => {
   globalThis.__presses = {};
-  return renderToStaticMarkup(createElement(MapActivitiesSheet, { activities, isLoading: false, onApply() {}, onClearAll() {}, onClose() {}, selectedTagIds, visible: true, ...handlers }));
+  return renderToStaticMarkup(createElement(MapActivitiesSheet, { activities, isLoading: false, onApply() {}, onCancel() {}, selectedTagIds, visible: true, ...handlers }));
 };
 const nav = { north: { _id: 'n', name: 'North Island', regions: [] } };
-const regionsHtml = (selection, onClear = () => {}) => {
+const regionsHtml = (selection, handlers = {}) => {
   globalThis.__presses = {};
-  return renderToStaticMarkup(createElement(MapRegionsSheet, { isLoading: false, navigation: nav, onClear, onClose() {}, onSelect() {}, selection, visible: true }));
+  return renderToStaticMarkup(createElement(MapRegionsSheet, { isLoading: false, navigation: nav, onApply() {}, onCancel() {}, selection, visible: true, ...handlers }));
 };
 
-// ── Activities ──────────────────────────────────────────────────────────────
-
-test('Activities shows Clear All when Activity filters are applied', () => {
-  assert.doesNotMatch(activitiesHtml([]), /Clear All/);
-  assert.match(activitiesHtml(['a']), /Clear All/);
-  assert.match(activitiesHtml(['a', 'b']), /data-label="Clear all selected activities"/);
-});
-
-test('Clear All acts immediately: it clears the applied filters once, without Apply and without closing', () => {
-  const calls = [];
-  activitiesHtml(['a', 'b'], { onApply: (ids) => calls.push(['apply', ids]), onClearAll: () => calls.push(['clearAll']), onClose: () => calls.push(['close']) });
-  press('Clear all selected activities');
-  assert.deepEqual(calls, [['clearAll']], 'one immediate action; the sheet is not closed');
-});
-
-test('Apply still commits the current selection through onApply', () => {
-  const calls = [];
-  activitiesHtml(['a'], { onApply: (ids) => calls.push(['apply', ids]), onClearAll: () => calls.push(['clearAll']) });
-  press('Apply filters');
-  assert.deepEqual(calls, [['apply', ['a']]]);
-});
-
-test('after Clear All, X closes without reversing it; a later pick needs Apply and X discards it', async () => {
-  const source = await read('components/map/map-activities-sheet.tsx');
-  const map = await read('app/(tabs)/map.tsx');
-  // Clear All commits through the owner; the staged copy is emptied, never restored.
-  assert.match(source, /setPendingTagIds\(\[\]\);\s*onClearAll\(\);/);
-  // X only closes: it has no path to onApply or to the applied filters.
-  const closeButton = source.match(/accessibilityLabel="Close without applying"[\s\S]*?onPress=\{onClose\}/)?.[0] ?? '';
-  assert.ok(closeButton);
-  // The Map's close handler only hides the sheet; it does not restore filters.
-  assert.match(map, /onClose=\{\(\) => setIsActivitiesSheetOpen\(false\)\}\s*selectedTagIds=\{selectedActivityTagIds\}/);
-  // Reopening stages from the applied filters, which are now empty.
-  assert.match(source, /if \(visible\) setPendingTagIds\(selectedTagIds\)/);
-});
-
-test('X closes without applying or clearing', () => {
-  const calls = [];
-  activitiesHtml(['a'], { onApply: () => calls.push('apply'), onClearAll: () => calls.push('clearAll'), onClose: () => calls.push('close') });
-  press('Close without applying');
-  assert.deepEqual(calls, ['close']);
-});
-
-test('individual selection stays staged, and reopening reflects the applied filters', async () => {
-  const source = await read('components/map/map-activities-sheet.tsx');
-  // Toggling a tag only touches pendingTagIds.
-  assert.match(source, /setPendingTagIds\(\(current\) =>\s*current\.includes\(tagId\)/);
-  assert.equal(source.match(/onApply\(/g)?.length, 1, 'only Apply commits staged picks');
-  assert.match(source, /if \(visible\) setPendingTagIds\(selectedTagIds\)/, 'opening resets staging to the applied filters');
-  // Clear All drops the staged picks too, so they cannot be restored.
-  assert.match(source, /setPendingTagIds\(\[\]\);\s*onClearAll\(\);/);
-  assert.doesNotMatch(source, /onSelect|onClear\b|setQuery|selection\b/);
-});
-
-test('the Map handler clears only Activities, keeps the sheet open, with no camera or tray change', async () => {
-  const map = await read('app/(tabs)/map.tsx');
-  const handler = map.match(/const clearActivityFilters = \(\) => \{[\s\S]*?\n  \};/)?.[0] ?? '';
-  assert.ok(handler, 'handler found');
-  assert.match(handler, /setSelectedActivityTagIds\(\[\]\)/);
-  assert.doesNotMatch(handler, /setIsActivitiesSheetOpen/, 'the sheet stays open');
-  assert.match(handler, /clearPlaceContext\(\)/);
-  assert.doesNotMatch(handler, /setSelection|setQuery|setIsFitPending|cameraRef|fitBounds|setTrayState|setIsMapReady|setIsRegionsSheetOpen/);
-  assert.match(map, /onClearAll=\{clearActivityFilters\}/);
-  // Apply is unchanged: it still sets tags, fits and closes.
-  assert.match(map, /const applyActivityTags = [\s\S]*?setSelectedActivityTagIds\(tagIds\);[\s\S]*?setIsActivitiesSheetOpen\(false\)/);
-});
-
-// ── Regions ─────────────────────────────────────────────────────────────────
+// ── One header, one Clear ───────────────────────────────────────────────────
 
 const REGION = { label: 'Fiordland', regionId: 'r', type: 'region' };
+const SUBREGION = { label: 'Te Anau', subRegionId: 's', type: 'subregion' };
+const both = () => [['Regions', regionsHtml(REGION)], ['Activities', activitiesHtml(['a'])]];
+const headerOf = (html) => html.slice(0, html.indexOf('>Clear<'));
 
-test('Regions Clear shows only for a region or sub-region selection', () => {
-  const visible = (selection) => /data-label="Clear region selection"/.test(regionsHtml(selection));
-  assert.equal(visible({ type: 'all' }), false);
-  assert.equal(visible({ type: 'favourites' }), false);
-  assert.equal(visible({ label: 'Trip', tripId: 't', type: 'trip' }), false);
-  assert.equal(visible(REGION), true);
-  assert.equal(visible({ label: 'Te Anau', subRegionId: 's', type: 'subregion' }), true);
-});
-
-test('Regions Clear sits in the header row, top-left, before the title and close control', () => {
-  const html = regionsHtml(REGION);
-  const clear = html.indexOf('Clear region selection');
-  const title = html.indexOf('>Regions<');
-  const close = html.indexOf('Close Region filters');
-  assert.ok(clear > 0 && clear < title && title < close, 'order: Clear, title, close');
-  assert.equal(html.match(/Clear region selection/g).length, 1, 'no standalone Clear row remains');
-  assert.doesNotMatch(html, /paddingTop&quot;:10/, 'old standalone row styling is gone');
-});
-
-test('Regions Clear fires the dedicated handler immediately and does not close the panel', async () => {
-  const calls = [];
-  regionsHtml(REGION, () => calls.push('clear'));
-  press('Clear region selection');
-  assert.deepEqual(calls, ['clear']);
-  const source = await read('components/map/map-regions-sheet.tsx');
-  assert.doesNotMatch(source.match(/function SheetHeader[\s\S]*$/)?.[0] ?? '', /onClose|Alert/, 'no confirmation and no close inside the header Clear');
-});
-
-test('clearRegionScope clears geography only and keeps saved scopes', () => {
-  assert.deepEqual(clearRegionScope(REGION), { type: 'all' });
-  assert.deepEqual(clearRegionScope({ label: 'T', subRegionId: 's', type: 'subregion' }), { type: 'all' });
-  for (const kept of [{ type: 'all' }, { type: 'favourites' }, { label: 'T', tripId: 't', type: 'trip' }]) {
-    assert.equal(clearRegionScope(kept), kept, `${kept.type} returned unchanged`);
+test('both filters have the same header: Cancel on the left, the title in the centre, Apply on the right, and no X', () => {
+  for (const [title, html] of both()) {
+    const cancel = html.indexOf('data-label="Cancel"');
+    const heading = html.indexOf(`>${title}<`);
+    const apply = html.indexOf('data-label="Apply"');
+    assert.ok(cancel > 0 && cancel < heading && heading < apply, `${title}: Cancel, title, Apply in that order`);
+    assert.doesNotMatch(html, /data-icon="close"|Close Region filters|Close without applying|Apply filters/, `${title}: no X and no old labels`);
   }
 });
 
-test('the Regions handler is dedicated and leaves Activities, search, camera and sheets alone', async () => {
+test('the two headers are identical apart from the title and Clear\'s spoken label (one shared frame)', () => {
+  const normalise = (html, title, label) => headerOf(html).replace(`>${title}<`, '>TITLE<').replace(label, 'CLEAR_LABEL');
+  assert.equal(
+    normalise(regionsHtml(REGION), 'Regions', 'Clear region selection'),
+    normalise(activitiesHtml(['a']), 'Activities', 'Clear all selected activities')
+  );
+  assert.match(headerOf(regionsHtml(REGION)), /data-style="[^"]*&quot;color&quot;:&quot;#0080C8&quot;[^"]*&quot;fontSize&quot;:17/, 'Cancel and Apply share one text style');
+  for (const source of ['map-regions-sheet.tsx', 'map-activities-sheet.tsx']) {
+    // Neither sheet builds its own header any more.
+    assert.doesNotMatch(readFileSync(new URL(`./${source}`, import.meta.url), 'utf8'), /<Modal|presentationStyle|accessibilityLabel="Apply/, source);
+  }
+});
+
+test('Clear sits right-aligned directly below the header, labelled "Clear" in both filters (never "Clear All")', () => {
+  for (const [title, html] of both()) {
+    const apply = html.indexOf('data-label="Apply"');
+    const clear = html.indexOf('>Clear<');
+    assert.ok(apply > 0 && clear > apply, `${title}: Clear comes after the header`);
+    const row = html.slice(apply, clear);
+    assert.match(row, /&quot;alignItems&quot;:&quot;flex-end&quot;/, `${title}: right-aligned`);
+    assert.doesNotMatch(html, /Clear All|>Clear all/, `${title}: the label is Clear`);
+    assert.equal(html.match(/>Clear</g).length, 1, `${title}: one Clear`);
+  }
+});
+
+test('Apply is available with nothing selected, and commits exactly what is pending', () => {
+  const regions = [];
+  regionsHtml({ type: 'all' }, { onApply: (selection) => regions.push(selection) });
+  press('Apply');
+  assert.deepEqual(regions, [{ type: 'all' }], 'applying an empty Regions selection is allowed');
+  const tags = [];
+  activitiesHtml([], { onApply: (ids) => tags.push(ids) });
+  press('Apply');
+  assert.deepEqual(tags, [[]], 'applying an empty Activities selection is allowed');
+  const applied = [];
+  activitiesHtml(['a', 'b'], { onApply: (ids) => applied.push(ids) });
+  press('Apply');
+  assert.deepEqual(applied, [['a', 'b']], 'opening stages the applied activities, and Apply passes them on');
+});
+
+test('Cancel only closes: it never applies, and there is no other path out that applies', () => {
+  const calls = [];
+  regionsHtml(REGION, { onApply: () => calls.push('apply'), onCancel: () => calls.push('cancel') });
+  press('Cancel');
+  activitiesHtml(['a'], { onApply: () => calls.push('apply'), onCancel: () => calls.push('cancel') });
+  press('Cancel');
+  assert.deepEqual(calls, ['cancel', 'cancel']);
+});
+
+test('Clear is dimmed and inert when nothing is pending, live when something is, and keeps its place either way', () => {
+  const state = (html, label) => JSON.parse(html.match(new RegExp(`data-label="${label}" data-style="([^"]*)"`))[1].replaceAll('&quot;', '"'));
+  assert.equal(state(regionsHtml({ type: 'all' }), 'Clear region selection').opacity, 0.35);
+  assert.equal(state(regionsHtml({ type: 'favourites' }), 'Clear region selection').opacity, 0.35, 'a saved scope is not a region');
+  assert.equal(state(regionsHtml(REGION), 'Clear region selection').opacity, 1);
+  assert.equal(state(regionsHtml(SUBREGION), 'Clear region selection').opacity, 1);
+  assert.equal(state(activitiesHtml([]), 'Clear all selected activities').opacity, 0.35);
+  assert.equal(state(activitiesHtml(['a']), 'Clear all selected activities').opacity, 1);
+  assert.match(activitiesHtml([]), />Clear</, 'still rendered, so the layout does not jump');
+});
+
+test('Clear acts on the pending selection only: it neither applies nor closes, and Cancel afterwards restores the applied filter', async () => {
+  const calls = [];
+  regionsHtml(REGION, { onApply: () => calls.push('apply'), onCancel: () => calls.push('cancel') });
+  press('Clear region selection');
+  activitiesHtml(['a'], { onApply: () => calls.push('apply'), onCancel: () => calls.push('cancel') });
+  press('Clear all selected activities');
+  assert.deepEqual(calls, [], 'Clear tells the Map nothing and does not close the sheet');
+  // The sheets stage on their own state; the Map no longer has a live "clear" for either.
   const map = await read('app/(tabs)/map.tsx');
-  const handler = map.match(/const clearRegionSelection = \(\) => \{[\s\S]*?\n  \};/)?.[0] ?? '';
-  assert.ok(handler, 'handler found');
-  assert.match(handler, /setSelection\(clearRegionScope\(selection\)\)/);
-  assert.match(handler, /clearPlaceContext\(\)/);
-  assert.doesNotMatch(handler, /setQuery|setSelectedActivityTagIds|setIsFitPending|cameraRef|fitBounds|setTrayState|setIsRegionsSheetOpen|setIsMapReady|applySelection/);
-  assert.match(map, /onClear=\{clearRegionSelection\}/);
-  assert.match(map, /const applySelection = [\s\S]*?setQuery\(''\)/, 'applySelection unchanged');
+  assert.doesNotMatch(map, /clearActivityFilters|clearRegionSelection|onClearAll|onClear=/);
+  for (const source of ['map-regions-sheet.tsx', 'map-activities-sheet.tsx']) {
+    assert.doesNotMatch(readFileSync(new URL(`./${source}`, import.meta.url), 'utf8'), /onClearAll|onClose\b/, source);
+  }
+});
+
+test('the pending transitions behind Clear: Regions keeps saved scopes, Activities empties everything', () => {
+  assert.deepEqual(clearPendingRegions(REGION), { type: 'all' });
+  assert.deepEqual(clearPendingRegions(SUBREGION), { type: 'all' });
+  const favourites = { type: 'favourites' };
+  assert.equal(clearPendingRegions(favourites), favourites);
+  assert.deepEqual(clearPendingActivities(), []);
+  assert.deepEqual(clearRegionScope(REGION), { type: 'all' });
+  for (const kept of [{ type: 'all' }, { type: 'favourites' }, { label: 'T', tripId: 't', type: 'trip' }]) {
+    assert.equal(clearRegionScope(kept), kept, `${kept.type} returned unchanged`);
+  }
+  assert.deepEqual(toggleActivity(['a'], 'b'), ['a', 'b']);
+  assert.deepEqual(chooseRegion({ type: 'all' }, REGION), REGION);
 });
 
 // ── Back control ────────────────────────────────────────────────────────────

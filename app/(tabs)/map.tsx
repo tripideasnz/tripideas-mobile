@@ -50,7 +50,7 @@ import {
 import { openPlaceFromMap } from '@/components/map/place-navigation';
 import { MapFullListOverlay } from '@/components/map/map-full-list-overlay';
 import { trayAfterDownArrow, trayAfterUpArrow, type MapTrayState } from '@/components/map/tray-motion';
-import { clearRegionScope, resolveSelection, type MapContentSelection } from '@/components/map/map-selection';
+import { isSameActivitySelection, isSameSelection, resolveSelection, type MapContentSelection } from '@/components/map/map-selection';
 import { MapTileView } from '@/components/map/map-tile-view';
 import { planPlaceTap, useMapSelection, type PlaceTapSource } from '@/components/map/use-map-selection';
 import { HeaderBackButton } from '@/components/ui/header-back-button';
@@ -677,7 +677,8 @@ export default function MapScreen() {
   // Tray height changes must not refit all results: that would undo locator
   // navigation or a pan into a viewport with a different result count.
 
-  const applySelection = (nextSelection: MapContentSelection, { keepRegionsOpen = false } = {}) => {
+  // The Saved sheet (Favourites, a Trip) still applies as soon as a row is chosen.
+  const applySelection = (nextSelection: MapContentSelection) => {
     // Exit rule 3: choosing a map filter clears the place context.
     clearPlaceContext();
 
@@ -685,30 +686,22 @@ export default function MapScreen() {
     setQuery('');
     setIsFitPending(true);
     setIsActivitiesSheetOpen(false);
-    // The Regions sheet is where regions are picked, switched or deselected in one
-    // visit, so choosing one leaves it open; only its X closes it (Clear does not).
-    if (!keepRegionsOpen) setIsRegionsSheetOpen(false);
+    setIsRegionsSheetOpen(false);
     setIsSavedSheetOpen(false);
     setTrayState('peek');
   };
-  const selectRegion = (nextSelection: MapContentSelection) => applySelection(nextSelection, { keepRegionsOpen: true });
 
-  // Clears only the geographical selection. Activities, the search query and the
-  // camera are left alone: the result list follows from `selection` alone, and the
-  // viewport filter keeps working on the current view. Saved scopes (favourites,
-  // trip) are not regions, so they are untouched.
-  const clearRegionSelection = () => {
-    if (clearRegionScope(selection) === selection) return;
+  // Regions and Activities stage their choices inside the sheet and tell the Map only on
+  // Apply. Applying what is already applied just closes the sheet: no refit, no search
+  // reset, no change to the selected Place. Cancel only closes.
+  const applyRegionSelection = (nextSelection: MapContentSelection) => {
+    setIsRegionsSheetOpen(false);
+    if (isSameSelection(selection, nextSelection)) return;
     clearPlaceContext();
-    setSelection(clearRegionScope(selection));
-  };
-
-  // Immediate "Clear All" from the Activities sheet: drops the applied Activity
-  // filters now. The sheet stays open; Apply or X closes it, and X never undoes
-  // this. Regions, search, camera and tray are untouched.
-  const clearActivityFilters = () => {
-    clearPlaceContext();
-    setSelectedActivityTagIds([]);
+    setSelection(nextSelection);
+    setQuery('');
+    setIsFitPending(true);
+    setTrayState('peek');
   };
 
   const toggleActivityTag = (tagId: string) => {
@@ -724,10 +717,11 @@ export default function MapScreen() {
   };
 
   const applyActivityTags = (tagIds: string[]) => {
+    setIsActivitiesSheetOpen(false);
+    if (isSameActivitySelection(selectedActivityTagIds, tagIds)) return;
     clearPlaceContext();
     setSelectedActivityTagIds(tagIds);
     setIsFitPending(true);
-    setIsActivitiesSheetOpen(false);
     setTrayState('peek');
   };
 
@@ -753,9 +747,8 @@ export default function MapScreen() {
     <MapRegionsSheet
       isLoading={isLoadingNavigation}
       navigation={navigation2}
-      onClear={clearRegionSelection}
-      onClose={() => setIsRegionsSheetOpen(false)}
-      onSelect={selectRegion}
+      onApply={applyRegionSelection}
+      onCancel={() => setIsRegionsSheetOpen(false)}
       selection={selection}
       visible={isRegionsSheetOpen}
     />
@@ -765,8 +758,7 @@ export default function MapScreen() {
       activities={activities}
       isLoading={isLoadingActivities}
       onApply={applyActivityTags}
-      onClearAll={clearActivityFilters}
-      onClose={() => setIsActivitiesSheetOpen(false)}
+      onCancel={() => setIsActivitiesSheetOpen(false)}
       selectedTagIds={selectedActivityTagIds}
       visible={isActivitiesSheetOpen}
     />

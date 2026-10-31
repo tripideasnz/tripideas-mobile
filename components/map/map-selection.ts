@@ -5,12 +5,17 @@ export type MapContentSelection =
   | { type: 'favourites' }
   | { label: string; tripId: string; type: 'trip' };
 
-function isSameSelection(left: MapContentSelection, right: MapContentSelection) {
+export function isSameSelection(left: MapContentSelection, right: MapContentSelection) {
   if (left.type !== right.type) return false;
   if (left.type === 'region' && right.type === 'region') return left.regionId === right.regionId;
   if (left.type === 'subregion' && right.type === 'subregion') return left.subRegionId === right.subRegionId;
   if (left.type === 'trip' && right.type === 'trip') return left.tripId === right.tripId;
   return true;
+}
+
+/** True when two sets of activity ids hold the same activities, in any order. */
+export function isSameActivitySelection(left: readonly string[], right: readonly string[]) {
+  return left.length === right.length && left.every((id) => right.includes(id));
 }
 
 /**

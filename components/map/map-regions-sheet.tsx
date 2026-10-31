@@ -1,15 +1,16 @@
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { useState } from 'react';
-import {
-  Modal,
-  Pressable,
-  ScrollView,
-  Text,
-  View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useEffect, useState } from 'react';
+import { Text, View } from 'react-native';
 
-import type { MapContentSelection } from '@/components/map/map-selection';
+import {
+  FILTER_GROUP_ROW_HEIGHT,
+  FilterExpandToggle,
+  FilterGroup,
+  FilterPanel,
+  FilterSelectRow,
+  FilterSheet,
+} from '@/components/map/filter-sheet';
+import { chooseRegion, clearPendingRegions } from '@/components/map/filter-pending';
+import { clearRegionScope, type MapContentSelection } from '@/components/map/map-selection';
 import type {
   MapNavigationIsland,
   MapNavigationRegion,
@@ -22,9 +23,11 @@ type MapRegionsSheetProps = {
     north?: MapNavigationIsland;
     south?: MapNavigationIsland;
   };
-  onClear: () => void;
-  onClose: () => void;
-  onSelect: (selection: MapContentSelection) => void;
+  /** Commits the pending selection (Apply). Nothing reaches the Map before this. */
+  onApply: (selection: MapContentSelection) => void;
+  /** Discards the pending selection (Cancel, or a swipe down). */
+  onCancel: () => void;
+  /** The selection currently applied to the Map. */
   selection: MapContentSelection;
   visible: boolean;
 };
@@ -32,65 +35,60 @@ type MapRegionsSheetProps = {
 export function MapRegionsSheet({
   isLoading,
   navigation,
-  onClear,
-  onClose,
-  onSelect,
+  onApply,
+  onCancel,
   selection,
   visible,
 }: MapRegionsSheetProps) {
   const [expandedRegionIds, setExpandedRegionIds] = useState<string[]>([]);
+  // One region or sub-region at a time: choosing another replaces it, choosing it again clears it.
+  const [pending, setPending] = useState<MapContentSelection>(selection);
+
+  useEffect(() => {
+    if (visible) setPending(selection);
+  // Staging restarts from the applied selection each time the sheet opens; `selection` is
+  // intentionally omitted so an applied change elsewhere cannot rewrite a sheet being edited.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]);
+
+  const choose = (next: MapContentSelection) => setPending((current) => chooseRegion(current, next));
+  const toggleRegion = (regionId: string) =>
+    setExpandedRegionIds((current) =>
+      current.includes(regionId) ? current.filter((id) => id !== regionId) : [...current, regionId]
+    );
 
   return (
-    <Modal
-      animationType="slide"
-      onRequestClose={onClose}
-      presentationStyle="pageSheet"
+    <FilterSheet
+      canClear={clearRegionScope(pending) !== pending}
+      clearLabel="Clear region selection"
+      onApply={() => onApply(pending)}
+      onCancel={onCancel}
+      onClear={() => setPending((current) => clearPendingRegions(current))}
+      title="Regions"
       visible={visible}>
-      <SafeAreaView style={{ backgroundColor: '#fff', flex: 1 }}>
-        <SheetHeader
-          onClear={selection.type === 'region' || selection.type === 'subregion' ? onClear : undefined}
-          onDismiss={onClose}
-          title="Regions"
-        />
-        <ScrollView
-          contentContainerStyle={{ paddingBottom: 40, paddingHorizontal: 18 }}>
-          {isLoading ? (
-            <Text style={{ color: '#717171', fontSize: 15, paddingTop: 24 }}>
-              Loading regions...
-            </Text>
-          ) : (
-            <>
-              <IslandSection
-                expandedRegionIds={expandedRegionIds}
-                island={navigation.north}
-                onSelect={onSelect}
-                onToggleRegion={(regionId) =>
-                  setExpandedRegionIds((current) =>
-                    current.includes(regionId)
-                      ? current.filter((id) => id !== regionId)
-                      : [...current, regionId]
-                  )
-                }
-                selection={selection}
-              />
-              <IslandSection
-                expandedRegionIds={expandedRegionIds}
-                island={navigation.south}
-                onSelect={onSelect}
-                onToggleRegion={(regionId) =>
-                  setExpandedRegionIds((current) =>
-                    current.includes(regionId)
-                      ? current.filter((id) => id !== regionId)
-                      : [...current, regionId]
-                  )
-                }
-                selection={selection}
-              />
-            </>
-          )}
-        </ScrollView>
-      </SafeAreaView>
-    </Modal>
+      {isLoading ? (
+        <Text style={{ color: '#717171', fontSize: 15, paddingTop: 24 }}>
+          Loading regions...
+        </Text>
+      ) : (
+        <>
+          <IslandSection
+            expandedRegionIds={expandedRegionIds}
+            island={navigation.north}
+            onSelect={choose}
+            onToggleRegion={toggleRegion}
+            selection={pending}
+          />
+          <IslandSection
+            expandedRegionIds={expandedRegionIds}
+            island={navigation.south}
+            onSelect={choose}
+            onToggleRegion={toggleRegion}
+            selection={pending}
+          />
+        </>
+      )}
+    </FilterSheet>
   );
 }
 
@@ -156,17 +154,15 @@ function RegionRow({
   const subRegions = (region.subRegions ?? []).filter(Boolean);
 
   return (
-    <View style={{ borderBottomColor: '#e7e7e7', borderBottomWidth: 1 }}>
+    <FilterGroup>
       <View
         style={{
           alignItems: 'center',
           flexDirection: 'row',
-          minHeight: 58,
+          minHeight: FILTER_GROUP_ROW_HEIGHT,
         }}>
-        <SelectionRow
-          isSelected={
-            selection.type === 'region' && selection.regionId === regionId
-          }
+        <FilterSelectRow
+          flex
           label={region.name ?? ''}
           onPress={() => {
             if (!regionId || !region.name) {
@@ -179,42 +175,23 @@ function RegionRow({
               type: 'region',
             });
           }}
+          selected={selection.type === 'region' && selection.regionId === regionId}
           subtitle={region.maori}
         />
         {subRegions.length > 0 ? (
-          <Pressable
-            accessibilityLabel={`${isExpanded ? 'Hide' : 'Show'} sub-regions`}
-            accessibilityRole="button"
+          <FilterExpandToggle
+            expanded={isExpanded}
             onPress={() => {
               if (regionId) {
                 onToggleRegion(regionId);
               }
             }}
-            style={({ pressed }) => ({
-              alignItems: 'center',
-              height: 48,
-              justifyContent: 'center',
-              opacity: pressed ? 0.55 : 1,
-              width: 44,
-            })}>
-            <MaterialIcons
-              color="#4a4a4a"
-              name={
-                isExpanded ? 'keyboard-arrow-up' : 'keyboard-arrow-down'
-              }
-              size={24}
-            />
-          </Pressable>
+          />
         ) : null}
       </View>
 
       {isExpanded ? (
-        <View
-          style={{
-            backgroundColor: '#f7f7f7',
-            marginBottom: 10,
-            paddingHorizontal: 12,
-          }}>
+        <FilterPanel>
           {subRegions.map((subRegion, index) => (
             <SubRegionRow
               key={subRegion._id ?? subRegion.slug?.current ?? index}
@@ -223,9 +200,9 @@ function RegionRow({
               subRegion={subRegion}
             />
           ))}
-        </View>
+        </FilterPanel>
       ) : null}
-    </View>
+    </FilterGroup>
   );
 }
 
@@ -241,11 +218,8 @@ function SubRegionRow({
   const subRegionId = subRegion._id;
 
   return (
-    <SelectionRow
-      isSelected={
-        selection.type === 'subregion' &&
-        selection.subRegionId === subRegionId
-      }
+    <FilterSelectRow
+      bordered
       label={subRegion.name ?? ''}
       onPress={() => {
         if (!subRegionId || !subRegion.name) {
@@ -258,98 +232,8 @@ function SubRegionRow({
           type: 'subregion',
         });
       }}
+      selected={selection.type === 'subregion' && selection.subRegionId === subRegionId}
       subtitle={subRegion.maori}
     />
-  );
-}
-
-function SheetHeader({
-  onClear,
-  onDismiss,
-  title,
-}: {
-  onClear?: () => void;
-  onDismiss: () => void;
-  title: string;
-}) {
-  return (
-    <View
-      style={{
-        alignItems: 'center',
-        borderBottomColor: '#e5e5e5',
-        borderBottomWidth: 1,
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        paddingHorizontal: 18,
-        paddingVertical: 14,
-      }}>
-      <View style={{ alignItems: 'flex-start', width: 64 }}>
-        {onClear ? (
-          <Pressable
-            accessibilityLabel="Clear region selection"
-            accessibilityRole="button"
-            hitSlop={8}
-            onPress={onClear}
-            style={({ pressed }) => ({ justifyContent: 'center', minHeight: 32, opacity: pressed ? 0.55 : 1 })}>
-            <Text style={{ color: '#0080C8', fontSize: 17, fontWeight: '700' }}>Clear</Text>
-          </Pressable>
-        ) : null}
-      </View>
-      <Text style={{ fontSize: 19, fontWeight: '800' }}>{title}</Text>
-      <View style={{ alignItems: 'flex-end', width: 64 }}>
-      <Pressable
-        accessibilityLabel="Close Region filters"
-        accessibilityRole="button"
-        hitSlop={8}
-        onPress={onDismiss}
-        style={({ pressed }) => ({
-          alignItems: 'center',
-          justifyContent: 'center',
-          opacity: pressed ? 0.55 : 1,
-          width: 42,
-        })}>
-        <MaterialIcons color="#4a4a4a" name="close" size={22} />
-      </Pressable>
-      </View>
-    </View>
-  );
-}
-
-function SelectionRow({
-  isSelected,
-  label,
-  onPress,
-  subtitle,
-}: {
-  isSelected: boolean;
-  label: string;
-  onPress: () => void;
-  subtitle?: string;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ selected: isSelected }}
-      onPress={onPress}
-      style={({ pressed }) => ({
-        alignItems: 'center',
-        flex: 1,
-        flexDirection: 'row',
-        minHeight: 54,
-        opacity: pressed ? 0.6 : 1,
-        paddingVertical: 8,
-      })}>
-      <View style={{ flex: 1 }}>
-        <Text style={{ fontSize: 16, fontWeight: '400' }}>{label}</Text>
-        {subtitle ? (
-          <Text style={{ color: '#717171', fontSize: 13, marginTop: 2 }}>
-            {subtitle}
-          </Text>
-        ) : null}
-      </View>
-      {isSelected ? (
-        <MaterialIcons color="#111" name="check-circle" size={22} />
-      ) : null}
-    </Pressable>
   );
 }

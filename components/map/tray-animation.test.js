@@ -227,8 +227,9 @@ test('existing behaviour is untouched: marker and thumbnail taps, place opening 
   const map = await read('app/(tabs)/map.tsx');
   assert.match(map, /tapPlace\(place, 'marker'\);/);
   assert.match(map, /onPlacePress=\{handleThumbnailPress\}/);
-  assert.match(map, /const clearRegionSelection = /);
-  assert.match(map, /const clearActivityFilters = /);
+  // C5C: Clear now only empties a sheet's pending choice, so the Map's live clear handlers are gone;
+  // Apply is where a filter reaches the Map, and it still returns the tray to its peek state.
+  assert.match(map, /const applyRegionSelection = [\s\S]*?setTrayState\('peek'\)/);
   assert.match(map, /const applySelection = [\s\S]*?setTrayState\('peek'\)/);
   assert.match(map, /const applyActivityTags = [\s\S]*?setTrayState\('peek'\)/);
 });

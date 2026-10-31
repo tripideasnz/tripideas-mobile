@@ -1,9 +1,11 @@
-// C5B: choosing a region in the Regions filter updates the selection but leaves the panel open, so
-// several choices can be made in one visit. Only the X closes it. The filtering itself is unchanged:
-// still one region or sub-region at a time, choosing the current one again deselects it.
+// Regions: the panel stays open while regions are chosen, switched, cleared or deselected, because
+// those choices are pending (C5C): they reach the Map only on Apply, and Cancel discards them. The
+// selection rule is unchanged, one region or sub-region at a time. (Written in C5B as "stays open";
+// C5B's live-apply path is replaced by pending selection.)
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
+import { chooseRegion } from './filter-pending.ts';
 import { clearRegionScope, resolveSelection } from './map-selection.ts';
 
 const read = (relativePath) => readFile(new URL(`../../${relativePath}`, import.meta.url), 'utf8');
@@ -26,41 +28,34 @@ test('choosing a region selects it, choosing another replaces it, choosing the c
   assert.deepEqual(selection, { type: 'all' }, 'deselected');
   assert.deepEqual(resolveSelection({ label: 'A trip', tripId: 't', type: 'trip' }, { label: 'A trip', tripId: 't', type: 'trip' }), { type: 'all' });
   assert.deepEqual(resolveSelection({ type: 'favourites' }, { type: 'favourites' }), { type: 'all' });
+  assert.deepEqual(chooseRegion(north, west), west, 'the sheet uses the same rule for its pending choice');
 });
 
-test('Clear still only clears a geographical scope (existing behaviour)', () => {
+test('Clear still only clears a geographical scope', () => {
   assert.deepEqual(clearRegionScope(north), { type: 'all' });
   assert.deepEqual(clearRegionScope(bay), { type: 'all' });
   const favourites = { type: 'favourites' };
   assert.equal(clearRegionScope(favourites), favourites);
 });
 
-test('the Regions sheet keeps itself open when a region is chosen; only X (onClose) closes it', async () => {
-  const screen = await read('app/(tabs)/map.tsx');
-  assert.match(screen, /const applySelection = \(nextSelection: MapContentSelection, \{ keepRegionsOpen = false \} = \{\}\) => \{/);
-  assert.match(screen, /if \(!keepRegionsOpen\) setIsRegionsSheetOpen\(false\);/);
-  assert.match(screen, /const selectRegion = \(nextSelection: MapContentSelection\) => applySelection\(nextSelection, \{ keepRegionsOpen: true \}\);/);
-  const sheet = screen.match(/<MapRegionsSheet[\s\S]*?\/>/)?.[0] ?? '';
-  assert.match(sheet, /onSelect=\{selectRegion\}/);
-  assert.match(sheet, /onClose=\{\(\) => setIsRegionsSheetOpen\(false\)\}/);
-  assert.match(sheet, /onClear=\{clearRegionSelection\}/);
-  const clear = screen.match(/const clearRegionSelection = \(\) => \{[\s\S]*?\n  \};/)?.[0] ?? '';
-  assert.doesNotMatch(clear, /setIsRegionsSheetOpen/, 'Clear never closed the sheet and still does not');
-});
-
-test('the sheet itself has no hidden dismissal: selecting a row calls onSelect only, and X is the one close control', async () => {
+test('the Regions sheet stays open on every row tap: rows only change its pending choice', async () => {
   const sheet = await read('components/map/map-regions-sheet.tsx');
-  const rows = sheet.slice(sheet.indexOf('function RegionRow'));
-  assert.doesNotMatch(rows.slice(0, rows.indexOf('function SheetHeader')), /onClose|onDismiss|router\.|navigate/);
-  assert.match(sheet, /accessibilityLabel="Close Region filters"/);
-  assert.match(sheet, /onPress=\{onDismiss\}/);
-  assert.match(sheet, /onDismiss=\{onClose\}|onDismiss=\{onClose\}/);
+  const rows = sheet.slice(sheet.indexOf('function IslandSection'));
+  assert.doesNotMatch(rows, /onApply|onCancel|onClose|router\.|navigate/, 'a row cannot apply, cancel or navigate');
+  assert.match(sheet, /const choose = \(next: MapContentSelection\) => setPending\(\(current\) => chooseRegion\(current, next\)\);/);
+  assert.match(sheet, /onApply=\{\(\) => onApply\(pending\)\}/);
+  assert.match(sheet, /onCancel=\{onCancel\}/);
+  // The only ways out are the frame's Cancel and Apply (and a swipe down, which is Cancel).
+  const frame = await read('components/map/filter-sheet.tsx');
+  assert.match(frame, /onRequestClose=\{onCancel\}/);
+  assert.match(frame, /<HeaderAction label="Cancel" onPress=\{onCancel\} \/>/);
+  assert.match(frame, /<HeaderAction label="Apply" onPress=\{onApply\} \/>/);
 });
 
-test('the other filter sheets keep their existing close-on-choice behaviour', async () => {
+test('the Map tells the Regions sheet nothing until Apply, and the other sheets keep their own behaviour', async () => {
   const screen = await read('app/(tabs)/map.tsx');
+  assert.doesNotMatch(screen, /keepRegionsOpen|selectRegion\b/, 'the C5B live path is gone');
   assert.match(screen, /<MapSavedSheet[\s\S]*?onSelect=\{applySelection\}/);
-  assert.match(screen, /const applyActivityTags = [\s\S]*?setIsActivitiesSheetOpen\(false\)/);
 });
 
 let failed = 0;

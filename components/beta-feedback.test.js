@@ -43,11 +43,14 @@ console.log('✓ September beta wiring preserves filters, viewport refresh, sear
 const [regions, activities, configText] = await Promise.all([
   read('components/map/map-regions-sheet.tsx'), read('components/map/map-activities-sheet.tsx'), read('app.json'),
 ]);
-assert.doesNotMatch(regions, /Apply|without applying/);
+const frame = await read('components/map/filter-sheet.tsx');
+// C5C: Regions and Activities share one Cancel / title / Apply header and stage their choices until Apply.
+assert.match(regions, /onApply=\{\(\) => onApply\(pending\)\}/);
 assert.match(regions, /onSelect\(\{[\s\S]*type: 'region'/);
-assert.match(regions, /accessibilityLabel="Close Region filters"/);
-assert.match(activities, /onApply\(pendingTagIds\)/);
-assert.match(activities, />Apply<\/Text>/);
+assert.doesNotMatch(regions, /Close Region filters/);
+assert.match(activities, /onApply=\{\(\) => onApply\(pendingTagIds\)\}/);
+assert.match(frame, /<HeaderAction label="Apply" onPress=\{onApply\} \/>/);
+assert.match(frame, /<HeaderAction label="Cancel" onPress=\{onCancel\} \/>/);
 assert.match(trips, /isCreatingTrip \? <View accessibilityLabel="Creating Trip"/);
 assert.match(trips, /<ActivityIndicator color=\{Palette.trip\}/);
 assert.doesNotMatch(trips, /<StatusText>Creating trip/);
@@ -57,7 +60,7 @@ assert.doesNotMatch(picker, /added to Trip\./);
 const config = JSON.parse(configText).expo;
 assert.ok(config.ios.infoPlist.NSLocationWhenInUseUsageDescription);
 assert.ok(config.plugins.find((plugin) => Array.isArray(plugin) && plugin[0] === 'expo-location')[1].locationWhenInUsePermission);
-console.log('✓ Region is immediate, Activity retains Apply, creation uses inline progress, and foreground permission remains configured');
+console.log('✓ Regions and Activities both stage until Apply, creation uses inline progress, and foreground permission remains configured');
 
 const discover = await read('app/(tabs)/(discover)/discover.tsx');
 const baselineDiscover = execFileSync('git', ['show', '3961aad6fe425d3c40ef521623f9303c9510f068:app/(tabs)/(discover)/discover.tsx'], { encoding: 'utf8' })

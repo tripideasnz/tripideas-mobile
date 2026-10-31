@@ -1,22 +1,24 @@
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useEffect, useState } from 'react';
-import {
-  Modal,
-  Pressable,
-  ScrollView,
-  Text,
-  View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Text } from 'react-native';
 
+import { clearPendingActivities, toggleActivity } from '@/components/map/filter-pending';
+import {
+  FilterGroup,
+  FilterGroupRow,
+  FilterPanel,
+  FilterSelectRow,
+  FilterSheet,
+} from '@/components/map/filter-sheet';
 import type { MapActivitySuperTag } from '@/sanity/types';
 
 type MapActivitiesSheetProps = {
   activities: MapActivitySuperTag[];
   isLoading: boolean;
+  /** Commits every pending selection together (Apply). Nothing reaches the Map before this. */
   onApply: (tagIds: string[]) => void;
-  onClearAll: () => void;
-  onClose: () => void;
+  /** Discards the pending selections (Cancel, or a swipe down). */
+  onCancel: () => void;
+  /** The activities currently applied to the Map. */
   selectedTagIds: string[];
   visible: boolean;
 };
@@ -25,224 +27,95 @@ export function MapActivitiesSheet({
   activities,
   isLoading,
   onApply,
-  onClearAll,
-  onClose,
+  onCancel,
   selectedTagIds,
   visible,
 }: MapActivitiesSheetProps) {
   const [expandedSuperTagIds, setExpandedSuperTagIds] = useState<string[]>([]);
+  // Any number of activities at once; the Map is only told on Apply.
   const [pendingTagIds, setPendingTagIds] = useState<string[]>(selectedTagIds);
 
   useEffect(() => {
     if (visible) setPendingTagIds(selectedTagIds);
-  // Reset to committed state whenever the modal opens; selectedTagIds intentionally omitted.
+  // Staging restarts from the applied activities each time the sheet opens; `selectedTagIds` is
+  // intentionally omitted so an applied change elsewhere cannot rewrite a sheet being edited.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
 
   const selectedIds = new Set(pendingTagIds);
 
   return (
-    <Modal
-      animationType="slide"
-      onRequestClose={onClose}
-      presentationStyle="pageSheet"
+    <FilterSheet
+      canClear={pendingTagIds.length > 0}
+      clearLabel="Clear all selected activities"
+      onApply={() => onApply(pendingTagIds)}
+      onCancel={onCancel}
+      onClear={() => setPendingTagIds(clearPendingActivities())}
+      title="Activities"
       visible={visible}>
-      <SafeAreaView style={{ backgroundColor: '#fff', flex: 1 }}>
-        <View
-          style={{
-            alignItems: 'center',
-            borderBottomColor: '#e5e5e5',
-            borderBottomWidth: 1,
-            flexDirection: 'row',
-            justifyContent: 'space-between',
-            paddingHorizontal: 18,
-            paddingVertical: 14,
-          }}>
-          <Pressable
-            accessibilityLabel="Apply filters"
-            accessibilityRole="button"
-            onPress={() => onApply(pendingTagIds)}
-            style={({ pressed }) => ({ opacity: pressed ? 0.55 : 1 })}>
-            <Text style={{ color: '#0080C8', fontSize: 17, fontWeight: '700' }}>Apply</Text>
-          </Pressable>
-          <Text style={{ fontSize: 19, fontWeight: '800' }}>Activities</Text>
-          <Pressable
-            accessibilityLabel="Close without applying"
-            accessibilityRole="button"
-            hitSlop={8}
-            onPress={onClose}
-            style={({ pressed }) => ({
-              alignItems: 'center',
-              justifyContent: 'center',
-              opacity: pressed ? 0.55 : 1,
-              width: 42,
-            })}>
-            <MaterialIcons color="#4a4a4a" name="close" size={22} />
-          </Pressable>
-        </View>
+      {isLoading ? (
+        <Text style={{ color: '#717171', fontSize: 15, paddingTop: 24 }}>
+          Loading activities...
+        </Text>
+      ) : activities.length > 0 ? (
+        activities.map((superTag, index) => {
+          const superTagId = superTag._id;
+          const isExpanded = Boolean(
+            superTagId && expandedSuperTagIds.includes(superTagId)
+          );
+          const tags = (superTag.tags ?? []).filter(Boolean);
+          const selectedCount = tags.filter(
+            (tag) => tag._id && selectedIds.has(tag._id)
+          ).length;
 
-        {pendingTagIds.length > 0 || selectedTagIds.length > 0 ? (
-          <View style={{ alignItems: 'flex-end', paddingHorizontal: 18, paddingTop: 10 }}>
-            <Pressable
-              accessibilityLabel="Clear all selected activities"
-              accessibilityRole="button"
-              hitSlop={8}
-              onPress={() => {
-                // Immediate: clear the applied filter and the staged picks together.
-                // The sheet stays open, and X afterwards cannot bring anything back.
-                setPendingTagIds([]);
-                onClearAll();
-              }}
-              style={({ pressed }) => ({ minHeight: 32, justifyContent: 'center', opacity: pressed ? 0.55 : 1 })}>
-              <Text style={{ color: '#0080C8', fontSize: 15, fontWeight: '600' }}>Clear All</Text>
-            </Pressable>
-          </View>
-        ) : null}
+          return (
+            <FilterGroup key={superTagId ?? superTag.slug?.current ?? index}>
+              <FilterGroupRow
+                expanded={isExpanded}
+                onPress={() => {
+                  if (!superTagId) {
+                    return;
+                  }
 
-        <ScrollView
-          contentContainerStyle={{ padding: 18, paddingBottom: 40 }}>
-          {isLoading ? (
-            <Text style={{ color: '#717171', fontSize: 15 }}>
-              Loading activities...
-            </Text>
-          ) : activities.length > 0 ? (
-            activities.map((superTag, index) => {
-              const superTagId = superTag._id;
-              const isExpanded = Boolean(
-                superTagId && expandedSuperTagIds.includes(superTagId)
-              );
-              const tags = (superTag.tags ?? []).filter(Boolean);
-              const selectedCount = tags.filter(
-                (tag) => tag._id && selectedIds.has(tag._id)
-              ).length;
+                  setExpandedSuperTagIds((current) =>
+                    current.includes(superTagId)
+                      ? current.filter((id) => id !== superTagId)
+                      : [...current, superTagId]
+                  );
+                }}
+                subtitle={selectedCount > 0 ? `${selectedCount} selected` : undefined}
+                title={superTag.name ?? ''}
+              />
 
-              return (
-                <View
-                  key={superTagId ?? superTag.slug?.current ?? index}
-                  style={{
-                    borderBottomColor: '#e7e7e7',
-                    borderBottomWidth: 1,
-                  }}>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityState={{ expanded: isExpanded }}
-                    onPress={() => {
-                      if (!superTagId) {
-                        return;
-                      }
+              {isExpanded ? (
+                <FilterPanel>
+                  {tags.map((tag, tagIndex) => {
+                    const tagId = tag._id;
 
-                      setExpandedSuperTagIds((current) =>
-                        current.includes(superTagId)
-                          ? current.filter((id) => id !== superTagId)
-                          : [...current, superTagId]
-                      );
-                    }}
-                    style={({ pressed }) => ({
-                      alignItems: 'center',
-                      flexDirection: 'row',
-                      minHeight: 58,
-                      opacity: pressed ? 0.6 : 1,
-                      paddingVertical: 8,
-                    })}>
-                    <View style={{ flex: 1 }}>
-                      {superTag.name ? (
-                        <Text style={{ fontSize: 17, fontWeight: '800' }}>
-                          {superTag.name}
-                        </Text>
-                      ) : null}
-                      {selectedCount > 0 ? (
-                        <Text
-                          style={{
-                            color: '#717171',
-                            fontSize: 13,
-                            marginTop: 2,
-                          }}>
-                          {selectedCount} selected
-                        </Text>
-                      ) : null}
-                    </View>
-                    <MaterialIcons
-                      color="#4a4a4a"
-                      name={
-                        isExpanded
-                          ? 'keyboard-arrow-up'
-                          : 'keyboard-arrow-down'
-                      }
-                      size={25}
-                    />
-                  </Pressable>
-
-                  {isExpanded ? (
-                    <View
-                      style={{
-                        backgroundColor: '#f7f7f7',
-                        marginBottom: 10,
-                        paddingHorizontal: 12,
-                      }}>
-                      {tags.map((tag, tagIndex) => {
-                        const tagId = tag._id;
-                        const isSelected = Boolean(
-                          tagId && selectedIds.has(tagId)
-                        );
-
-                        return (
-                          <Pressable
-                            accessibilityRole="button"
-                            accessibilityState={{ selected: isSelected }}
-                            key={tagId ?? tag.slug?.current ?? tagIndex}
-                            onPress={() => {
-                              if (tagId) {
-                                setPendingTagIds((current) =>
-                                  current.includes(tagId)
-                                    ? current.filter((id) => id !== tagId)
-                                    : [...current, tagId]
-                                );
-                              }
-                            }}
-                            style={({ pressed }) => ({
-                              alignItems: 'center',
-                              borderBottomColor: '#e2e2e2',
-                              borderBottomWidth: 1,
-                              flexDirection: 'row',
-                              minHeight: 52,
-                              opacity: pressed ? 0.6 : 1,
-                              paddingVertical: 8,
-                            })}>
-                            <View style={{ flex: 1 }}>
-                              {tag.name ? (
-                                <Text
-                                  style={{
-                                    fontSize: 16,
-                                    fontWeight: '400',
-                                  }}>
-                                  {tag.name}
-                                </Text>
-                              ) : null}
-                            </View>
-                            <MaterialIcons
-                              color={isSelected ? '#111' : '#a0a0a0'}
-                              name={
-                                isSelected
-                                  ? 'check-circle'
-                                  : 'radio-button-unchecked'
-                              }
-                              size={22}
-                            />
-                          </Pressable>
-                        );
-                      })}
-                    </View>
-                  ) : null}
-                </View>
-              );
-            })
-          ) : (
-            <Text style={{ color: '#717171', fontSize: 15 }}>
-              No activities found.
-            </Text>
-          )}
-        </ScrollView>
-      </SafeAreaView>
-    </Modal>
+                    return (
+                      <FilterSelectRow
+                        bordered
+                        key={tagId ?? tag.slug?.current ?? tagIndex}
+                        label={tag.name ?? ''}
+                        onPress={() => {
+                          if (tagId) {
+                            setPendingTagIds((current) => toggleActivity(current, tagId));
+                          }
+                        }}
+                        selected={Boolean(tagId && selectedIds.has(tagId))}
+                      />
+                    );
+                  })}
+                </FilterPanel>
+              ) : null}
+            </FilterGroup>
+          );
+        })
+      ) : (
+        <Text style={{ color: '#717171', fontSize: 15 }}>
+          No activities found.
+        </Text>
+      )}
+    </FilterSheet>
   );
 }
