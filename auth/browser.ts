@@ -11,6 +11,13 @@ export type AuthBrowserOutcome =
       category: 'invalid-url' | 'unavailable' | 'unknown';
     };
 
+// Sign-in runs in a private iOS authentication session (ASWebAuthenticationSession with
+// prefersEphemeralWebBrowserSession). The default session shares Safari's cookies, and signing out
+// of the app cannot end the hosted WorkOS or Google session, so the next sign-in would silently
+// reuse the previous account. A private session starts with no cookies, so the person always gets
+// the sign-in and Google account choice. Ignored on Android, which has no equivalent option.
+export const AUTH_BROWSER_OPTIONS = { preferEphemeralSession: true } as const;
+
 type ErrorWithCode = {
   code?: unknown;
 };

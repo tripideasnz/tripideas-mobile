@@ -19,6 +19,7 @@ import {
   mobileRefresh,
 } from '@/auth/api';
 import {
+  AUTH_BROWSER_OPTIONS,
   authBrowserFailureMessage,
   openAuthBrowserSafely,
 } from '@/auth/browser';
@@ -269,7 +270,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     }
 
     const browserOutcome = await openAuthBrowserSafely(() =>
-      WebBrowser.openAuthSessionAsync(authorizationUrl, MOBILE_REDIRECT_URI)
+      WebBrowser.openAuthSessionAsync(authorizationUrl, MOBILE_REDIRECT_URI, AUTH_BROWSER_OPTIONS)
     );
 
     if (browserOutcome.status === 'cancelled') {
@@ -360,8 +361,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   const endSession = useCallback(async (reason: SessionEndReason) => {
     // TODO: Call POST /auth/mobile/logout once backend implements it.
-    // Until then, sign-out is local-only. The WorkOS hosted session remains
-    // active, so re-signing in immediately will skip the WorkOS UI.
+    // Until then, sign-out is local-only. The hosted WorkOS session is not ended here; signIn
+    // opens a private browser session (AUTH_BROWSER_OPTIONS) so it is never reused.
     const signedOutUserId = state.session?.userId ?? state.user?.id;
     if (signedOutUserId) cancelPhotoUploadsForUser(signedOutUserId);
     const nextState = await clearMobileSession(
