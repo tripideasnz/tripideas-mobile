@@ -28,6 +28,7 @@ import { sharedTripsStore } from '@/shared-trips';
 import { useSharedTripsState } from '@/shared-trips/use-shared-trips';
 import {
   linkErrorMessage,
+  isNewLiveShare,
   liveShareConfirmation,
   liveShareMessage,
   SHARE_CHOICES,
@@ -213,13 +214,14 @@ export default function TripDetailScreen() {
   // again never makes a second). Others who open the link can Join the live Trip or Save a Copy.
   const shareLive = async () => {
     if (!trip || isSharingLive) return;
+    const wasSharing = sharingActive;
     const result = await sharedTripsStore.share(trip.id);
     if (!result.ok) {
       Alert.alert('Could not share this Trip', shareErrorMessage(result.error));
       return;
     }
     const { url } = result.value;
-    const confirmation = liveShareConfirmation(result.value.created, url);
+    const confirmation = liveShareConfirmation(isNewLiveShare(result.value.created, wasSharing), url);
     Alert.alert(
       confirmation.title,
       confirmation.message,

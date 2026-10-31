@@ -289,6 +289,13 @@ export const SHARE_CHOICES = {
 } as const;
 
 /**
+ * Whether "Share live Trip" just switched sharing on. The server's `created` only says the Trip's shared copy was
+ * made now (the first time ever); sharing again after "Stop sharing" issues a new link on the existing copy, so it
+ * also counts when sharing was off at the moment the person chose to share.
+ */
+export const isNewLiveShare = (created: boolean, wasSharing: boolean): boolean => created || !wasSharing;
+
+/**
  * The dialog shown with the link after "Share live Trip". Sharing switched on just now says so; asking for the
  * link of a Trip that was already shared says it already is. (The same text used to be shown for both.)
  */

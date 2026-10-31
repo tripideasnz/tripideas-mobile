@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import {
   PREVIEW_ACTIONS,
   SHARE_CHOICES,
+  isNewLiveShare,
   liveShareConfirmation,
   authorLabel,
   deleteNoteConfirmation,
@@ -281,6 +282,14 @@ test('a newly created live link says sharing is now on; an existing one says it 
     assert.match(dialog.message, /join it and add notes/);
     assert.match(dialog.message, /cannot change your Places/);
   }
+});
+
+test('sharing counts as newly switched on after Stop sharing, not only the first time ever', () => {
+  // created: the shared copy was made now (first share). wasSharing: sharing was on when the person tapped.
+  assert.equal(isNewLiveShare(true, false), true, 'first share ever');
+  assert.equal(isNewLiveShare(false, false), true, 'shared again after Stop sharing: a new link');
+  assert.equal(isNewLiveShare(false, true), false, 'asking for the link of a Trip that is already shared');
+  assert.equal(isNewLiveShare(true, true), true, 'a copy made now is always new');
 });
 
 for (const { name, run } of tests) {

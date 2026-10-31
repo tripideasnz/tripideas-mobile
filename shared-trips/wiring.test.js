@@ -93,7 +93,8 @@ test('sharing from a Trip: two clearly different choices, live sharing guarded a
   assert.match(detail, /Alert\.alert\('Share this Trip'/);
   assert.match(detail, /SHARE_CHOICES\.copy\.label/);
   assert.match(detail, /SHARE_CHOICES\.live\(sharingActive\)\.label/);
-  assert.match(detail, /liveShareConfirmation\(result\.value\.created, url\)/);
+  assert.match(detail, /const wasSharing = sharingActive;/);
+  assert.match(detail, /liveShareConfirmation\(isNewLiveShare\(result\.value\.created, wasSharing\), url\)/);
   // Stop sharing is offered only while the link is on, and only to the Trip's owner (this is My Trips).
   assert.match(detail, /\.\.\.\(sharingActive \? \[\{ onPress: stopSharingLive/);
   assert.match(detail, /sharedTripsStore\.stopSharing\(sharedCollectionId\)/);
