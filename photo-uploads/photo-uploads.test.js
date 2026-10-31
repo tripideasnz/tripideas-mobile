@@ -225,6 +225,34 @@ test('interrupted PUT is retryable', async () => {
   assert.equal(result.lastErrorCode, 'put_interrupted');
 });
 
+test('unreachable storage host keeps the upload retryable and a later retry completes it', async () => {
+  // An integration API with its photo storage disabled signs URLs on a host that cannot resolve, so the PUT
+  // fails with a plain network error (not an abort). The upload must stay retryable with its record,
+  // asset and request id intact, and complete once storage is reachable.
+  const h = await prepared(harness({
+    putFile: async () => { throw new TypeError('Network request failed'); },
+  }));
+  const failed = await runPhotoUpload(
+    h.dependencies, 'user-a', h.record.id, new AbortController().signal
+  );
+  assert.equal(failed.state, 'RETRYABLE_ERROR');
+  assert.equal(failed.lastErrorCode, 'network_unavailable');
+  assert.equal(failed.assetId, 'asset-1');
+  assert.equal(failed.clientRequestId, h.record.clientRequestId);
+  assert.equal(h.records.get(`user-a:${h.record.id}`).state, 'RETRYABLE_ERROR', 'the failed record is kept, not cleared');
+  assert.equal(h.events.some(([name]) => name === 'complete'), false);
+
+  h.dependencies.putFile = async () => ({ status: 200 });
+  const retried = await runPhotoUpload(
+    h.dependencies, 'user-a', h.record.id, new AbortController().signal
+  );
+  assert.equal(retried.state, 'UPLOADED');
+  assert.equal(retried.lastErrorCode, null);
+  const intents = h.events.filter(([name]) => name === 'intent').map(([, request]) => request.clientRequestId);
+  assert.ok(intents.length >= 1);
+  assert.deepEqual([...new Set(intents)], [h.record.clientRequestId], 'every attempt reuses the same request id');
+});
+
 test('expired signed URL is retryable and is never sent', async () => {
   let putCalls = 0;
   const h = await prepared(harness({
