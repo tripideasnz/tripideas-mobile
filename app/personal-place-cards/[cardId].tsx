@@ -526,12 +526,13 @@ export default function PersonalPlaceCardScreen() {
       />
 
       <AppText variant="section">Location</AppText>
+      {/* In these two button rows the primary button carries a 1 pt border in its own colour, like the outlined one beside it, so the two share the row exactly (a border-less button is 2 pt narrower under flex). */}
       <View style={{ flexDirection: 'row', gap: Space.sm }}>
         <AppButton
           disabled={locateNow.isBusy}
           label={locateNow.state.kind === 'saving' ? 'Saving…' : locateNow.isBusy ? 'Locating…' : 'Locate now'}
           onPress={() => void locateNow.locate()}
-          style={{ flex: 1 }}
+          style={{ borderColor: Palette.primary, borderWidth: 1, flex: 1 }}
         />
         <AppButton label="Locate on map" onPress={() => router.push({ pathname: '/personal-place-cards/location-picker', params: {
           cardId: card.id,
@@ -575,14 +576,12 @@ export default function PersonalPlaceCardScreen() {
         onLayout={(event) => { photosYRef.current = event.nativeEvent.layout.y; }}
         style={{ gap: Space.md }}>
         <AppText variant="section">Photos</AppText>
-        {/* Both photo actions share one row: equal width and height, one style. */}
+        {/* Both photo actions share one row, built exactly like the Location row above: the same button size, equal widths, primary on the left, outlined on the right. */}
         <View style={{ flexDirection: 'row', gap: Space.sm }}>
           <AppButton
             disabled={busy}
             label={mainMedia ? 'Change main photo' : 'Add main photo'}
-            size="compact"
-            style={{ flex: 1 }}
-            variant="secondary"
+            style={{ borderColor: Palette.primary, borderWidth: 1, flex: 1 }}
             onPress={mainMedia ? replaceMainPhoto : () => void act(async () => {
               const selected = await pickPhotoForUpload();
               if (!selected || !session?.userId) return;
@@ -605,7 +604,6 @@ export default function PersonalPlaceCardScreen() {
           <AppButton
             disabled={busy || remainingBodySlots === 0}
             label="Add body photos"
-            size="compact"
             style={{ flex: 1 }}
             variant="secondary"
             onPress={() => void act(async () => {
