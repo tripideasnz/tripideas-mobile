@@ -288,6 +288,22 @@ export const SHARE_CHOICES = {
   }),
 } as const;
 
+/**
+ * The dialog shown with the link after "Share live Trip". Sharing switched on just now says so; asking for the
+ * link of a Trip that was already shared says it already is. (The same text used to be shown for both.)
+ */
+export function liveShareConfirmation(created: boolean, url: string): { message: string; title: string } {
+  return created
+    ? {
+        message: `This Trip is now shared live. Anyone with the link can join it and add notes; they cannot change your Places.\n\n${url}`,
+        title: 'Trip shared',
+      }
+    : {
+        message: `${SHARE_CHOICES.live(true).message}\n\n${url}`,
+        title: SHARE_CHOICES.live(true).label,
+      };
+}
+
 export const liveShareMessage = (title: string, url: string) =>
   `Join my Trip "${title}" on TripIdeas: ${url}`;
 

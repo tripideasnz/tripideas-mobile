@@ -28,6 +28,7 @@ import { sharedTripsStore } from '@/shared-trips';
 import { useSharedTripsState } from '@/shared-trips/use-shared-trips';
 import {
   linkErrorMessage,
+  liveShareConfirmation,
   liveShareMessage,
   SHARE_CHOICES,
   shareErrorMessage,
@@ -218,9 +219,10 @@ export default function TripDetailScreen() {
       return;
     }
     const { url } = result.value;
+    const confirmation = liveShareConfirmation(result.value.created, url);
     Alert.alert(
-      result.value.created ? 'Trip shared' : SHARE_CHOICES.live(true).label,
-      `${SHARE_CHOICES.live(true).message}\n\n${url}`,
+      confirmation.title,
+      confirmation.message,
       [
         { style: 'cancel', text: 'Done' },
         {

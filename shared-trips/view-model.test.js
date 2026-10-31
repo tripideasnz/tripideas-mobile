@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import {
   PREVIEW_ACTIONS,
   SHARE_CHOICES,
+  liveShareConfirmation,
   authorLabel,
   deleteNoteConfirmation,
   detailControls,
@@ -261,6 +262,27 @@ test('error messages are specific and actionable', () => {
 });
 
 let failed = 0;
+test('a newly created live link says sharing is now on; an existing one says it already is', () => {
+  const url = 'https://staging.tripideas.nz/collections/fc_x?k=abc';
+  const created = liveShareConfirmation(true, url);
+  assert.equal(created.title, 'Trip shared');
+  assert.match(created.message, /now shared live/);
+  assert.doesNotMatch(created.message, /already/);
+  assert.ok(created.message.endsWith(`\n\n${url}`));
+
+  const existing = liveShareConfirmation(false, url);
+  assert.equal(existing.title, SHARE_CHOICES.live(true).label);
+  assert.match(existing.message, /already shared live/);
+  assert.doesNotMatch(existing.message, /now shared/);
+  assert.ok(existing.message.endsWith(`\n\n${url}`));
+
+  // Both still say what joining allows and what it does not.
+  for (const dialog of [created, existing]) {
+    assert.match(dialog.message, /join it and add notes/);
+    assert.match(dialog.message, /cannot change your Places/);
+  }
+});
+
 for (const { name, run } of tests) {
   try {
     await run();
