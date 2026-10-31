@@ -1,11 +1,12 @@
-// Switching accounts on one device: sign-out ends the app session and removes only that account's
-// credentials and private caches; the next sign-in can establish a different identity; nothing
-// account-specific, and none of the person's saved content, crosses between accounts. The hosted
-// WorkOS/Google session cannot be ended from the app, so sign-in must open a private browser session.
+// What the app guarantees when the account on a device changes: sign-out ends the app session and removes only
+// that account's credentials and private caches; the next sign-in can establish a different identity; nothing
+// account-specific, and none of the person's saved content, crosses between accounts. The app cannot end the
+// hosted WorkOS/Google session (sign-out is local-only), so sign-in deliberately uses the standard
+// authentication browser and may reuse an existing browser session; switching Google accounts on a device is a
+// separate, documented improvement.
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-import { AUTH_BROWSER_OPTIONS } from './browser.ts';
 import {
   clearMobileSession,
   persistMobileSession,
@@ -164,20 +165,18 @@ async function run() {
   assert.equal(state.session, null);
   assert.equal(d.secure.has(USER_SECURE_KEY), false);
 
-  // The hosted session cannot be ended from the app: sign-in must use a private browser session,
-  // and the provider must hand that option to the system authentication browser.
-  assert.deepEqual(AUTH_BROWSER_OPTIONS, { preferEphemeralSession: true });
+  // Standard authentication browser: sign-in is opened with the redirect URI only (no private-session
+  // option), so session restoration and normal sign-in behave as before. Sign-out stays local-only.
   const provider = await readFile(new URL('./provider.tsx', import.meta.url), 'utf8');
-  assert.match(
-    provider,
-    /WebBrowser\.openAuthSessionAsync\(authorizationUrl, MOBILE_REDIRECT_URI, AUTH_BROWSER_OPTIONS\)/
-  );
+  const browser = await readFile(new URL('./browser.ts', import.meta.url), 'utf8');
+  assert.match(provider, /WebBrowser\.openAuthSessionAsync\(authorizationUrl, MOBILE_REDIRECT_URI\)/);
+  assert.doesNotMatch(provider + browser, /preferEphemeral|AUTH_BROWSER_OPTIONS/);
 
   // Sign-out only ever removes authentication keys: no saved-content storage key is listed.
   const storage = await readFile(new URL('./storage.ts', import.meta.url), 'utf8');
   assert.doesNotMatch(storage, /savedPlaceIds|sharedTrips|favourite|trip/i);
 
-  console.log('✓ account switching: sign-out ends the session, a different identity can sign in, saved content and per-account caches stay separate');
+  console.log('✓ account changes: sign-out ends the session, a different identity can sign in, saved content and per-account caches stay separate, standard auth browser');
 }
 
 void run().catch((error) => {
