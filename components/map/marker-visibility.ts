@@ -55,6 +55,23 @@ export function selectedMarkerNeedsMove({
   );
 }
 
+/** Zoom at which Places are individual pins (the map clusters up to zoom 12). */
+export const SELECTED_PLACE_MIN_ZOOM = 13;
+
+/**
+ * Camera move for a Place chosen from the tray: centred in the unobscured area and
+ * at least at the zoom where its own pin shows. A closer zoom is never undone.
+ */
+export const selectedPlaceCamera = (
+  marker: { lat: number; lng: number },
+  obscured: ObscuredEdges,
+  currentZoom: number,
+  durationMs = 450
+) => ({
+  ...revealMarkerCamera(marker, obscured, durationMs),
+  zoom: Math.max(currentZoom, SELECTED_PLACE_MIN_ZOOM),
+});
+
 /**
  * Camera move that puts the marker in the middle of the unobscured area while
  * keeping the current zoom (no zoom option is given).

@@ -25,6 +25,7 @@ import { MapControls, MapZoomControls } from '@/components/map/map-controls';
 import { MapPeekSheet } from '@/components/map/map-peek-sheet';
 import { MapPin, MapPinColors } from '@/components/map/map-pin';
 import { MapStyleSheet } from '@/components/map/map-style-sheet';
+import { nearestPointFeature } from '@/components/map/marker-hit';
 import { MapQuickFilters } from '@/components/map/map-quick-filters';
 import { orderMapNavigation } from '@/components/map/map-region-order';
 import { MapRegionsSheet } from '@/components/map/map-regions-sheet';
@@ -43,14 +44,15 @@ import { MapSavedSheet } from '@/components/map/map-saved-sheet';
 import {
   revealMarkerCamera,
   selectedMarkerNeedsMove,
+  selectedPlaceCamera,
   type ObscuredEdges,
 } from '@/components/map/marker-visibility';
 import { openPlaceFromMap } from '@/components/map/place-navigation';
 import { MapFullListOverlay } from '@/components/map/map-full-list-overlay';
 import { trayAfterDownArrow, trayAfterUpArrow, type MapTrayState } from '@/components/map/tray-motion';
-import { clearRegionScope, type MapContentSelection } from '@/components/map/map-selection';
+import { clearRegionScope, resolveSelection, type MapContentSelection } from '@/components/map/map-selection';
 import { MapTileView } from '@/components/map/map-tile-view';
-import { useMapSelection } from '@/components/map/use-map-selection';
+import { planPlaceTap, useMapSelection, type PlaceTapSource } from '@/components/map/use-map-selection';
 import { HeaderBackButton } from '@/components/ui/header-back-button';
 import { MAP_STYLE_URL, MAP_STYLES, type MapStyleId } from '@/constants/map';
 import { Palette, Radius, Shadow, Space } from '@/constants/design';
@@ -76,34 +78,13 @@ const QUICK_FILTERS_BAR_HEIGHT = 44;
 const PEEK_SHEET_FALLBACK = 289;
 // Room the selected-marker label needs above the marker pin.
 const SELECTED_MARKER_LABEL_ALLOWANCE = 80;
+// Space between the selected pin and the bottom of its name pop-up.
+const SELECTED_MARKER_LABEL_GAP = 18;
 
 
 function parseCoordinate(value: string | undefined): number | null {
   const n = parseFloat(value ?? '');
   return Number.isFinite(n) ? n : null;
-}
-
-function isSameSelection(
-  left: MapContentSelection,
-  right: MapContentSelection
-) {
-  if (left.type !== right.type) {
-    return false;
-  }
-
-  if (left.type === 'region' && right.type === 'region') {
-    return left.regionId === right.regionId;
-  }
-
-  if (left.type === 'subregion' && right.type === 'subregion') {
-    return left.subRegionId === right.subRegionId;
-  }
-
-  if (left.type === 'trip' && right.type === 'trip') {
-    return left.tripId === right.tripId;
-  }
-
-  return true;
 }
 
 type PlaceContext = {
@@ -489,6 +470,11 @@ export default function MapScreen() {
     }),
   }), [displayedPlaces, selectedPlaceId, placeContext]);
   const selectedMapPlace = useMemo(() => displayedPlaces.find((place) => mapPlaceId(place) === selectedPlaceId) ?? null, [displayedPlaces, selectedPlaceId]);
+  // A filter or search that removes the selected Place also drops its selection, so it
+  // cannot come back highlighted later. Moving the map never changes the selection.
+  useEffect(() => {
+    if (selectedPlaceId !== null && !selectedMapPlace) clearSelectedPlace();
+  }, [clearSelectedPlace, selectedMapPlace, selectedPlaceId]);
 
   // True when the focused place appears in the dataset (can be highlighted via layer paint).
   const hasFocusedInDataset =
@@ -498,22 +484,50 @@ export default function MapScreen() {
   // Selecting a marker shows a label above it and the peek sheet sits below, so
   // the marker is brought into the clear area only when it is not already there.
   // Zoom, filters and clustering are untouched.
+  const selectedMarkerObscuredEdges = (): ObscuredEdges => ({
+    bottom: (peekSheetHeight > 0 ? peekSheetHeight : PEEK_SHEET_FALLBACK) + 16,
+    left: 24,
+    right: 24,
+    top: insets.top + QUICK_FILTERS_BAR_HEIGHT + SELECTED_MARKER_LABEL_ALLOWANCE,
+  });
   const revealSelectedMarker = (place: MappablePlace) => {
-    const obscured: ObscuredEdges = {
-      bottom: (peekSheetHeight > 0 ? peekSheetHeight : PEEK_SHEET_FALLBACK) + 16,
-      left: 24,
-      right: 24,
-      top: insets.top + QUICK_FILTERS_BAR_HEIGHT + SELECTED_MARKER_LABEL_ALLOWANCE,
-    };
+    const obscured = selectedMarkerObscuredEdges();
     const marker = { lat: place.coordinates.lat, lng: place.coordinates.lng };
     if (!selectedMarkerNeedsMove({ bounds: visibleBoundsRef.current, marker, obscured, viewport: mapSizeRef.current })) return;
     cancelPendingFit();
     cameraRef.current?.easeTo(revealMarkerCamera(marker, obscured));
   };
+  // A thumbnail chosen in the tray brings its marker into view: centred in the clear
+  // area and close enough that its own pin (not a cluster) shows. Filters are untouched.
+  const focusSelectedPlace = (place: MappablePlace) => {
+    cancelPendingFit();
+    cameraRef.current?.easeTo(
+      selectedPlaceCamera(
+        { lat: place.coordinates.lat, lng: place.coordinates.lng },
+        selectedMarkerObscuredEdges(),
+        lastCameraRef.current.zoom
+      )
+    );
+  };
+  // One two-stage rule for markers and tray thumbnails (see planPlaceTap): the first tap
+  // selects the Place and stays on the Map, a tap on the selected Place opens it.
+  const tapPlace = (place: MappablePlace, source: PlaceTapSource) => {
+    const id = mapPlaceId(place);
+    if (!id) return;
+    const plan = planPlaceTap(selectedPlaceId, id, source);
+    if (plan.action === 'open') {
+      openMapPlace(place);
+      return;
+    }
+    setSelectedPlaceId(id);
+    if (plan.then === 'focus') focusSelectedPlace(place);
+    else revealSelectedMarker(place);
+  };
 
   const handleSourcePress = async (event: NativeSyntheticEvent<PressEventWithFeatures>) => {
     event.stopPropagation();
-    const feature = event.nativeEvent.features[0];
+    // Several pins can sit inside the touch area: the one nearest the finger is meant.
+    const feature = nearestPointFeature(event.nativeEvent.features, event.nativeEvent.lngLat);
     if (!feature || feature.geometry.type !== 'Point') return;
 
     const { properties, geometry } = feature;
@@ -535,19 +549,16 @@ export default function MapScreen() {
     const id = properties?.id as string | null;
     const place = displayedPlaces.find((candidate) => mapPlaceId(candidate) === id);
     if (!id || !place) return;
-    // One tap, one outcome: a marker tap replaces the selection (highlight and
-    // label) and opens its Place straight away. Only a place that has no page
-    // to open stays selected, and is brought clear of the sheet.
-    setSelectedPlaceId(id);
-    if (place.slug?.current) openMapPlace(place);
-    else revealSelectedMarker(place);
+    // Clusters returned above; a single marker is the first or second tap of the
+    // two-stage rule: the first selects (highlight, name pop-up, tray thumbnail),
+    // the second, on the selected marker, opens the Place.
+    tapPlace(place, 'marker');
   };
-  // Thumbnails open the Place on the first tap. The place is selected first so
-  // its marker is still highlighted when the user comes back.
-  const handleThumbnailPress = useCallback((place: MapPlace) => {
-    setSelectedPlaceId(mapPlaceId(place));
-    openMapPlace(place);
-  }, [openMapPlace, setSelectedPlaceId]);
+  // Tray thumbnails follow the same rule: the first tap selects the Place and brings its
+  // marker into view, a tap on the selected thumbnail opens the Place.
+  const handleThumbnailPress = (place: MapPlace) => {
+    if (hasValidCoordinates(place)) tapPlace(place, 'thumbnail');
+  };
 
   const isLoading =
     isLoadingPlaces ||
@@ -666,23 +677,21 @@ export default function MapScreen() {
   // Tray height changes must not refit all results: that would undo locator
   // navigation or a pan into a viewport with a different result count.
 
-  const applySelection = (nextSelection: MapContentSelection) => {
+  const applySelection = (nextSelection: MapContentSelection, { keepRegionsOpen = false } = {}) => {
     // Exit rule 3: choosing a map filter clears the place context.
     clearPlaceContext();
 
-    const isDeselecting = isSameSelection(selection, nextSelection);
-    const resolvedSelection: MapContentSelection = isDeselecting
-      ? { type: 'all' }
-      : nextSelection;
-
-    setSelection(resolvedSelection);
+    setSelection(resolveSelection(selection, nextSelection));
     setQuery('');
     setIsFitPending(true);
     setIsActivitiesSheetOpen(false);
-    setIsRegionsSheetOpen(false);
+    // The Regions sheet is where regions are picked, switched or deselected in one
+    // visit, so choosing one leaves it open; only its X closes it (Clear does not).
+    if (!keepRegionsOpen) setIsRegionsSheetOpen(false);
     setIsSavedSheetOpen(false);
     setTrayState('peek');
   };
+  const selectRegion = (nextSelection: MapContentSelection) => applySelection(nextSelection, { keepRegionsOpen: true });
 
   // Clears only the geographical selection. Activities, the search query and the
   // camera are left alone: the result list follows from `selection` alone, and the
@@ -746,7 +755,7 @@ export default function MapScreen() {
       navigation={navigation2}
       onClear={clearRegionSelection}
       onClose={() => setIsRegionsSheetOpen(false)}
-      onSelect={applySelection}
+      onSelect={selectRegion}
       selection={selection}
       visible={isRegionsSheetOpen}
     />
@@ -869,7 +878,8 @@ export default function MapScreen() {
           />
         </GeoJSONSource>
 
-        {selectedMapPlace ? <Marker anchor="bottom" lngLat={[selectedMapPlace.coordinates.lng, selectedMapPlace.coordinates.lat]}><Pressable accessibilityLabel={`${selectedMapPlace.title || 'Place'}, selected. Open place.`} accessibilityRole="button" onPress={(event) => { event.stopPropagation(); openMapPlace(selectedMapPlace); }} style={({ pressed }) => ({ ...Shadow.floating, backgroundColor: Palette.surface, borderColor: Palette.trip, borderRadius: Radius.control, borderWidth: 1, marginBottom: 18, maxWidth: 190, opacity: pressed ? 0.65 : 1, paddingHorizontal: Space.md, paddingVertical: Space.sm })}><Text numberOfLines={2} style={{ color: Palette.text, fontSize: 14, fontWeight: '700' }}>{selectedMapPlace.title || 'Place'}</Text></Pressable></Marker> : null}
+        {/* The gap above the pin is the marker's offset, not an inner margin: a margin would put the pop-up's touch area over the pin and swallow the tap that opens the Place. */}
+        {selectedMapPlace ? <Marker anchor="bottom" lngLat={[selectedMapPlace.coordinates.lng, selectedMapPlace.coordinates.lat]} offset={[0, -SELECTED_MARKER_LABEL_GAP]}><Pressable accessibilityLabel={`${selectedMapPlace.title || 'Place'}, selected. Open place.`} accessibilityRole="button" onPress={(event) => { event.stopPropagation(); openMapPlace(selectedMapPlace); }} style={({ pressed }) => ({ ...Shadow.floating, backgroundColor: Palette.surface, borderColor: Palette.trip, borderRadius: Radius.control, borderWidth: 1, maxWidth: 190, opacity: pressed ? 0.65 : 1, paddingHorizontal: Space.md, paddingVertical: Space.sm })}><Text numberOfLines={2} style={{ color: Palette.text, fontSize: 14, fontWeight: '700' }}>{selectedMapPlace.title || 'Place'}</Text></Pressable></Marker> : null}
 
         {/* Fallback marker when the focused place is not in the main dataset */}
         {placeContext && !hasFocusedInDataset ? (

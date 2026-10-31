@@ -1,7 +1,7 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { Linking, Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BrandLogo } from '@/components/brand-logo';
@@ -142,64 +142,12 @@ export default function SharedTripPreviewScreen() {
             </Text>
             {shareCardData ? <TripShareCard data={shareCardData} /> : null}
 
-            <View style={{ flexDirection: 'row', gap: Space.sm }}>
-              <Pressable
-                accessibilityRole="link"
-                onPress={() => void Linking.openURL('https://tripideas.nz')}
-                style={({ pressed }) => ({
-                  alignItems: 'center',
-                  backgroundColor: Palette.primary,
-                  borderRadius: Radius.control,
-                  flex: 1,
-                  opacity: pressed ? 0.72 : 1,
-                  paddingHorizontal: Space.sm,
-                  paddingVertical: Space.md,
-                })}>
-                <Text
-                  style={{
-                    color: Palette.textOnPrimary,
-                    ...Type.label,
-                    textAlign: 'center',
-                  }}>
-                  Open on TripIdeas.nz
-                </Text>
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityState={{ disabled: true }}
-                disabled
-                style={{
-                  alignItems: 'center',
-                  backgroundColor: Palette.surfaceMuted,
-                  borderColor: Palette.border,
-                  borderRadius: Radius.control,
-                  borderWidth: 1,
-                  flex: 1,
-                  paddingHorizontal: Space.sm,
-                  paddingVertical: Space.md,
-                }}>
-                <Text
-                  style={{
-                    color: Palette.textMuted,
-                    ...Type.label,
-                    textAlign: 'center',
-                  }}>
-                  Open in app
-                </Text>
-              </Pressable>
-            </View>
             <Text
               style={{
-                color: Palette.textMuted,
-                ...Type.caption,
-                marginBottom: Space.xxxl,
-                marginTop: Space.sm,
+                ...Type.section,
+                marginBottom: Space.lg,
+                marginTop: Space.xxl,
               }}>
-              App opening will be available when shared-trip deep links are
-              ready.
-            </Text>
-
-            <Text style={{ ...Type.section, marginBottom: Space.lg }}>
               Places
             </Text>
 

@@ -35,17 +35,16 @@ const clock = () => {
   return { advance: (ms) => { now += ms; }, now: () => now };
 };
 
-// ── N05: thumbnails open on the first tap ───────────────────────────────────
+// ── Thumbnails: two-stage since C5B (first tap selects and shows the marker, a tap on the selected one opens) ──
 
-test('a thumbnail opens its editorial Place on the first tap, selecting it first', async () => {
+test('a thumbnail takes part in the two-stage rule: select and focus the marker first, open on the selected one', async () => {
   const map = await read('app/(tabs)/map.tsx');
   const peek = await read('components/map/map-peek-sheet.tsx');
-  const handler = map.match(/const handleThumbnailPress = useCallback\(\(place: MapPlace\) => \{[\s\S]*?\}, \[openMapPlace, setSelectedPlaceId\]\);/)?.[0] ?? '';
+  const handler = map.match(/const handleThumbnailPress = [\s\S]*?\n  \};/)?.[0] ?? '';
   assert.ok(handler, 'thumbnail handler found');
-  assert.match(handler, /setSelectedPlaceId\(mapPlaceId\(place\)\)/);
-  assert.match(handler, /openMapPlace\(place\)/);
-  assert.doesNotMatch(handler, /activatePlace/, 'no select-then-activate step');
-  assert.match(peek, /accessibilityHint="Opens the place\."/);
+  assert.match(handler, /tapPlace\(place, 'thumbnail'\)/);
+  assert.doesNotMatch(handler, /openMapPlace|activatePlace/);
+  assert.match(peek, /accessibilityHint=\{selected \? 'Opens the place\.' : 'Selects the place on the map\.'\}/);
   assert.doesNotMatch(peek, /Activate again/);
 });
 
@@ -88,11 +87,12 @@ test('thumbnail, marker label and Place list all use the same guarded opener', a
   assert.doesNotMatch(tile, /router\.push/);
 });
 
-// ── N05: marker selection remains a separate interaction ────────────────────
+// ── Marker selection: highlight, pop-up and the two-stage rule ──────────────
 
-test('markers open the Place on the first tap and keep the highlight and the preview', async () => {
+test('markers select on the first tap and keep the highlight and the pop-up; the selected marker opens', async () => {
   const map = await read('app/(tabs)/map.tsx');
-  assert.match(map, /setSelectedPlaceId\(id\);\s*if \(place\.slug\?\.current\) openMapPlace\(place\);\s*else revealSelectedMarker\(place\);/);
+  assert.match(map, /planPlaceTap\(selectedPlaceId, id, source\)/);
+  assert.match(map, /if \(plan\.action === 'open'\) \{\s*openMapPlace\(place\);\s*return;\s*\}\s*setSelectedPlaceId\(id\);/);
   assert.doesNotMatch(map, /activatePlace/);
   assert.match(map, /isSelected: featureId === selectedPlaceId/);
   assert.match(map, /MapPinColors\.selected/);

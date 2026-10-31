@@ -223,9 +223,9 @@ test('tray handlers change the tray only: no filters, query, selection, camera o
   }
 });
 
-test('existing behaviour is untouched: marker first-tap, place opening and filter handlers', async () => {
+test('existing behaviour is untouched: marker and thumbnail taps, place opening and filter handlers', async () => {
   const map = await read('app/(tabs)/map.tsx');
-  assert.match(map, /if \(place\.slug\?\.current\) openMapPlace\(place\);/);
+  assert.match(map, /tapPlace\(place, 'marker'\);/);
   assert.match(map, /onPlacePress=\{handleThumbnailPress\}/);
   assert.match(map, /const clearRegionSelection = /);
   assert.match(map, /const clearActivityFilters = /);

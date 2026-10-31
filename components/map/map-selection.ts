@@ -5,6 +5,23 @@ export type MapContentSelection =
   | { type: 'favourites' }
   | { label: string; tripId: string; type: 'trip' };
 
+function isSameSelection(left: MapContentSelection, right: MapContentSelection) {
+  if (left.type !== right.type) return false;
+  if (left.type === 'region' && right.type === 'region') return left.regionId === right.regionId;
+  if (left.type === 'subregion' && right.type === 'subregion') return left.subRegionId === right.subRegionId;
+  if (left.type === 'trip' && right.type === 'trip') return left.tripId === right.tripId;
+  return true;
+}
+
+/**
+ * What a tap in a filter sheet leaves selected: choosing the current scope again
+ * deselects it (back to everything); choosing another replaces it. A single scope
+ * at a time, exactly as before; whether the sheet then stays open is the caller's.
+ */
+export function resolveSelection(current: MapContentSelection, next: MapContentSelection): MapContentSelection {
+  return isSameSelection(current, next) ? { type: 'all' } : next;
+}
+
 /**
  * The selection after "Clear" in the Regions sheet. Only a geographical scope
  * (region or sub-region) is cleared; saved scopes (favourites, a trip) and 'all'

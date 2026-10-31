@@ -14,7 +14,8 @@ const [mainMap, peek, diaryMap, selection] = await Promise.all([
 ]);
 
 assert.match(selection, /selectedId === nextId \? 'open' : 'select'/);
-assert.match(mainMap, /if \(place\.slug\?\.current\) openMapPlace\(place\);/);
+assert.match(mainMap, /tapPlace\(place, 'marker'\);/);
+assert.match(mainMap, /tapPlace\(place, 'thumbnail'\)/);
 assert.doesNotMatch(mainMap, /activatePlace/);
 assert.match(mainMap, /onPress=\{clearSelectedPlace\}/);
 assert.match(mainMap, /isSelected: featureId === selectedPlaceId/);
@@ -29,17 +30,17 @@ assert.match(mainMap, /properties\?\.cluster_id !== undefined/);
 assert.match(peek, /selectedPlaceId/);
 assert.match(peek, /borderColor: selected \? Palette\.trip/);
 assert.match(peek, /placesRef\.current\?\.scrollToOffset/);
+assert.match(peek, /peekCenteredOffset\(index, Space\.md, viewportWidth, places\.length\)/);
 assert.match(peek, /onPress=\{\(\) => onPress\(place\)\}/);
 assert.match(peek, /onPress=\{onPlacePress\}/);
 assert.doesNotMatch(peek, /router\.push/);
 assert.match(mainMap, /handleThumbnailPress/);
 assert.match(mainMap, /onPlacePress=\{handleThumbnailPress\}/);
-// Thumbnails open the Place on the first tap (markers keep select-first).
-const thumbnail = mainMap.match(/const handleThumbnailPress = useCallback\(\(place: MapPlace\) => \{[\s\S]*?\}, \[openMapPlace, setSelectedPlaceId\]\);/)?.[0] ?? '';
+// Thumbnails follow the same two-stage rule as markers (select first, open on the selected one).
+const thumbnail = mainMap.match(/const handleThumbnailPress = [\s\S]*?\n  \};/)?.[0] ?? '';
 assert.ok(thumbnail);
-assert.match(thumbnail, /setSelectedPlaceId\(mapPlaceId\(place\)\)/);
-assert.match(thumbnail, /openMapPlace\(place\)/);
-assert.doesNotMatch(thumbnail, /activatePlace/);
+assert.match(thumbnail, /tapPlace\(place, 'thumbnail'\)/);
+assert.doesNotMatch(thumbnail, /openMapPlace|activatePlace/);
 assert.doesNotMatch(peek, /Activate again to open/);
 
 assert.match(diaryMap, /useMapSelection\(openFeature\)/);
@@ -49,4 +50,4 @@ assert.match(diaryMap, /selected\. Activate again to open/);
 assert.match(diaryMap, /openFeature\(selectedFeature\)/);
 for (const identity of ['diaryId: feature.diaryId', 'topicId: feature.topicId', 'itemId: feature.itemId']) assert.match(diaryMap, new RegExp(identity));
 
-console.log('✓ map markers and the Diary map keep select-first semantics; main-map thumbnails open on the first tap');
+console.log('✓ main-map markers and thumbnails, and the Diary map, all use select-first semantics');

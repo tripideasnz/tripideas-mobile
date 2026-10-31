@@ -7,7 +7,7 @@ import {
   openPlaceFromMap,
   backFromPlace,
 } from './place-navigation.ts';
-import { nextMapSelectionAction } from './use-map-selection.ts';
+import { nextMapSelectionAction, planPlaceTap } from './use-map-selection.ts';
 
 const read = (relativePath) =>
   readFile(new URL(`../../${relativePath}`, import.meta.url), 'utf8');
@@ -37,19 +37,19 @@ const markerHandler = (map) => {
   return map.slice(start, start + 600);
 };
 
-// ── Map: marker first tap ───────────────────────────────────────────────────
+// ── Map: marker taps (two-stage since C5B: first tap selects, a tap on the selected marker opens) ──
 
-test('a direct marker tap selects and opens the Place in one step, with no select-first stage', async () => {
+test('a marker tap follows the two-stage rule, and clusters are still handled first and never open a Place', async () => {
   const map = await read('app/(tabs)/map.tsx');
   const body = markerHandler(map);
-  assert.match(body, /setSelectedPlaceId\(id\);\s*if \(place\.slug\?\.current\) openMapPlace\(place\);\s*else revealSelectedMarker\(place\);/);
-  assert.doesNotMatch(map, /activatePlace|const \{ activate/);
-  // The cluster branch is unchanged: it zooms, and never opens a Place.
+  assert.match(body, /tapPlace\(place, 'marker'\);/);
+  assert.doesNotMatch(body, /openMapPlace|setSelectedPlaceId/, 'the handler itself neither selects nor opens: the shared rule does');
+  // The cluster branch is unchanged: it zooms, and never opens or selects a Place.
   const cluster = map.match(/properties\?\.cluster_id !== undefined[\s\S]*?return;/)?.[0] ?? '';
   assert.ok(cluster, 'cluster branch found');
   assert.match(cluster, /getClusterExpansionZoom/);
-  assert.doesNotMatch(cluster, /openMapPlace|setSelectedPlaceId/);
-  assert.ok(map.indexOf('properties?.cluster_id !== undefined') < map.indexOf('openMapPlace(place)'), 'clusters are handled before places');
+  assert.doesNotMatch(cluster, /openMapPlace|setSelectedPlaceId|tapPlace/);
+  assert.ok(map.indexOf('properties?.cluster_id !== undefined') < map.indexOf("tapPlace(place, 'marker')"), 'clusters are handled before places');
 });
 
 test('one tap fires exactly one Place push through the guarded opener', () => {
@@ -62,26 +62,34 @@ test('one tap fires exactly one Place push through the guarded opener', () => {
   assert.deepEqual(router.actions[0], ['push', { params: { origin: 'map', slug: 'milford' }, pathname: '/place/[slug]' }]);
 });
 
-test('selecting another Place replaces the previous selection and navigates to the new one', () => {
+test('selecting another Place replaces the previous selection and stays on the Map; only the selected Place opens', () => {
   const time = clock();
   const guard = createNavigationGuard({ now: time.now });
   const router = fakeRouter();
   let selected = null;
-  const tap = (slug) => { selected = slug; openPlaceFromMap(router, slug, guard); };
+  const tap = (id) => {
+    const plan = planPlaceTap(selected, id, 'marker');
+    selected = plan.selectedId;
+    if (plan.action === 'open') openPlaceFromMap(router, id, guard);
+  };
   tap('a');
   time.advance(50);
   tap('b');
-  assert.equal(selected, 'b');
-  assert.deepEqual(router.actions.map(([, href]) => href.params.slug), ['a', 'b']);
+  assert.equal(selected, 'b', 'b replaced a');
+  assert.deepEqual(router.actions, [], 'no navigation yet');
+  time.advance(50);
+  tap('b');
+  assert.deepEqual(router.actions.map(([, href]) => href.params.slug), ['b'], 'the second tap on b opens b');
 });
 
-test('the pop-up title and the thumbnail both open the Place through the same opener', async () => {
+test('the pop-up title opens the Place through the shared opener, and the thumbnail goes through the same two-stage rule as a marker', async () => {
   const map = await read('app/(tabs)/map.tsx');
   assert.match(map, /openMapPlace\(selectedMapPlace\)/, 'pop-up');
   assert.match(map, /const openMapPlace = useCallback\(\(place: Pick<MapPlace, 'slug'>\) => \{ openPlaceFromMap\(router, place\.slug\?\.current\); \}/, 'shared opener');
   assert.match(map, /onPlacePress=\{handleThumbnailPress\}/, 'thumbnail');
-  const thumbnail = map.match(/const handleThumbnailPress = useCallback[\s\S]*?\]\);/)?.[0] ?? '';
-  assert.match(thumbnail, /openMapPlace\(place\)/);
+  const thumbnail = map.match(/const handleThumbnailPress = [\s\S]*?\n  \};/)?.[0] ?? '';
+  assert.match(thumbnail, /tapPlace\(place, 'thumbnail'\)/);
+  assert.doesNotMatch(thumbnail, /openMapPlace/, 'a thumbnail opens only through the two-stage rule');
 });
 
 // ── Map: selection dismissal and returning ──────────────────────────────────

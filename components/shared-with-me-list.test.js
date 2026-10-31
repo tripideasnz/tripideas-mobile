@@ -52,16 +52,41 @@ test('a saved copy stays readable offline and is labelled as saved', () => {
   assert.doesNotMatch(textOf(current), /saved|offline/i);
 });
 
+const tabs = (tree) => findAll(tree, (node) => node.type === 'Pressable' && node.props.accessibilityRole === 'tab');
+
 test('the view switch separates My Trips from Shared With Me and reports the choice', () => {
   const changes = [];
   const tree = render(createElement(TripsViewSwitch, { onChange: (v) => changes.push(v), value: 'mine' }));
-  const [mine, shared] = buttons(tree);
+  const [mine, shared] = tabs(tree);
   assert.deepEqual([mine.props.accessibilityLabel, shared.props.accessibilityLabel], ['My Trips', 'Shared With Me']);
   assert.deepEqual([mine.props.accessibilityState.selected, shared.props.accessibilityState.selected], [true, false]);
   press(shared);
   assert.deepEqual(changes, ['shared']);
   const other = render(createElement(TripsViewSwitch, { onChange() {}, value: 'shared' }));
-  assert.deepEqual(buttons(other).map((b) => b.props.accessibilityState.selected), [false, true]);
+  assert.deepEqual(tabs(other).map((b) => b.props.accessibilityState.selected), [false, true]);
+});
+
+test('the view switch is one compact segmented control: equal segments, clear selected state, no chrome', () => {
+  const tree = render(createElement(TripsViewSwitch, { onChange() {}, value: 'mine' }));
+  assert.equal(buttons(tree).length, 0, 'segments are tabs, not separate oversized buttons');
+  const track = find(tree, (node) => node.props.accessibilityRole === 'tablist');
+  assert.equal(track.props.accessibilityLabel, 'Trips view');
+  const [mine, shared] = tabs(tree);
+  const a = mine.props.style({ pressed: false });
+  const b = shared.props.style({ pressed: false });
+  assert.equal(a.flex, 1);
+  assert.equal(b.flex, 1);
+  assert.equal(a.height, b.height, 'equal height');
+  assert.ok(a.height <= 36, 'compact');
+  assert.notEqual(a.backgroundColor, b.backgroundColor, 'selected differs from unselected');
+  assert.equal(b.backgroundColor, 'transparent');
+  for (const style of [a, b]) {
+    assert.equal(style.borderWidth, undefined, 'no borders');
+    assert.equal(style.shadowOpacity, undefined, 'no shadows');
+    assert.equal(style.elevation, undefined, 'no shadows');
+  }
+  assert.ok(a.height + mine.props.hitSlop.top + mine.props.hitSlop.bottom >= 44, 'touch target is at least 44 points');
+  assert.equal(textOf(tree), 'My TripsShared With Me');
 });
 
 let failed = 0;

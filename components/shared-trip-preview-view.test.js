@@ -113,6 +113,40 @@ test('the preview is read-only: shared notes are shown, never edited, and no str
   assert.deepEqual(buttons(tree).map((b) => textOf(b)).sort(), ['Join Trip', 'Save a Copy']);
 });
 
+test('the mobile preview offers only Join Trip and Save a Copy, never a web action, signed in or signed out', () => {
+  const signedOut = view({ account: null, signInHint: 'Sign in to join or save this Trip.' });
+  const signedIn = view({ account: 'ana@example.com' });
+  for (const { tree } of [signedOut, signedIn]) {
+    assert.deepEqual(buttons(tree).map((b) => textOf(b)), ['Join Trip', 'Save a Copy']);
+    assert.equal(findAll(tree, (n) => n.props?.accessibilityRole === 'link').length, 0);
+    assert.doesNotMatch(textOf(tree), /Open on TripIdeas|tripideas\.nz|Open in app/i);
+  }
+  // Both actions still act, so removing the web action did not change what the two real ones do.
+  const { calls, tree } = view();
+  press(buttonByText(tree, 'Join Trip'));
+  press(buttonByText(tree, 'Save a Copy'));
+  assert.deepEqual([calls.join, calls.copy], [1, 1]);
+});
+
+test('no mobile Shared Trip screen carries a web action; Universal Link routing is untouched', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
+  const [preview, owner, linkScreen, collection] = await Promise.all([
+    read('components/shared-trip-preview-view.tsx'),
+    read('app/trips/[tripId]/shared.tsx'),
+    read('app/shared-trips/[collectionId].tsx'),
+    read('app/collections/[collectionId].tsx'),
+  ]);
+  for (const [name, source] of Object.entries({ collection, linkScreen, owner, preview })) {
+    assert.doesNotMatch(source, /Open on TripIdeas/, `${name} has no web action`);
+    assert.doesNotMatch(source, /Linking\.openURL/, `${name} opens no web page`);
+    assert.doesNotMatch(source, /https:\/\/tripideas\.nz/, `${name} links nowhere on the web`);
+  }
+  assert.doesNotMatch(owner, /App opening will be available/, 'the stale deep-link placeholder is gone with the web action');
+  assert.match(owner, /Read-only trip/); // the owner's Preview itself is still there
+  assert.match(owner, /<TripShareCard data=\{shareCardData\}/);
+});
+
 let failed = 0;
 for (const { name, run } of tests) {
   try {

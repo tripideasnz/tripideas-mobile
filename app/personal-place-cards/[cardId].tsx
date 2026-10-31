@@ -572,6 +572,71 @@ export default function PersonalPlaceCardScreen() {
         onLayout={(event) => { photosYRef.current = event.nativeEvent.layout.y; }}
         style={{ gap: Space.md }}>
         <AppText variant="section">Photos</AppText>
+        {/* Both photo actions share one row: equal width and height, one style. */}
+        <View style={{ flexDirection: 'row', gap: Space.sm }}>
+          <AppButton
+            disabled={busy}
+            label={mainMedia ? 'Change main photo' : 'Add main photo'}
+            size="compact"
+            style={{ flex: 1 }}
+            variant="secondary"
+            onPress={mainMedia ? replaceMainPhoto : () => void act(async () => {
+              const selected = await pickPhotoForUpload();
+              if (!selected || !session?.userId) return;
+              revealEditorObject(photosYRef.current);
+              setPendingMainPreview(selected.uri);
+              try {
+                await addPersonalPlaceCardPhoto(
+                  session.userId,
+                  card.id,
+                  'main',
+                  selected,
+                  mutate.attachPhoto,
+                  load
+                );
+              } finally {
+                setPendingMainPreview(null);
+              }
+            })}
+          />
+          <AppButton
+            disabled={busy || remainingBodySlots === 0}
+            label="Add body photos"
+            size="compact"
+            style={{ flex: 1 }}
+            variant="secondary"
+            onPress={() => void act(async () => {
+              if (!session?.userId) return;
+              const selected = await pickPhotosForUpload(remainingBodySlots);
+              if (selected.length) revealEditorObject(photosYRef.current);
+              const selectedSlots = selected.map((photo, index) => ({
+                key: `selection:${Date.now()}:${index}`,
+                uri: photo.uri,
+                state: 'uploading' as const,
+              }));
+              setPendingBodyPreviews((current) => [...current, ...selectedSlots]);
+              for (const [index, photo] of selected.entries()) {
+                const slot = selectedSlots[index];
+                try {
+                  const uploaded = await addPersonalPlaceCardPhoto(
+                    session.userId,
+                    card.id,
+                    'body',
+                    photo,
+                    mutate.attachPhoto,
+                    load
+                  );
+                  if (!uploaded) throw new Error('Photo upload remains incomplete.');
+                  setPendingBodyPreviews((current) => current.filter(
+                    ({ key }) => key !== slot.key
+                  ));
+                } catch {
+                  await refreshPendingBodyPreviews();
+                }
+              }
+            })}
+          />
+        </View>
         {mainMedia ? (
         pendingMainPreview || mainPhoto?.status === 'ready' ? (
           <PhotoEditorTile
@@ -604,70 +669,9 @@ export default function PersonalPlaceCardScreen() {
           />
           <StatusText>Uploading main photo…</StatusText>
         </View>
-      ) : (
-        <AppButton
-          disabled={busy}
-          label="Add main photo"
-          onPress={() => void act(async () => {
-            const selected = await pickPhotoForUpload();
-            if (!selected || !session?.userId) return;
-            revealEditorObject(photosYRef.current);
-            setPendingMainPreview(selected.uri);
-            try {
-              await addPersonalPlaceCardPhoto(
-                session.userId,
-                card.id,
-                'main',
-                selected,
-                mutate.attachPhoto,
-                load
-              );
-            } finally {
-              setPendingMainPreview(null);
-            }
-          })}
-        />
-        )}
+      ) : null}
       </View>
 
-      <View style={{ alignItems: 'flex-start' }}>
-        <AppButton
-          disabled={busy || remainingBodySlots === 0}
-          label="Add body photos"
-          size="compact"
-          variant="secondary"
-          onPress={() => void act(async () => {
-            if (!session?.userId) return;
-            const selected = await pickPhotosForUpload(remainingBodySlots);
-            if (selected.length) revealEditorObject(photosYRef.current);
-            const selectedSlots = selected.map((photo, index) => ({
-              key: `selection:${Date.now()}:${index}`,
-              uri: photo.uri,
-              state: 'uploading' as const,
-            }));
-            setPendingBodyPreviews((current) => [...current, ...selectedSlots]);
-            for (const [index, photo] of selected.entries()) {
-              const slot = selectedSlots[index];
-              try {
-                const uploaded = await addPersonalPlaceCardPhoto(
-                  session.userId,
-                  card.id,
-                  'body',
-                  photo,
-                  mutate.attachPhoto,
-                  load
-                );
-                if (!uploaded) throw new Error('Photo upload remains incomplete.');
-                setPendingBodyPreviews((current) => current.filter(
-                  ({ key }) => key !== slot.key
-                ));
-              } catch {
-                await refreshPendingBodyPreviews();
-              }
-            }
-          })}
-        />
-      </View>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm }}>
         {bodyMedia.map((media, index) => (
           <View

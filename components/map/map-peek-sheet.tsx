@@ -26,6 +26,7 @@ import {
 import {
   indexOfSelectedPlace,
   PEEK_ITEM_WIDTH,
+  peekCenteredOffset,
   peekItemLayout,
   peekScrollOffset,
 } from '@/components/map/peek-list';
@@ -59,9 +60,9 @@ const PeekPlaceItem = memo(function PeekPlaceItem({
 }) {
   return (
     <Pressable
-      accessibilityHint="Opens the place."
+      accessibilityHint={selected ? 'Opens the place.' : 'Selects the place on the map.'}
       accessibilityLabel={`${place.title || 'Place'}${selected ? ', selected' : ''}`}
-      disabled={!place.slug?.current}
+      accessibilityState={{ selected }}
       onPress={() => onPress(place)}
       style={({ pressed }) => ({
         borderColor: selected ? Palette.trip : 'transparent',
@@ -144,9 +145,17 @@ export function MapPeekSheet({
   selectedPlaceId,
 }: MapPeekSheetProps) {
   const placesRef = useRef<FlatList<MapPlace>>(null);
+  const listWidthRef = useRef(0);
+  // The selected thumbnail is centred in the tray whenever the selection or the list changes
+  // (left-aligned only in the instant before the list has been measured).
   useEffect(() => {
     const index = indexOfSelectedPlace(places, selectedPlaceId);
-    if (index >= 0) placesRef.current?.scrollToOffset({ animated: true, offset: peekScrollOffset(index, Space.md) });
+    if (index < 0) return;
+    const viewportWidth = listWidthRef.current;
+    const offset = viewportWidth > 0
+      ? peekCenteredOffset(index, Space.md, viewportWidth, places.length)
+      : peekScrollOffset(index, Space.md);
+    placesRef.current?.scrollToOffset({ animated: true, offset });
   }, [places, selectedPlaceId]);
 
   const renderPlace = useCallback(
@@ -352,6 +361,7 @@ export function MapPeekSheet({
                 keyboardShouldPersistTaps="handled"
                 keyExtractor={placeKey}
                 maxToRenderPerBatch={6}
+                onLayout={(event) => { listWidthRef.current = event.nativeEvent.layout.width; }}
                 renderItem={renderPlace}
                 showsHorizontalScrollIndicator={false}
                 style={{ flexGrow: 0 }}
