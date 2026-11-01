@@ -1,5 +1,6 @@
-// Dynamic Type: constrained controls cap their own label growth and rows stack at larger text sizes, while body
-// text is never capped anywhere (no global limit, no allowFontScaling={false}).
+// Dynamic Type: constrained controls cap their own label growth and paired buttons stay side by side at every
+// text size (they fit their labels instead of stacking), while body text is never capped anywhere (no global
+// limit, no allowFontScaling={false}).
 import assert from 'node:assert/strict';
 import { readFile, readdir } from 'node:fs/promises';
 import { join, relative } from 'node:path';
@@ -7,8 +8,7 @@ import { join, relative } from 'node:path';
 import { createElement, find, findAll, render } from './render-harness.js';
 const { AppButton } = await import('./ui/app-button.tsx');
 const { AppChip } = await import('./ui/app-chip.tsx');
-const { CONTROL_MAX_FONT_SCALE, STACK_ROWS_AT_FONT_SCALE } = await import('../constants/design.ts');
-const { shouldStackRows } = await import('../lib/text-scale.ts');
+const { CONTROL_MAX_FONT_SCALE } = await import('../constants/design.ts');
 
 const root = new URL('..', import.meta.url).pathname;
 const tests = [];
@@ -25,15 +25,20 @@ async function sources(dir, found = []) {
   return found;
 }
 
-test('the control limit is 1.4× and rows stack from a 1.2× system text scale', () => {
+test('the control limit is 1.4×', () => {
   assert.equal(CONTROL_MAX_FONT_SCALE, 1.4);
-  assert.equal(STACK_ROWS_AT_FONT_SCALE, 1.2);
 });
 
-test('rows stay side by side at the default and Larger Text steps up to xLarge, and stack from xxLarge', () => {
-  // iOS Dynamic Type multipliers: large 1, xLarge 1.118, xxLarge 1.235, xxxLarge 1.353, AX1 1.786, AX5 3.571.
-  assert.deepEqual([1, 1.118].map(shouldStackRows), [false, false]);
-  assert.deepEqual([1.235, 1.353, 1.786, 2.143, 3.571].map(shouldStackRows), [true, true, true, true, true]);
+test('paired buttons never stack at larger text: the stacking helpers of the rejected approach do not exist', async () => {
+  const offenders = [];
+  for (const file of await sources('.')) {
+    if (file.endsWith('.test.js')) continue;
+    if (/shouldStackRows|useStackedRows|STACK_ROWS_AT_FONT_SCALE/.test(await read(file))) offenders.push(file);
+  }
+  assert.deepEqual(offenders, []);
+  for (const removed of ['lib/text-scale.ts', 'hooks/use-stacked-rows.ts']) {
+    await assert.rejects(read(removed), { code: 'ENOENT' }, `${removed} stays deleted`);
+  }
 });
 
 test('AppButton: every label is capped; fitLabel makes it a single line that shrinks to 80% instead of breaking', () => {

@@ -94,6 +94,3 @@ export const Screen = {
  * custom screen header title). Body text is never capped: it follows the system text size in full.
  */
 export const CONTROL_MAX_FONT_SCALE = 1.4;
-
-/** The text scale from which `shouldStackRows` is true. Not used by the editor: its button rows stay side by side at every size. */
-export const STACK_ROWS_AT_FONT_SCALE = 1.2;
