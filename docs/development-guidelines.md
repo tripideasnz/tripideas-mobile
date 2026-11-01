@@ -4,6 +4,13 @@ This is the authoritative guide for how work is done in this repository, by peop
 
 Related: [architecture](architecture.md) · [UI/UX style guide](mobile-ui-ux-style-guide.md) · [release configuration and process](release-configuration.md) · shared API contract: `../tripideas-architecture/architecture/shared-database-schema-discipline.md`.
 
+**Instruction precedence.** When instructions conflict, follow them in this order and report the conflict:
+
+1. the owner's explicit instruction for the current task;
+2. approved repository and architecture policies (the UI/UX canon, the shared database and API contract in `../tripideas-architecture/`, and `AGENTS.md`);
+3. the current development guidelines (`docs/development-guidelines.md`);
+4. historical documentation (release issue register, September beta report, audits, dated release notes), which is context only and never overrides the above.
+
 ## 1. Repository and worktree boundaries
 
 - Work only in the mobile repository (`tripideas-mobile` and its worktrees). API, web, CMS and planner repositories are separate; do not edit them from a mobile task. Reading them to confirm a fact is fine; say so in the report.
@@ -17,7 +24,9 @@ Related: [architecture](architecture.md) · [UI/UX style guide](mobile-ui-ux-sty
 - Release work happens on a named release branch (current: `release/shared-trips-mobile-rc2`). Start from a clean working tree and a known HEAD; record the SHA in your report.
 - Make small, focused commits with a conventional subject (`fix(mobile): …`, `docs: …`). One concern per commit; do not mix a feature, a layout change and a refactor. Say what changed and what was deliberately left alone.
 - AI-assisted commits end with the attribution line the tooling specifies (`Co-Authored-By: …`).
-- Commit locally when the work is validated. **Pushing, merging, opening or merging PRs and force operations need explicit authorisation for the specific branch and destination.** (The shared contract recommends pushing validated work promptly; during the Shared Trips release the owner restricted pushes, and that instruction overrides the default. If unsure, ask.)
+- Commit locally when the work is validated.
+- **Git pushes.** The architecture policy is to push validated work on an authorised working branch promptly, and to treat deployment as a separate permission. That default applies only to branches the owner has authorised for pushing. While the owner has restricted pushes (as for the Shared Trips release branches), do not push, merge or open pull requests until explicitly told, and name the branch and destination when asking. A push never implies permission to build, submit or deploy.
+- Merges, pull requests and force operations always need explicit authorisation for the specific branch and destination.
 - Never rewrite or discard a commit that has been built or submitted: the build record names its SHA.
 
 ## 3. Shared component reuse
@@ -66,7 +75,7 @@ The following always need explicit, specific approval, and approval for one does
 
 | Action | Notes |
 |---|---|
-| `git push`, merge, PR, force operations | Name branch and destination |
+| `git push` (see section 2), merge, PR, force operations | Name branch and destination; a push is allowed only where the owner has authorised the branch |
 | EAS builds (cloud) and local iOS builds | Name profile and commit; cloud builds only, no local iOS builds |
 | `eas submit` / TestFlight | Separate from the build approval |
 | EAS Update (OTA) | Reaches every build on a channel; not used for this release |

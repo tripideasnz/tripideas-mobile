@@ -150,7 +150,7 @@ The integration API must never be reconnected to production or legacy-staging da
 
 Nothing here has been done for production.
 
-- [ ] Owner confirms physical-device acceptance of the current TestFlight build (sign-in and relaunch, Universal Link tap, Join/Leave, notes, Map, Personal Place photos with the real picker, Saved/Trips persistence).
+- [ ] Owner confirms physical-device acceptance of the current TestFlight build (sign-in and relaunch, Universal Link tap, Join/Leave, notes, Map, Personal Place photos with the real picker, Saved/Trips persistence). The owner has reported build 28 satisfactory for release preparation (2026-11-02); these specific checks are not individually recorded.
 - [ ] Re-verify live production: API `/version` and routes in section 3, web snapshot and association routes, WorkOS configuration.
 - [ ] Production environment configured (section 9 items 4 to 6): WorkOS SDK ≥ 7.74.1, `RESEND_API_KEY` and a verified sender (add DMARC), share token key, hosts, photo storage, `APPLE_TEAM_ID`, admin routes off, no Sanity write token.
 - [ ] Migration ledger compared; additive migration applied with `prisma migrate deploy`; production backup and restore position recorded.

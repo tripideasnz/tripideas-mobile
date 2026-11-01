@@ -547,7 +547,7 @@ Verified at `d7bef7d` against the code and on device and Simulator. The goal is 
 - **Body text follows the system text size without a cap.**
 - **Controls are capped at 1.4×** (`CONTROL_MAX_FONT_SCALE`): button, chip and segmented-control labels, the filter-sheet header and the Saved header title. This keeps them inside their slots; it is not a general typography cap. Do not add a global cap or change type tokens to solve a control problem.
 - Approach in order: let the control grow in height (minimum height, never fixed height) → `fitLabel` for paired labels → shorten the label. **Do not stack paired buttons at large sizes**: that was tried (TestFlight build 26) and rejected; approved side-by-side layouts are preserved at every size.
-- `lib/text-scale.ts`, `hooks/use-stacked-rows.ts` and `STACK_ROWS_AT_FONT_SCALE` are leftovers of the rejected approach: do not use them.
+- The stacking helpers of the rejected approach (`shouldStackRows`, `useStackedRows`, `STACK_ROWS_AT_FONT_SCALE`) have been removed. `components/text-scaling.test.js` fails if one is reintroduced.
 - Known residual: at the largest accessibility size a long single word in body text can wrap inside a narrow card or row.
 - When touching text or controls, check normal, one enlarged and one accessibility size on a narrow and a wide device (see [development guidelines](development-guidelines.md) section 6).
 
@@ -568,7 +568,7 @@ These were reviewed by the product owner on device; treat them as frozen. A task
 - **Regions** and **Activities** filter sheets (section 11 convention) and the Map's two-stage pin and thumbnail selection.
 - **My Trips / Shared With Me** segmented control.
 - **Trip card** delete control (section 12).
-- `Favourites` / `Search TripIdeas` in Add places to Trip, and `Save` / `Cancel` for the Trip name: `ButtonRow` of `fitLabel` buttons (added in build 28; pending device confirmation at the time of writing).
+- `Favourites` / `Search TripIdeas` in Add places to Trip, and `Save` / `Cancel` for the Trip name: `ButtonRow` of `fitLabel` buttons (added in build 28; the owner reported that build satisfactory on 2026-11-02).
 
 ## Recorded implementation inconsistencies
 

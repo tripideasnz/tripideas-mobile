@@ -31,7 +31,7 @@ Cause: `EXPO_PUBLIC_TRIP_SHARE_API_URL` is defined twice, in `eas.json` (staging
 |---|---|---|---|---|
 | `development` | internal dev client / `development` | none set (EAS default undocumented) | `APP_VARIANT`, API, share | n/a (`development` environment is empty) |
 | `preview` | internal / `preview` | none set | `APP_VARIANT`, API, share | n/a |
-| `testflight-staging` | store / `preview` | `preview` | `APP_VARIANT`, API, share | map style, **share (production value: conflict)** |
+| `testflight-staging` | store / `preview` | `preview` | `APP_VARIANT`, API, share | map style, **share (production value: conflict, removed by section 4)** |
 | `production` | store / `production` | `production` | nothing | API (`api.tripideas.nz`), map style, share (`www`) |
 
 Local development (`expo start`) reads `.env.local` (untracked; `.env.example` has placeholders).
@@ -138,7 +138,7 @@ Never use EAS Update for this release: builds check for updates on launch and an
 | 25 | `7ea8ba9` | Superseded: Dynamic Type defect |
 | 26 | `ff9f425` | Superseded: stacked Personal Place buttons rejected |
 | 27 | `e145439` | Approved Personal Place layouts restored; accepted on device |
-| 28 | `d7bef7d` | Photo flicker corrections and standardised button pairs; submitted, EAS submission `FINISHED`, awaiting device acceptance |
+| 28 | `d7bef7d` | Photo flicker corrections and standardised button pairs; submitted, EAS submission `FINISHED`; the owner reported it satisfactory for release preparation (2026-11-02). Production and the full device checklist (sign-in, Universal Links) are still unverified |
 
 ## 9. MapTiler verification
 

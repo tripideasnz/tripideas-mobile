@@ -139,6 +139,5 @@ History worth knowing: photo flicker was first fixed in `4acff79` (stable keys, 
 - Silent production defaults in `lib/api-client.ts`, `trips/shared-trip.ts`, `trips/public-sharing.ts`, `constants/map.ts` (section 4).
 - No in-app account deletion or Terms of Use ([release issue register](release-issue-register.md), P0-10, historical but still relevant).
 - Older public snapshot sharing includes Trip and Place notes (register P0-04/P0-14a, owner decision needed); live sharing is the supported path.
-- Unused leftovers from the abandoned stacked-button approach: `lib/text-scale.ts`, `hooks/use-stacked-rows.ts` and `STACK_ROWS_AT_FONT_SCALE` in `constants/design.ts` (still referenced only by tests). Remove with explicit approval.
 - The map's name pop-up is not exposed to VoiceOver (iOS MapLibre limitation); the selected thumbnail offers the same action.
 - Acceptance so far is Simulator plus TestFlight on one phone: see the handover for what still needs physical-device and production verification.
