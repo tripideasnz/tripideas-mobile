@@ -19,7 +19,9 @@ import { TripPlacePicker } from '@/components/trip-place-picker';
 import { AutosaveNote } from '@/components/ui/autosave-note';
 import { IconAction } from '@/components/ui/icon-action';
 import { clearHeaderRightAction, headerShareAction } from '@/components/ui/header-actions';
+import { AppButton } from '@/components/ui/app-button';
 import { AppText } from '@/components/ui/app-text';
+import { ButtonRow } from '@/components/ui/button-row';
 import { LoadingView } from '@/components/ui/loading-view';
 import { TripImageCollage } from '@/components/trip-image-collage';
 import { AutoExpandingTextInput } from '@/components/ui/app-text-input';
@@ -380,50 +382,11 @@ export default function TripDetailScreen() {
                 }}
                 value={name}
               />
-              <View
-                style={{
-                  flexDirection: 'row',
-                  gap: Space.sm,
-                  marginTop: Space.sm,
-                }}>
-                <Pressable
-                  accessibilityRole="button"
-                  disabled={!isNameDirty}
-                  onPress={() => void saveName()}
-                  style={({ pressed }) => ({
-                    alignItems: 'center',
-                    backgroundColor: isNameDirty
-                      ? Palette.primary
-                      : Palette.border,
-                    borderRadius: Radius.control,
-                    flex: 1,
-                    opacity: pressed ? 0.7 : 1,
-                    paddingVertical: Space.md,
-                  })}>
-                  <Text
-                    style={{
-                      color: isNameDirty
-                        ? Palette.textOnPrimary
-                        : Palette.textMuted,
-                      ...Type.label,
-                    }}>
-                    Save
-                  </Text>
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={cancelNameEdit}
-                  style={({ pressed }) => ({
-                    alignItems: 'center',
-                    borderColor: Palette.border,
-                    borderRadius: Radius.control,
-                    borderWidth: 1,
-                    flex: 1,
-                    opacity: pressed ? 0.55 : 1,
-                    paddingVertical: Space.md,
-                  })}>
-                  <Text style={Type.label}>Cancel</Text>
-                </Pressable>
+              <View style={{ marginTop: Space.sm }}>
+                <ButtonRow>
+                  <AppButton disabled={!isNameDirty} label="Save" onPress={() => void saveName()} />
+                  <AppButton label="Cancel" onPress={cancelNameEdit} variant="secondary" />
+                </ButtonRow>
               </View>
             </View>
           ) : (

@@ -7,6 +7,7 @@ import { PlaceCard } from '@/components/place-card';
 import { PlaceSearch } from '@/components/place-search';
 import { AppButton } from '@/components/ui/app-button';
 import { AppText } from '@/components/ui/app-text';
+import { ButtonRow } from '@/components/ui/button-row';
 import { IconAction } from '@/components/ui/icon-action';
 import { Palette, Screen, Space } from '@/constants/design';
 import { useSavedPlaces } from '@/saved/provider';
@@ -86,10 +87,10 @@ export function TripPlacePicker({ tripId, onClose }: { tripId: string; onClose: 
           <AppText style={{ flex: 1 }} variant="section">Add places to Trip</AppText>
           <IconAction accessibilityLabel="Close Add places" icon="close" disabled={adding} onPress={close} />
         </View>
-        <View style={{ flexDirection: 'row', alignItems: 'stretch', gap: Space.sm }}>
-          <AppButton style={{ flex: 1 }} label="Favourites" disabled={adding} variant={source === 'favourites' ? 'primary' : 'secondary'} onPress={() => setSource('favourites')} />
-          <AppButton style={{ flex: 1 }} label="Search TripIdeas" disabled={adding} variant={source === 'search' ? 'primary' : 'secondary'} onPress={() => setSource('search')} />
-        </View>
+        <ButtonRow>
+          <AppButton fitLabel label="Favourites" disabled={adding} variant={source === 'favourites' ? 'primary' : 'secondary'} onPress={() => setSource('favourites')} />
+          <AppButton fitLabel label="Search TripIdeas" disabled={adding} variant={source === 'search' ? 'primary' : 'secondary'} onPress={() => setSource('search')} />
+        </ButtonRow>
         <AppText color={message ? Palette.danger : Palette.textMuted} accessibilityLiveRegion="polite">
           {message || 'Use the Trip icon to add places. Tap a card to explore it.'}
         </AppText>
