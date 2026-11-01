@@ -38,6 +38,8 @@ type Context = {
   invalidatePhotoAuthorization: (photoAssetId: string) => void;
   /** Remembers photos whose automatic recovery was exhausted (per user, in memory). */
   photoFailures: PhotoFailureTracker;
+  /** The signed URL already authorised for this photo and still fresh, else null. Never fetches. */
+  peekPhotoAuthorization: (photoAssetId: string) => string | null;
   mutate: {
     attachPhoto: (
       id: string,
@@ -103,6 +105,11 @@ export function PersonalPlaceCardProvider({ children }: PropsWithChildren) {
 
   const invalidatePhotoAuthorization = useCallback((photoAssetId: string) => {
     photoAuthorizerRef.current.invalidate(photoAssetId);
+  }, []);
+
+  const peekPhotoAuthorization = useCallback((photoAssetId: string) => {
+    if (!activeUser.current) return null;
+    return photoAuthorizerRef.current.peek(photoAssetId);
   }, []);
 
   const authorizePhoto = useCallback(async (photoAssetId: string) => {
@@ -217,7 +224,7 @@ export function PersonalPlaceCardProvider({ children }: PropsWithChildren) {
     authorizePhoto, cards, create, deleteCard,
     get: (id) => cards.find((card) => card.id === id),
     invalidatePhotoAuthorization, isLoading, load, mutate,
-    photoFailures: photoFailuresRef.current, refresh,
+    peekPhotoAuthorization, photoFailures: photoFailuresRef.current, refresh,
   }), [
     authorizePhoto,
     cards,
@@ -227,6 +234,7 @@ export function PersonalPlaceCardProvider({ children }: PropsWithChildren) {
     isLoading,
     load,
     mutate,
+    peekPhotoAuthorization,
     refresh,
   ]);
   return (

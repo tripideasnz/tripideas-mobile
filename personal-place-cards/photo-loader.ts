@@ -59,6 +59,8 @@ export type PersonalPhotoLoaderOptions = {
   invalidate: (photoAssetId: string) => void;
   maxAutoRetries?: number;
   onChange: () => void;
+  /** A still-fresh signed URL that needs no request, or null. Lets a remount start ready. */
+  peek?: (photoAssetId: string) => string | null;
   /** Returns a function that cancels the scheduled callback. */
   schedule?: (callback: () => void, delayMs: number) => () => void;
   userId: string;
@@ -76,6 +78,7 @@ export function createPersonalPhotoLoader({
   invalidate,
   maxAutoRetries = PERSONAL_PHOTO_MAX_AUTO_RETRIES,
   onChange,
+  peek,
   schedule = defaultSchedule,
   userId,
 }: PersonalPhotoLoaderOptions) {
@@ -185,7 +188,13 @@ export function createPersonalPhotoLoader({
           // Recently exhausted: show the retry state without any request.
           publish(id, { attempts: maxAutoRetries, cacheKey: cacheKeyFor(id), status: 'failed', url: null });
         } else {
-          load(id, 0);
+          const cachedUrl = peek?.(id) ?? null;
+          if (cachedUrl) {
+            // Already authorised and fresh: start ready, with no loading state in between.
+            publish(id, { attempts: 0, cacheKey: cacheKeyFor(id), status: 'ready', url: cachedUrl });
+          } else {
+            load(id, 0);
+          }
         }
       }
     },

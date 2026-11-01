@@ -378,6 +378,165 @@ test('the Personal Places list is virtualised and each card authorises at most f
   assert.match(card, /\.slice\(0, 4\)/);
 });
 
+// ── Revisits: a photo that is already authorised starts ready ────────────────
+
+const cachedPair = () => {
+  let now = Date.parse('2026-10-25T00:00:00Z');
+  let fetches = 0;
+  const authorizer = createPhotoAuthorizer({
+    fetchAuthorization: async (id) => {
+      fetches += 1;
+      return { expiresAt: new Date(now + 300_000).toISOString(), url: `https://signed.example/${id}/${fetches}` };
+    },
+    now: () => now,
+  });
+  const loaderFor = (userId, changes = []) => createPersonalPhotoLoader({
+    authorize: authorizer.authorize,
+    failures: createPhotoFailureTracker(),
+    invalidate: authorizer.invalidate,
+    onChange: () => changes.push('change'),
+    peek: authorizer.peek,
+    schedule: manualScheduler().schedule,
+    userId,
+  });
+  return { advance: (ms) => { now += ms; }, authorizer, fetches: () => fetches, loaderFor };
+};
+
+test('peek returns a fresh URL without fetching, and nothing once it is expired, invalidated or cleared', async () => {
+  const { advance, authorizer, fetches } = cachedPair();
+  assert.equal(authorizer.peek('a'), null, 'nothing authorised yet');
+  assert.equal(fetches(), 0, 'peek never fetches');
+  const url = await authorizer.authorize('a');
+  assert.equal(authorizer.peek('a'), url);
+  advance(280_000); // inside the 30 s safety margin, the same rule authorize() applies
+  assert.equal(authorizer.peek('a'), null, 'an expiring URL is not offered');
+  const renewed = await authorizer.authorize('a');
+  assert.equal(authorizer.peek('a'), renewed);
+  authorizer.invalidate('a');
+  assert.equal(authorizer.peek('a'), null, 'invalidation is honoured');
+  await authorizer.authorize('a');
+  authorizer.clear();
+  assert.equal(authorizer.peek('a'), null, 'sign-out or account switch drops every URL');
+  assert.equal(fetches(), 3, 'only authorize() ever fetched');
+});
+
+test('a remount within the authorisation lifetime is ready at once: no loading state, no request', async () => {
+  const { authorizer, fetches, loaderFor } = cachedPair();
+  const first = loaderFor('user-a');
+  first.setAssets(['photo-1']);
+  assert.equal(first.get('photo-1').status, 'loading');
+  await flush();
+  const ready = first.get('photo-1');
+  assert.equal(ready.status, 'ready');
+  first.dispose();
+
+  const states = [];
+  const second = loaderFor('user-a', states);
+  second.setAssets(['photo-1']);
+  const now = second.get('photo-1');
+  assert.deepEqual([now.status, now.url, now.cacheKey], ['ready', ready.url, ready.cacheKey]);
+  assert.equal(states.length, 1, 'ready is published once; no loading state first');
+  await flush();
+  assert.equal(second.get('photo-1').status, 'ready');
+  assert.equal(fetches(), 1, 'no further authorisation request');
+  assert.equal(authorizer.peek('photo-1'), ready.url);
+});
+
+test('an expired authorisation still goes loading, then one refresh, then ready with the same cache key', async () => {
+  const { advance, fetches, loaderFor } = cachedPair();
+  const first = loaderFor('user-a');
+  first.setAssets(['photo-1']);
+  await flush();
+  const before = first.get('photo-1');
+  first.dispose();
+  advance(280_000);
+
+  const second = loaderFor('user-a');
+  second.setAssets(['photo-1']);
+  assert.equal(second.get('photo-1').status, 'loading');
+  await flush();
+  const after = second.get('photo-1');
+  assert.equal(after.status, 'ready');
+  assert.notEqual(after.url, before.url);
+  assert.equal(after.cacheKey, before.cacheKey);
+  assert.equal(fetches(), 2);
+});
+
+test('new and replaced photos (new asset ids) still load; a cached one beside them starts ready', async () => {
+  const { fetches, loaderFor } = cachedPair();
+  const first = loaderFor('user-a');
+  first.setAssets(['old']);
+  await flush();
+  first.dispose();
+
+  const next = loaderFor('user-a');
+  next.setAssets(['old', 'replacement']);
+  assert.equal(next.get('old').status, 'ready');
+  assert.equal(next.get('replacement').status, 'loading');
+  await flush();
+  assert.equal(next.get('replacement').status, 'ready');
+  assert.equal(fetches(), 2, 'only the new asset was requested');
+});
+
+test('retry, image error and exhausted-photo memory are unaffected by a cached URL', async () => {
+  const { authorizer, loaderFor } = cachedPair();
+  const loader = loaderFor('user-a');
+  loader.setAssets(['photo-1']);
+  await flush();
+  const ready = loader.get('photo-1');
+  loader.reportError('photo-1', ready.url);
+  assert.equal(loader.get('photo-1').status, 'loading', 'an image error still enters recovery');
+  assert.equal(loader.get('photo-1').url, null);
+  loader.retry('photo-1');
+  assert.equal(loader.get('photo-1').status, 'loading', 'explicit retry invalidates first, so it reloads');
+  await flush();
+  assert.equal(loader.get('photo-1').status, 'ready');
+  assert.notEqual(loader.get('photo-1').url, ready.url);
+  assert.equal(authorizer.peek('photo-1'), loader.get('photo-1').url);
+
+  const failures = createPhotoFailureTracker();
+  failures.markExhausted('bad');
+  const exhausted = createPersonalPhotoLoader({
+    authorize: authorizer.authorize,
+    failures,
+    invalidate: authorizer.invalidate,
+    onChange() {},
+    peek: () => 'https://signed.example/stale',
+    schedule: manualScheduler().schedule,
+    userId: 'user-a',
+  });
+  exhausted.setAssets(['bad']);
+  assert.equal(exhausted.get('bad').status, 'failed', 'cooldown wins over any cached URL');
+});
+
+test('accounts stay isolated: a cache cleared by an account switch seeds nothing for the next user', async () => {
+  const { authorizer, loaderFor } = cachedPair();
+  const a = loaderFor('user-a');
+  a.setAssets(['photo-1']);
+  await flush();
+  a.dispose();
+  authorizer.clear();
+  const b = loaderFor('user-b');
+  b.setAssets(['photo-1']);
+  assert.equal(b.get('photo-1').status, 'loading');
+  assert.match(b.get('photo-1').cacheKey, /user-b/);
+});
+
+test('the hook reports a cached photo as ready on its first render, without side effects', async () => {
+  const hook = await read('personal-place-cards/use-personal-photos.ts');
+  const provider = await read('personal-place-cards/provider.tsx');
+  // get() falls back to the cache while the loader has published nothing yet.
+  assert.match(hook, /const state = loader\?\.get\(photoAssetId\);\s*if \(state\) return state;/);
+  assert.match(hook, /peekPhotoAuthorization\(photoAssetId\)/);
+  assert.match(hook, /status: 'ready', url \}/);
+  assert.match(hook, /peek: peekPhotoAuthorization,/);
+  // The fallback is a plain read: no authorise, setState or loader creation outside the effects.
+  const getBody = hook.match(/const get = useCallback\([\s\S]*?\n  \);/)[0];
+  assert.doesNotMatch(getBody, /authorizePhoto|setLoader|rerender\(|createPersonalPhotoLoader|setAssets/);
+  // The provider exposes one stable function that is empty when nobody is signed in.
+  assert.match(provider, /const peekPhotoAuthorization = useCallback\(\(photoAssetId: string\) => \{\s*if \(!activeUser\.current\) return null;\s*return photoAuthorizerRef\.current\.peek\(photoAssetId\);\s*\}, \[\]\);/);
+});
+
 let failed = false;
 for (const { name, run } of tests) {
   try {

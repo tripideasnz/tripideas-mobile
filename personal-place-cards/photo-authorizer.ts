@@ -1,7 +1,8 @@
 // Short-lived, in-memory photo read authorisations.
 //
 // A signed read URL is never persisted: it lives in this map only until it is
-// about to expire. Concurrent requests for one asset share a single API call.
+// about to expire (peek() reads it synchronously, so a screen can show a photo
+// it already has on its first render). Concurrent requests for one asset share a single API call.
 // clear() (used on sign-out or account switch) drops every URL and makes any
 // response that was still in flight unusable, so nothing can cross accounts.
 
@@ -20,12 +21,16 @@ export function createPhotoAuthorizer({
   const inFlight = new Map<string, Promise<string>>();
   let generation = 0;
 
+  // A cached URL is usable only until shortly before it expires.
+  const fresh = (photoAssetId: string): string | null => {
+    const cached = cache.get(photoAssetId);
+    return cached && Date.parse(cached.expiresAt) > now() + skewMs ? cached.url : null;
+  };
+
   return {
     authorize(photoAssetId: string): Promise<string> {
-      const cached = cache.get(photoAssetId);
-      if (cached && Date.parse(cached.expiresAt) > now() + skewMs) {
-        return Promise.resolve(cached.url);
-      }
+      const url = fresh(photoAssetId);
+      if (url) return Promise.resolve(url);
       const pending = inFlight.get(photoAssetId);
       if (pending) return pending;
 
@@ -43,6 +48,11 @@ export function createPhotoAuthorizer({
         });
       inFlight.set(photoAssetId, request);
       return request;
+    },
+
+    /** The cached URL if it is still fresh, otherwise null. Never fetches. */
+    peek(photoAssetId: string): string | null {
+      return fresh(photoAssetId);
     },
 
     invalidate(photoAssetId: string) {
