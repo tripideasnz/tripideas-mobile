@@ -1,7 +1,7 @@
 // In the Personal Place editor the Location row and the Photos row are one design: primary (black) on the left,
 // outlined on the right, equal in width and height, built from the same ButtonRow in create and edit alike (one editor
-// screen). At larger system text sizes ButtonRow stacks the buttons so no label is squeezed or broken. The pickers,
-// upload, retry and removal behind the photo buttons are the ones that were there before.
+// screen), side by side at every text size: a label that needs more room shrinks instead of the row changing shape.
+// The pickers, upload, retry and removal behind the photo buttons are the ones that were there before.
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
@@ -28,8 +28,11 @@ test('both photo buttons share one ButtonRow directly under the Photos heading',
   assert.ok(editor.indexOf('<AppText variant="section">Photos</AppText>') < editor.indexOf('Both photo actions share one row'));
   assert.match(row, /^\{\/\* Both photo actions share one row[^*]*\*\/\}\s*<ButtonRow>/);
   assert.equal(buttons.length, 2);
-  assert.match(buttons[0], /label=\{mainMedia \? 'Change main photo' : 'Add main photo'\}/);
-  assert.match(buttons[1], /label="Add body photos"/);
+  assert.match(buttons[0], /label="Main photo"/);
+  assert.match(buttons[1], /label="Body photos"/);
+  // The spoken names stay descriptive.
+  assert.match(buttons[0], /accessibilityLabel=\{mainMedia \? 'Change main photo' : 'Add main photo'\}/);
+  assert.match(buttons[1], /accessibilityLabel="Add body photos"/);
 });
 
 test('the two photo buttons are equal in size and width: primary on the left, outlined on the right', () => {
@@ -51,11 +54,8 @@ test('widths and heights come from ButtonRow: no per-button flex or border worka
   assert.doesNotMatch(row, /flexDirection: 'row'/);
 });
 
-test('ButtonRow: equal slots side by side at normal text sizes, stacked at larger ones, buttons filling their slot', () => {
-  assert.match(buttonRowSource, /const stacked = useStackedRows\(\);/);
-  assert.match(buttonRowSource, /if \(stacked\) \{/);
-  assert.match(buttonRowSource, /<View style=\{\{ gap: Space\.sm \}\}>/);
-  assert.match(buttonRowSource, /borderColor: Palette\.primary, borderWidth: 1/, 'stacked filled buttons match the outlined ones in height');
+test('ButtonRow: always side by side in equal slots, with buttons filling their slot; it never stacks', () => {
+  assert.doesNotMatch(buttonRowSource, /useStackedRows|shouldStackRows|stacked/);
   assert.match(buttonRowSource, /<View style=\{\{ flexDirection: 'row', gap: Space\.sm \}\}>/);
   assert.match(buttonRowSource, /<View key=\{index\} style=\{\{ flex: 1 \}\}>/, 'equal slots with no padding or border of their own');
   assert.match(buttonRowSource, /\{ flexGrow: 1 \}/, 'the button fills its slot, so both are equally high');
@@ -80,8 +80,8 @@ test('behaviour behind the buttons is unchanged: pickers, guards, previews, uplo
 });
 
 test('no photo button is left outside the row, and no left-aligned stray body button remains', () => {
-  assert.equal((editor.match(/label="Add body photos"/g) ?? []).length, 1);
-  assert.equal((editor.match(/'Add main photo'/g) ?? []).length, 1);
+  assert.equal((editor.match(/label="Body photos"/g) ?? []).length, 1);
+  assert.equal((editor.match(/label="Main photo"/g) ?? []).length, 1);
   assert.doesNotMatch(editor, /<View style=\{\{ alignItems: 'flex-start' \}\}>\s*<AppButton\s+disabled=\{busy \|\| remainingBodySlots === 0\}/);
 });
 

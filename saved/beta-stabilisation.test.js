@@ -41,7 +41,7 @@ console.log('✓ Trip creation confirmation and cancellation use semantic colour
 assert.match(editor, /<AppText variant="section">Photos<\/AppText>/);
 assert.doesNotMatch(editor, /<AppText variant="section">Main photo<\/AppText>/);
 assert.doesNotMatch(editor, /<AppText[^>]*>Body photos<\/AppText>/);
-assert.match(editor, /label="Add body photos"/);
+assert.match(editor, /label="Body photos"/);
 assert.match(editor, /bodyMedia\.map/);
 assert.match(editor, /pendingBodyPreviews\.map/);
 assert.match(editor, /aspectRatio: 1/);

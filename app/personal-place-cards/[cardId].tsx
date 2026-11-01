@@ -11,7 +11,6 @@ import { PlaceMapPreview } from '@/components/place-map-preview';
 import { SignedOutFeature } from '@/components/signed-out-feature';
 import { AppButton } from '@/components/ui/app-button';
 import { ButtonRow } from '@/components/ui/button-row';
-import { shouldStackRows } from '@/lib/text-scale';
 import { AppText } from '@/components/ui/app-text';
 import { AppTextInput, AutoExpandingTextInput } from '@/components/ui/app-text-input';
 import { AutosaveStatus } from '@/components/ui/autosave-status';
@@ -62,7 +61,7 @@ type PendingPhotoPreview = {
 };
 
 // 'Added' and 'Add to Trip' are one control in two states, so they share one width (the longer label fits, shrinking
-// slightly if the system text is a little larger; from 1.2x the button moves under the Trip name at full width).
+// slightly if the system text is larger). The button always sits beside the Trip name, which wraps if it is long.
 const TRIP_ACTION_WIDTH = 120;
 
 export default function PersonalPlaceCardScreen() {
@@ -114,7 +113,7 @@ export default function PersonalPlaceCardScreen() {
   const scrollRef = useRef<ScrollView>(null);
   const bodyYRef = useRef(0);
   const photosYRef = useRef(0);
-  const { fontScale, height: viewportHeight } = useWindowDimensions();
+  const { height: viewportHeight } = useWindowDimensions();
 
   const revealEditorObject = (contentY: number) => {
     const keyboardHeight = Keyboard.metrics()?.height ?? 0;
@@ -529,7 +528,7 @@ export default function PersonalPlaceCardScreen() {
       />
 
       <AppText variant="section">Location</AppText>
-      {/* Two buttons, equal width and height; they stack at larger system text sizes (see ButtonRow). */}
+      {/* Two buttons side by side, equal width and height (see ButtonRow). */}
       <ButtonRow>
         <AppButton
           disabled={locateNow.isBusy}
@@ -584,7 +583,8 @@ export default function PersonalPlaceCardScreen() {
           <AppButton
             disabled={busy}
             fitLabel
-            label={mainMedia ? 'Change main photo' : 'Add main photo'}
+            accessibilityLabel={mainMedia ? 'Change main photo' : 'Add main photo'}
+            label="Main photo"
             onPress={mainMedia ? replaceMainPhoto : () => void act(async () => {
               const selected = await pickPhotoForUpload();
               if (!selected || !session?.userId) return;
@@ -607,7 +607,8 @@ export default function PersonalPlaceCardScreen() {
           <AppButton
             disabled={busy || remainingBodySlots === 0}
             fitLabel
-            label="Add body photos"
+            accessibilityLabel="Add body photos"
+            label="Body photos"
             variant="secondary"
             onPress={() => void act(async () => {
               if (!session?.userId) return;
@@ -795,20 +796,18 @@ export default function PersonalPlaceCardScreen() {
       </AppText>
       {card.readiness.isTripIdeaReady ? trips.map((trip) => {
         const attached = attachedTripIds.includes(trip.id);
-        // Name and button sit side by side; at larger text sizes the button moves under the name, full width.
-        const stacked = shouldStackRows(fontScale);
         return (
           <View
             key={trip.id}
-            style={{ alignItems: stacked ? 'stretch' : 'center', flexDirection: stacked ? 'column' : 'row', gap: Space.sm }}>
-            <Text style={{ flex: stacked ? undefined : 1, ...Type.body }}>{trip.name}</Text>
+            style={{ alignItems: 'center', flexDirection: 'row', gap: Space.sm }}>
+            <Text style={{ flex: 1, ...Type.body }}>{trip.name}</Text>
             <AppButton
               disabled={attached || busy}
               fitLabel
               label={attached ? 'Added' : 'Add to Trip'}
               size="compact"
               onPress={() => void act(() => addPersonalCardToTrip(trip.id, card.id))}
-              style={stacked ? undefined : { width: TRIP_ACTION_WIDTH }}
+              style={{ width: TRIP_ACTION_WIDTH }}
               variant="secondary"
             />
           </View>

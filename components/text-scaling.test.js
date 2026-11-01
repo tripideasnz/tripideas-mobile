@@ -62,12 +62,13 @@ test('filter-sheet header and the custom Saved header cap their title and action
   assert.match(header, /maxFontSizeMultiplier=\{CONTROL_MAX_FONT_SCALE\}/);
 });
 
-test('Add to Trip rows stack at larger text sizes and fit their label on one line', async () => {
+test('Add to Trip rows stay horizontal: Trip name left, fixed-width action beside it, label fitted on one line', async () => {
   const editor = await read('app/personal-place-cards/[cardId].tsx');
-  assert.match(editor, /const stacked = shouldStackRows\(fontScale\);/);
-  assert.match(editor, /flexDirection: stacked \? 'column' : 'row'/);
-  assert.match(editor, /style=\{stacked \? undefined : \{ width: TRIP_ACTION_WIDTH \}\}/);
+  assert.doesNotMatch(editor, /shouldStackRows|stacked/);
+  assert.match(editor, /style=\{\{ alignItems: 'center', flexDirection: 'row', gap: Space\.sm \}\}>\s*<Text style=\{\{ flex: 1, \.\.\.Type\.body \}\}>\{trip\.name\}<\/Text>/);
   assert.match(editor, /fitLabel\s+label=\{attached \? 'Added' : 'Add to Trip'\}/);
+  assert.match(editor, /style=\{\{ width: TRIP_ACTION_WIDTH \}\}/);
+  assert.match(editor, /const TRIP_ACTION_WIDTH = 120;/);
 });
 
 test('no blanket cap: only controls set a limit, nothing disables scaling, and AppText leaves body text uncapped', async () => {
