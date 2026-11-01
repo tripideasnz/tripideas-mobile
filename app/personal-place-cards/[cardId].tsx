@@ -886,7 +886,7 @@ function PhotoEditorTile({
           borderRadius: Radius.card,
           width: '100%',
         }}
-        transition={150}
+        transition={0}
       />
       <View style={{ bottom: Space.sm, position: 'absolute', right: Space.sm }}>
         <ContainedRemoveButton label={`Remove ${accessibilityLabel.toLowerCase()}`} onPress={onRemove} />

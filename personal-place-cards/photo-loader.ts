@@ -9,13 +9,19 @@ export const PERSONAL_PHOTO_MAX_AUTO_RETRIES = 2;
 export const PERSONAL_PHOTO_RETRY_DELAYS_MS: readonly number[] = [1_000, 3_000];
 export const PERSONAL_PHOTO_FAILURE_COOLDOWN_MS = 60_000;
 
+const PERSONAL_PHOTO_CACHE_KEY_PREFIX = 'tripideas:personal-photo:v1:';
+
 /**
  * Stable identity for expo-image's cache. It is scoped to the signed-in user
  * and the asset, never to the signed URL, so URL refreshes do not re-download
  * and one account's key can never match another's.
  */
 export const personalPhotoCacheKey = (userId: string, photoAssetId: string) =>
-  `tripideas:personal-photo:v1:${userId}:${photoAssetId}`;
+  `${PERSONAL_PHOTO_CACHE_KEY_PREFIX}${userId}:${photoAssetId}`;
+
+/** True for the cache key of a private Personal Place photo (never for editorial or other images). */
+export const isPersonalPhotoCacheKey = (cacheKey?: string | null): boolean =>
+  Boolean(cacheKey?.startsWith(PERSONAL_PHOTO_CACHE_KEY_PREFIX));
 
 export type PersonalPhotoState =
   | { attempts: number; cacheKey: string; status: 'loading'; url: null }

@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Palette, Radius, Screen, Space, Type } from '@/constants/design';
+import { isPersonalPhotoCacheKey } from '@/personal-place-cards/photo-loader';
 import type { PlaceGalleryImage } from '@/sanity/types';
 import { ContainedRemoveButton } from '@/components/ui/contained-remove-button';
 
@@ -58,7 +59,7 @@ function PhotoTile({
           height: '100%',
           width: '100%',
         }}
-        transition={150}
+        transition={isPersonalPhotoCacheKey(image.cacheKey) ? 0 : 150}
       />
       {overlayText ? (
         <View

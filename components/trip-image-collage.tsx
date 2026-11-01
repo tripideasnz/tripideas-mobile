@@ -4,6 +4,7 @@ import { Pressable, Text, View } from 'react-native';
 import type { ViewStyle } from 'react-native';
 
 import { Palette, Type } from '@/constants/design';
+import { isPersonalPhotoCacheKey } from '@/personal-place-cards/photo-loader';
 import type { TripImage } from '@/trips/images';
 
 function CollageImage({
@@ -43,7 +44,8 @@ function CollageImage({
         onError={() => onError?.(image)}
         source={image.cacheKey ? { cacheKey: image.cacheKey, uri: image.url } : { uri: image.url }}
         style={{ height: '100%', width: '100%' }}
-        transition={150}
+        // Private Personal Place photos appear without a fade; every other image keeps it.
+        transition={isPersonalPhotoCacheKey(image.cacheKey) ? 0 : 150}
       />
     </View>
   );

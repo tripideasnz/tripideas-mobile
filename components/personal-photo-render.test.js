@@ -62,3 +62,26 @@ assert.match(card, /photos\.retry\(/);
 assert.match(card, /photos\.reportError\(/);
 assert.doesNotMatch(card, /setCoverImages|retryImage|authorizationRevision/);
 console.log('✓ every private-photo renderer passes the cache key and has a bounded error path');
+
+// Personal Place photos appear without a fade; editorial and other images keep their 150 ms transition.
+const { isPersonalPhotoCacheKey, personalPhotoCacheKey } = await import('../personal-place-cards/photo-loader.ts');
+assert.equal(isPersonalPhotoCacheKey(personalPhotoCacheKey('user-a', 'asset-1')), true);
+for (const other of [undefined, null, '', 'sanity-image-1', 'notebook:photo-1', 'tripideas:personal-photo']) {
+  assert.equal(isPersonalPhotoCacheKey(other), false, `${String(other)} is not a Personal Place photo key`);
+}
+console.log('✓ only the private Personal Place cache key is recognised as a Personal Place photo');
+
+const personalTransition = (source, key) =>
+  assert.match(source, new RegExp(`transition=\\{isPersonalPhotoCacheKey\\(${key}\\) \\? 0 : 150\\}`));
+personalTransition(collage, 'image\\.cacheKey');
+personalTransition(grid, 'image\\.cacheKey');
+personalTransition(detail, 'hero\\.cacheKey');
+assert.equal((collage.match(/transition=/g) ?? []).length, 1);
+assert.equal((grid.match(/transition=/g) ?? []).length, 1);
+assert.equal((detail.match(/transition=/g) ?? []).length, 1);
+const editor = await read('app/personal-place-cards/[cardId].tsx');
+assert.deepEqual(editor.match(/transition=\{[^}]*\}/g), ['transition={0}'], 'the editor tile is the only transition there, and it is 0');
+// Cache, authorisation, retry and error handling are untouched by the transition change.
+assert.match(collage, /cacheKey: image\.cacheKey, uri: image\.url/);
+assert.match(editor, /source=\{cacheKey \? \{ cacheKey, uri: imageUrl \} : \{ uri: imageUrl \}\}/);
+console.log('✓ Personal Place photos render with no fade; editorial and other images keep 150 ms; caching is unchanged');

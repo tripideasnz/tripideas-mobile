@@ -5,6 +5,7 @@ import { Text, View } from 'react-native';
 import { PlaceMapPreview } from '@/components/place-map-preview';
 import { PlacePhotoGrid } from '@/components/place-photo-grid';
 import { Screen, Space, Type } from '@/constants/design';
+import { isPersonalPhotoCacheKey } from '@/personal-place-cards/photo-loader';
 import type { PlaceGalleryImage } from '@/sanity/types';
 
 export function PlaceDetailContent({
@@ -39,7 +40,7 @@ export function PlaceDetailContent({
           onError={hero.onError}
           source={hero.cacheKey ? { cacheKey: hero.cacheKey, uri: hero.url } : { uri: hero.url }}
           style={{ aspectRatio: 16 / 9, width: '100%' }}
-          transition={150}
+          transition={isPersonalPhotoCacheKey(hero.cacheKey) ? 0 : 150}
         />
       ) : null}
 
