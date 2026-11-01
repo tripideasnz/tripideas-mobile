@@ -10,6 +10,8 @@ import type { ReactNode } from 'react';
 import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { CONTROL_MAX_FONT_SCALE } from '@/constants/design';
+
 export const FILTER_ACCENT = '#0080C8';
 const DIVIDER = '#e7e7e7';
 const PANEL_DIVIDER = '#e2e2e2';
@@ -34,7 +36,7 @@ function HeaderAction({ label, onPress }: { label: string; onPress: () => void }
       hitSlop={8}
       onPress={onPress}
       style={({ pressed }) => ({ justifyContent: 'center', minHeight: 44, opacity: pressed ? 0.55 : 1 })}>
-      <Text style={headerAction}>{label}</Text>
+      <Text maxFontSizeMultiplier={CONTROL_MAX_FONT_SCALE} numberOfLines={1} style={headerAction}>{label}</Text>
     </Pressable>
   );
 }
@@ -77,11 +79,20 @@ export function FilterSheet({
             paddingHorizontal: 18,
             paddingVertical: 8,
           }}>
-          <View style={{ alignItems: 'flex-start', width: 72 }}>
+          {/* Slots are at least 72 pt (as before) but grow with their label, so Cancel and Apply are never split. */}
+          <View style={{ alignItems: 'flex-start', flexShrink: 0, minWidth: 72 }}>
             <HeaderAction label="Cancel" onPress={onCancel} />
           </View>
-          <Text accessibilityRole="header" style={{ fontSize: 19, fontWeight: '800' }}>{title}</Text>
-          <View style={{ alignItems: 'flex-end', width: 72 }}>
+          <Text
+            accessibilityRole="header"
+            adjustsFontSizeToFit
+            maxFontSizeMultiplier={CONTROL_MAX_FONT_SCALE}
+            minimumFontScale={0.7}
+            numberOfLines={1}
+            style={{ flexShrink: 1, fontSize: 19, fontWeight: '800', textAlign: 'center' }}>
+            {title}
+          </Text>
+          <View style={{ alignItems: 'flex-end', flexShrink: 0, minWidth: 72 }}>
             <HeaderAction label="Apply" onPress={onApply} />
           </View>
         </View>
@@ -99,7 +110,7 @@ export function FilterSheet({
               minHeight: 36,
               opacity: !canClear ? 0.35 : pressed ? 0.55 : 1,
             })}>
-            <Text style={{ color: FILTER_ACCENT, fontSize: 15, fontWeight: '600' }}>Clear</Text>
+            <Text maxFontSizeMultiplier={CONTROL_MAX_FONT_SCALE} numberOfLines={1} style={{ color: FILTER_ACCENT, fontSize: 15, fontWeight: '600' }}>Clear</Text>
           </Pressable>
         </View>
 

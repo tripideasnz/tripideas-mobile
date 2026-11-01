@@ -2,7 +2,7 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Pressable, type PressableProps } from 'react-native';
 
 import { AppText } from '@/components/ui/app-text';
-import { Palette, Radius, Shadow, Space } from '@/constants/design';
+import { CONTROL_MAX_FONT_SCALE, Palette, Radius, Shadow, Space } from '@/constants/design';
 
 type AppChipProps = Omit<PressableProps, 'children'> & {
   elevated?: boolean;
@@ -45,7 +45,7 @@ export function AppChip({
       {icon ? (
         <MaterialIcons color={foreground} name={icon} size={17} />
       ) : null}
-      <AppText color={foreground} variant="label">
+      <AppText color={foreground} maxFontSizeMultiplier={CONTROL_MAX_FONT_SCALE} variant="label">
         {label}
       </AppText>
     </Pressable>

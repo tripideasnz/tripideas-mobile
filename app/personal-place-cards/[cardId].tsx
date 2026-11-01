@@ -10,6 +10,8 @@ import { PlaceDetailContent } from '@/components/place-detail-content';
 import { PlaceMapPreview } from '@/components/place-map-preview';
 import { SignedOutFeature } from '@/components/signed-out-feature';
 import { AppButton } from '@/components/ui/app-button';
+import { ButtonRow } from '@/components/ui/button-row';
+import { shouldStackRows } from '@/lib/text-scale';
 import { AppText } from '@/components/ui/app-text';
 import { AppTextInput, AutoExpandingTextInput } from '@/components/ui/app-text-input';
 import { AutosaveStatus } from '@/components/ui/autosave-status';
@@ -59,7 +61,8 @@ type PendingPhotoPreview = {
   state: 'uploading' | 'retryable-error';
 };
 
-// 'Added' and 'Add to Trip' are one control in two states, so they share one width (the longer label fits).
+// 'Added' and 'Add to Trip' are one control in two states, so they share one width (the longer label fits, shrinking
+// slightly if the system text is a little larger; from 1.2x the button moves under the Trip name at full width).
 const TRIP_ACTION_WIDTH = 120;
 
 export default function PersonalPlaceCardScreen() {
@@ -111,7 +114,7 @@ export default function PersonalPlaceCardScreen() {
   const scrollRef = useRef<ScrollView>(null);
   const bodyYRef = useRef(0);
   const photosYRef = useRef(0);
-  const { height: viewportHeight } = useWindowDimensions();
+  const { fontScale, height: viewportHeight } = useWindowDimensions();
 
   const revealEditorObject = (contentY: number) => {
     const keyboardHeight = Keyboard.metrics()?.height ?? 0;
@@ -526,23 +529,23 @@ export default function PersonalPlaceCardScreen() {
       />
 
       <AppText variant="section">Location</AppText>
-      {/* In these two button rows the primary button carries a 1 pt border in its own colour, like the outlined one beside it, so the two share the row exactly (a border-less button is 2 pt narrower under flex). */}
-      <View style={{ flexDirection: 'row', gap: Space.sm }}>
+      {/* Two buttons, equal width and height; they stack at larger system text sizes (see ButtonRow). */}
+      <ButtonRow>
         <AppButton
           disabled={locateNow.isBusy}
+          fitLabel
           label={locateNow.state.kind === 'saving' ? 'Saving…' : locateNow.isBusy ? 'Locating…' : 'Locate now'}
           onPress={() => void locateNow.locate()}
-          style={{ borderColor: Palette.primary, borderWidth: 1, flex: 1 }}
         />
-        <AppButton label="Locate on map" onPress={() => router.push({ pathname: '/personal-place-cards/location-picker', params: {
+        <AppButton fitLabel label="Locate on map" onPress={() => router.push({ pathname: '/personal-place-cards/location-picker', params: {
           cardId: card.id,
           latitude: card.location ? String(card.location.latitude) : undefined,
           longitude: card.location ? String(card.location.longitude) : undefined,
           origin,
           notebookId: originNotebookId,
           tripId: originTripId,
-        } })} style={{ flex: 1 }} variant="secondary" />
-      </View>
+        } })} variant="secondary" />
+      </ButtonRow>
       {locateNow.status ? (
         <View style={{ gap: Space.sm }}>
           <AppText
@@ -576,12 +579,12 @@ export default function PersonalPlaceCardScreen() {
         onLayout={(event) => { photosYRef.current = event.nativeEvent.layout.y; }}
         style={{ gap: Space.md }}>
         <AppText variant="section">Photos</AppText>
-        {/* Both photo actions share one row, built exactly like the Location row above: the same button size, equal widths, primary on the left, outlined on the right. */}
-        <View style={{ flexDirection: 'row', gap: Space.sm }}>
+        {/* Both photo actions share one row, built exactly like the Location row above (see ButtonRow). */}
+        <ButtonRow>
           <AppButton
             disabled={busy}
+            fitLabel
             label={mainMedia ? 'Change main photo' : 'Add main photo'}
-            style={{ borderColor: Palette.primary, borderWidth: 1, flex: 1 }}
             onPress={mainMedia ? replaceMainPhoto : () => void act(async () => {
               const selected = await pickPhotoForUpload();
               if (!selected || !session?.userId) return;
@@ -603,8 +606,8 @@ export default function PersonalPlaceCardScreen() {
           />
           <AppButton
             disabled={busy || remainingBodySlots === 0}
+            fitLabel
             label="Add body photos"
-            style={{ flex: 1 }}
             variant="secondary"
             onPress={() => void act(async () => {
               if (!session?.userId) return;
@@ -637,7 +640,7 @@ export default function PersonalPlaceCardScreen() {
               }
             })}
           />
-        </View>
+        </ButtonRow>
         {mainMedia ? (
         pendingMainPreview || mainPhoto?.status === 'ready' ? (
           <PhotoEditorTile
@@ -792,17 +795,20 @@ export default function PersonalPlaceCardScreen() {
       </AppText>
       {card.readiness.isTripIdeaReady ? trips.map((trip) => {
         const attached = attachedTripIds.includes(trip.id);
+        // Name and button sit side by side; at larger text sizes the button moves under the name, full width.
+        const stacked = shouldStackRows(fontScale);
         return (
           <View
             key={trip.id}
-            style={{ alignItems: 'center', flexDirection: 'row', gap: Space.sm }}>
-            <Text style={{ flex: 1, ...Type.body }}>{trip.name}</Text>
+            style={{ alignItems: stacked ? 'stretch' : 'center', flexDirection: stacked ? 'column' : 'row', gap: Space.sm }}>
+            <Text style={{ flex: stacked ? undefined : 1, ...Type.body }}>{trip.name}</Text>
             <AppButton
               disabled={attached || busy}
+              fitLabel
               label={attached ? 'Added' : 'Add to Trip'}
               size="compact"
               onPress={() => void act(() => addPersonalCardToTrip(trip.id, card.id))}
-              style={{ width: TRIP_ACTION_WIDTH }}
+              style={stacked ? undefined : { width: TRIP_ACTION_WIDTH }}
               variant="secondary"
             />
           </View>

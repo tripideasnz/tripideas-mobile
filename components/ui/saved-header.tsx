@@ -11,7 +11,7 @@ import { Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { HEADER_CONTROL_BORDER_COLOR, HEADER_CONTROL_BORDER_WIDTH, HeaderBackButton } from '@/components/ui/header-back-button';
-import { Palette } from '@/constants/design';
+import { CONTROL_MAX_FONT_SCALE, Palette } from '@/constants/design';
 
 export const SAVED_HEADER_CONTROL_SIZE = 44;
 export const SAVED_HEADER_GUTTER = 16;
@@ -85,7 +85,7 @@ export function SavedActionHeader({ options, back }: NativeStackHeaderProps) {
             right: SAVED_HEADER_GUTTER + SAVED_HEADER_CONTROL_SIZE + 8,
             top: 0,
           }}>
-          <Text accessibilityRole="header" numberOfLines={1} style={{ color: Palette.text, fontSize: 17, fontWeight: '600' }}>
+          <Text accessibilityRole="header" maxFontSizeMultiplier={CONTROL_MAX_FONT_SCALE} numberOfLines={1} style={{ color: Palette.text, fontSize: 17, fontWeight: '600' }}>
             {title}
           </Text>
         </View>

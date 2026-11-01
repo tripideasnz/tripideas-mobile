@@ -88,3 +88,12 @@ export const Screen = {
   top: Space.xl,
   bottom: Space.xxxl,
 } as const;
+
+/**
+ * Text scaling for controls whose frame cannot grow freely (buttons, chips, segments, filter-sheet headers, the
+ * custom screen header title). Body text is never capped: it follows the system text size in full.
+ */
+export const CONTROL_MAX_FONT_SCALE = 1.4;
+
+/** From this system text scale, side-by-side button rows stack vertically so every label keeps a full line. */
+export const STACK_ROWS_AT_FONT_SCALE = 1.2;

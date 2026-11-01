@@ -1,51 +1,64 @@
-// C5B: in the Personal Place editor the two photo actions sit side by side directly under the
-// "Photos" heading, equal in width, height and style, in create and edit alike (one editor screen).
-// The pickers, upload, retry and removal behind them are the ones that were there before.
+// In the Personal Place editor the Location row and the Photos row are one design: primary (black) on the left,
+// outlined on the right, equal in width and height, built from the same ButtonRow in create and edit alike (one editor
+// screen). At larger system text sizes ButtonRow stacks the buttons so no label is squeezed or broken. The pickers,
+// upload, retry and removal behind the photo buttons are the ones that were there before.
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 const editor = await readFile(new URL('../app/personal-place-cards/[cardId].tsx', import.meta.url), 'utf8');
+const buttonRowSource = await readFile(new URL('../components/ui/button-row.tsx', import.meta.url), 'utf8');
 const tests = [];
 const test = (name, run) => tests.push({ name, run });
 
-const row = editor.match(/\{\/\* Both photo actions share one row[\s\S]*?\n        <\/View>\n        \{mainMedia \? \(/)?.[0] ?? '';
-const buttons = row.match(/<AppButton[\s\S]*?\n          \/>/g) ?? [];
-const locationRow = editor.match(/<AppText variant="section">Location<\/AppText>\s*(?:\{\/\*[\s\S]*?\*\/\}\s*)?<View style=\{\{ flexDirection: 'row', gap: Space\.sm \}\}>[\s\S]*?<\/View>\s*\{locateNow\.status/)?.[0] ?? '';
-const locationButtons = locationRow.match(/<AppButton[\s\S]*?(?:\n        \/>|variant="secondary" \/>)/g) ?? [];
+const row = editor.match(/\{\/\* Both photo actions share one row[\s\S]*?<\/ButtonRow>/)?.[0] ?? '';
+const locationRow = editor.match(/<AppText variant="section">Location<\/AppText>\s*\{\/\*[\s\S]*?\*\/\}\s*<ButtonRow>[\s\S]*?<\/ButtonRow>/)?.[0] ?? '';
+const buttonsIn = (source) => source.split('<AppButton').slice(1).map((part) => `<AppButton${part}`);
+const buttons = buttonsIn(row);
+const locationButtons = buttonsIn(locationRow);
 
-test('both photo buttons share one row directly under the Photos heading', () => {
+const signature = (button) => ({
+  fitLabel: /\bfitLabel\b/.test(button),
+  size: button.match(/size="(\w+)"/)?.[1] ?? 'default',
+  style: /\bstyle=\{/.test(button),
+  variant: button.match(/variant="(\w+)"/)?.[1] ?? 'primary',
+});
+
+test('both photo buttons share one ButtonRow directly under the Photos heading', () => {
   assert.ok(row, 'row found');
   assert.ok(editor.indexOf('<AppText variant="section">Photos</AppText>') < editor.indexOf('Both photo actions share one row'));
-  assert.match(row, /^\{\/\* Both photo actions share one row[^*]*\*\/\}\n        <View style=\{\{ flexDirection: 'row', gap: Space\.sm \}\}>/);
+  assert.match(row, /^\{\/\* Both photo actions share one row[^*]*\*\/\}\s*<ButtonRow>/);
   assert.equal(buttons.length, 2);
   assert.match(buttons[0], /label=\{mainMedia \? 'Change main photo' : 'Add main photo'\}/);
   assert.match(buttons[1], /label="Add body photos"/);
 });
 
-const signature = (button) => ({
-  size: button.match(/size="(\w+)"/)?.[1] ?? 'default',
-  style: button.match(/style=\{\{([^}]*)\}\}/)?.[1].trim(),
-  variant: button.match(/variant="(\w+)"/)?.[1] ?? 'primary',
-});
-
 test('the two photo buttons are equal in size and width: primary on the left, outlined on the right', () => {
-  assert.deepEqual(signature(buttons[0]), { size: 'default', style: 'borderColor: Palette.primary, borderWidth: 1, flex: 1', variant: 'primary' });
-  assert.deepEqual(signature(buttons[1]), { size: 'default', style: 'flex: 1', variant: 'secondary' });
+  assert.deepEqual(signature(buttons[0]), { fitLabel: true, size: 'default', style: false, variant: 'primary' });
+  assert.deepEqual(signature(buttons[1]), { fitLabel: true, size: 'default', style: false, variant: 'secondary' });
 });
 
-test('the Photos row is built exactly like the Location row: same component, size, widths, spacing and variants', () => {
+test('the Photos row is built exactly like the Location row: same component, size, variants and fitted labels', () => {
   assert.equal(locationButtons.length, 2, 'Locate now and Locate on map found');
   assert.match(locationButtons[0], /'Locate now'/);
   assert.match(locationButtons[1], /label="Locate on map"/);
-  assert.deepEqual(buttons.map(signature), locationButtons.map(signature), 'identical size, width and variant, left to right');
-  assert.match(locationRow, /<View style=\{\{ flexDirection: 'row', gap: Space\.sm \}\}>/);
-  assert.match(row, /<View style=\{\{ flexDirection: 'row', gap: Space\.sm \}\}>/, 'same row spacing');
+  assert.deepEqual(buttons.map(signature), locationButtons.map(signature), 'identical size and variant, left to right');
 });
 
-test('no photo button is left outside the row, and no left-aligned stray body button remains', () => {
-  assert.equal((editor.match(/label="Add body photos"/g) ?? []).length, 1);
-  assert.equal((editor.match(/'Add main photo'/g) ?? []).length, 1);
-  assert.doesNotMatch(editor, /<View style=\{\{ alignItems: 'flex-start' \}\}>\s*<AppButton\s+disabled=\{busy \|\| remainingBodySlots === 0\}/);
+test('widths and heights come from ButtonRow: no per-button flex or border workaround remains', () => {
+  for (const button of [...buttons, ...locationButtons]) {
+    assert.doesNotMatch(button, /flex: 1|borderWidth|borderColor/);
+  }
+  assert.doesNotMatch(row, /flexDirection: 'row'/);
+});
+
+test('ButtonRow: equal slots side by side at normal text sizes, stacked at larger ones, buttons filling their slot', () => {
+  assert.match(buttonRowSource, /const stacked = useStackedRows\(\);/);
+  assert.match(buttonRowSource, /if \(stacked\) \{/);
+  assert.match(buttonRowSource, /<View style=\{\{ gap: Space\.sm \}\}>/);
+  assert.match(buttonRowSource, /borderColor: Palette\.primary, borderWidth: 1/, 'stacked filled buttons match the outlined ones in height');
+  assert.match(buttonRowSource, /<View style=\{\{ flexDirection: 'row', gap: Space\.sm \}\}>/);
+  assert.match(buttonRowSource, /<View key=\{index\} style=\{\{ flex: 1 \}\}>/, 'equal slots with no padding or border of their own');
+  assert.match(buttonRowSource, /\{ flexGrow: 1 \}/, 'the button fills its slot, so both are equally high');
 });
 
 test('behaviour behind the buttons is unchanged: pickers, guards, previews, upload and refresh', () => {
@@ -57,10 +70,19 @@ test('behaviour behind the buttons is unchanged: pickers, guards, previews, uplo
   assert.match(buttons[1], /pickPhotosForUpload\(remainingBodySlots\)/);
   assert.match(buttons[1], /'body',/);
   assert.match(buttons[1], /await refreshPendingBodyPreviews\(\);/);
+  assert.match(locationButtons[0], /onPress=\{\(\) => void locateNow\.locate\(\)\}/);
+  assert.match(locationButtons[0], /disabled=\{locateNow\.isBusy\}/);
+  assert.match(locationButtons[1], /pathname: '\/personal-place-cards\/location-picker'/);
   // The main photo tile still replaces on tap and removes with its own control; the body grid is unchanged.
   assert.match(editor, /accessibilityLabel="Replace main photo"[\s\S]*?onPress=\{replaceMainPhoto\}/);
   assert.match(editor, /onRemove=\{\(\) => void removePhoto\(mainMedia\)\}/);
   assert.match(editor, /Remove body photo|ContainedRemoveButton/);
+});
+
+test('no photo button is left outside the row, and no left-aligned stray body button remains', () => {
+  assert.equal((editor.match(/label="Add body photos"/g) ?? []).length, 1);
+  assert.equal((editor.match(/'Add main photo'/g) ?? []).length, 1);
+  assert.doesNotMatch(editor, /<View style=\{\{ alignItems: 'flex-start' \}\}>\s*<AppButton\s+disabled=\{busy \|\| remainingBodySlots === 0\}/);
 });
 
 test('one editor serves both create and edit, so one layout covers both', () => {

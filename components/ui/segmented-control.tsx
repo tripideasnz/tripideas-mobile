@@ -1,12 +1,13 @@
 // A compact two-or-more segment switch for choosing one view of the same screen (for example
 // My Trips / Shared With Me). One muted track, equal-width segments, the selected one filled with the
-// app's primary colour, no borders or shadows. Each segment keeps a 44-point touch target through hitSlop.
+// app's primary colour, no borders or shadows. Each segment is at least 32 points high and grows with its label
+// (the label follows the text size up to a limit), and keeps a 44-point touch target through hitSlop.
 import { Pressable, View } from 'react-native';
 
 import { AppText } from '@/components/ui/app-text';
-import { Palette, Radius, Space } from '@/constants/design';
+import { CONTROL_MAX_FONT_SCALE, Palette, Radius, Space } from '@/constants/design';
 
-const SEGMENT_HEIGHT = 32;
+const SEGMENT_MIN_HEIGHT = 32;
 
 export type SegmentedOption<T extends string> = { label: string; value: T };
 
@@ -46,11 +47,16 @@ export function SegmentedControl<T extends string>({
               backgroundColor: selected ? Palette.primary : 'transparent',
               borderRadius: Radius.small,
               flex: 1,
-              height: SEGMENT_HEIGHT,
+              minHeight: SEGMENT_MIN_HEIGHT,
+              paddingHorizontal: Space.sm,
               justifyContent: 'center',
               opacity: pressed && !selected ? 0.6 : 1,
             })}>
-            <AppText color={selected ? Palette.textOnPrimary : Palette.textBody} variant="label">
+            <AppText
+              color={selected ? Palette.textOnPrimary : Palette.textBody}
+              maxFontSizeMultiplier={CONTROL_MAX_FONT_SCALE}
+              style={{ textAlign: 'center' }}
+              variant="label">
               {option.label}
             </AppText>
           </Pressable>

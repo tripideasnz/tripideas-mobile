@@ -6,11 +6,13 @@ import {
 } from 'react-native';
 
 import { AppText } from '@/components/ui/app-text';
-import { Palette, Radius, Space } from '@/constants/design';
+import { CONTROL_MAX_FONT_SCALE, Palette, Radius, Space } from '@/constants/design';
 
 type AppButtonVariant = 'primary' | 'secondary' | 'danger';
 
 type AppButtonProps = Omit<PressableProps, 'style'> & {
+  /** One line, shrinking the label slightly (down to 80%) rather than wrapping: for buttons that share a row. */
+  fitLabel?: boolean;
   label: string;
   size?: 'compact' | 'default';
   style?: StyleProp<ViewStyle>;
@@ -19,6 +21,7 @@ type AppButtonProps = Omit<PressableProps, 'style'> & {
 
 export function AppButton({
   disabled,
+  fitLabel = false,
   label,
   size = 'default',
   style,
@@ -54,7 +57,14 @@ export function AppButton({
         },
         style,
       ]}>
-      <AppText color={foreground} variant="bodyStrong">
+      <AppText
+        adjustsFontSizeToFit={fitLabel}
+        color={foreground}
+        maxFontSizeMultiplier={CONTROL_MAX_FONT_SCALE}
+        minimumFontScale={fitLabel ? 0.8 : undefined}
+        numberOfLines={fitLabel ? 1 : undefined}
+        style={{ textAlign: 'center' }}
+        variant="bodyStrong">
         {label}
       </AppText>
     </Pressable>

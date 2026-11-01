@@ -76,8 +76,9 @@ test('the view switch is one compact segmented control: equal segments, clear se
   const b = shared.props.style({ pressed: false });
   assert.equal(a.flex, 1);
   assert.equal(b.flex, 1);
-  assert.equal(a.height, b.height, 'equal height');
-  assert.ok(a.height <= 36, 'compact');
+  assert.equal(a.minHeight, b.minHeight, 'equal height at normal text size');
+  assert.ok(a.minHeight <= 36, 'compact');
+  assert.equal(a.height, undefined, 'the segment grows with its label instead of clipping it');
   assert.notEqual(a.backgroundColor, b.backgroundColor, 'selected differs from unselected');
   assert.equal(b.backgroundColor, 'transparent');
   for (const style of [a, b]) {
@@ -85,7 +86,11 @@ test('the view switch is one compact segmented control: equal segments, clear se
     assert.equal(style.shadowOpacity, undefined, 'no shadows');
     assert.equal(style.elevation, undefined, 'no shadows');
   }
-  assert.ok(a.height + mine.props.hitSlop.top + mine.props.hitSlop.bottom >= 44, 'touch target is at least 44 points');
+  assert.ok(a.minHeight + mine.props.hitSlop.top + mine.props.hitSlop.bottom >= 44, 'touch target is at least 44 points');
+  // The labels follow the system text size, but only up to the shared control limit (body text is never capped).
+  const labels = findAll(tree, (node) => node.type === 'Text');
+  assert.equal(labels.length, 2);
+  assert.ok(labels.every((l) => l.props.maxFontSizeMultiplier === 1.4));
   assert.equal(textOf(tree), 'My TripsShared With Me');
 });
 
