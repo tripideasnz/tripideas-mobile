@@ -1,5 +1,19 @@
 # TripIdeas mobile: release issue register
 
+> **Historical snapshot, 2026-10-26, branch `beta/mobile-mvp-clean`. Not the current status.** It predates unified secure sharing and the TestFlight builds 25 to 28. Do not use its status columns for release decisions; use [mobile-web-api-handover.md](mobile-web-api-handover.md) and [release-configuration.md](release-configuration.md). What has changed since:
+>
+> | Register item | Then | Now (code at `d7bef7d`, acceptance on integration) |
+> |---|---|---|
+> | P0-04, P0-05a Trip sharing | Public snapshot, no revocation | **Live sharing** with a capability link, Stop sharing and rotation; the snapshot share remains, production-only and without Personal Places |
+> | P0-05b received links | Missing; no associated domains | Associated domains and a `collections/[collectionId]` route exist; staging association file verified; production association file **404 as of 2026-10-31**; no physical-device test |
+> | P0-05c, P0-05d Shared With Me, permissions | Missing | Shared With Me list, Join, Leave, participant notes, owner-only controls implemented; permissions enforced by the API; verified with two accounts on integration (Simulator and web) |
+> | P0-08 Personal Places | Partial | Photo reliability and flicker corrections (`4acff79`, `b919ff9`, `1906716`); integration photo storage working; two-account device isolation not yet verified |
+> | P0-13 TestFlight preparation | Partial | Release validation scripts and a verified cloud-build procedure (release-configuration sections 5, 8, 9); production configuration still unverified |
+> | P0-10 legal and account deletion, P0-02 sign-out, P0-12 device acceptance | Open | **Still open** |
+> | Test files | 78 | 105 |
+>
+> Items not listed are unchanged or were not re-checked.
+
 Read-only audit of branch `beta/mobile-mvp-clean` at `9f10dc35d19de3f87cb54c43e0cd0a13f2a66557` (the September consolidation commit `33d40c6` plus the 12 local commits after it; push state cannot be verified from this checkout). Prepared 2026-10-26.
 
 ## Sources and limitations

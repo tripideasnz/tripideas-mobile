@@ -1,50 +1,53 @@
-# Welcome to your Expo app 👋
+# TripIdeas Mobile
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+The TripIdeas.nz iPhone app: discover New Zealand places from the shared editorial content, search and map them, save Favourites, plan Trips, keep private Personal Places with photos, and share Trips with other people. Built with Expo (SDK 54), React Native and TypeScript; content comes from Sanity and user data from the TripIdeas API.
 
-## Get started
+Status: release candidate on `release/shared-trips-mobile-rc2`, distributed to internal TestFlight against the **integration** environment. It has not been released to production. See [docs/mobile-web-api-handover.md](docs/mobile-web-api-handover.md) for what is verified and what is not.
 
-1. Install dependencies
+## Start here
 
-   ```bash
-   npm install
-   ```
+| If you want to… | Read |
+|---|---|
+| Understand how the app, API, website and CMS fit together | [docs/architecture.md](docs/architecture.md) |
+| Work in this repository (rules, branching, tests, approvals) | [docs/development-guidelines.md](docs/development-guidelines.md) |
+| Change any user-facing UI | [docs/mobile-ui-ux-style-guide.md](docs/mobile-ui-ux-style-guide.md) (mandatory) |
+| Build, verify and submit a TestFlight build, or prepare production | [docs/release-configuration.md](docs/release-configuration.md) |
+| Brief the production release owner | [docs/mobile-web-api-handover.md](docs/mobile-web-api-handover.md) |
+| Change API, schema or environment selection | `../tripideas-architecture/architecture/shared-database-schema-discipline.md` |
+| Instructions for AI coding agents | [AGENTS.md](AGENTS.md) |
 
-2. Start the app
+Other documents: [photo upload transport](docs/photo-upload-transport.md), [product decisions](docs/product-decisions.md), [project scope](PROJECT.md). Historical records, kept for context and **not current**: [release issue register](docs/release-issue-register.md), [September 2026 beta report](docs/beta-feedback-september-2026.md) and the Personal Place audits in [`audit/personal-place-cards/`](audit/personal-place-cards/).
 
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+## Quick start (development)
 
 ```bash
-npm run reset-project
+npm install
+cp .env.example .env.local   # then fill in the three EXPO_PUBLIC_* values
+npx expo start               # open in the iOS Simulator, or a development build
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+Set all three `EXPO_PUBLIC_*` variables in `.env.local`. **If `EXPO_PUBLIC_API_URL` is missing the app silently talks to the production API, and without `EXPO_PUBLIC_MAP_STYLE_URL` every map is blank.** Use the integration values (see [release configuration](docs/release-configuration.md) section 2), never production credentials, for development. Never commit `.env.local` or print the map key.
 
-## Learn more
+| Variable | Purpose |
+|---|---|
+| `EXPO_PUBLIC_API_URL` | TripIdeas API base URL |
+| `EXPO_PUBLIC_MAP_STYLE_URL` | MapTiler style URL (contains the map key) |
+| `EXPO_PUBLIC_TRIP_SHARE_API_URL` | Website snapshot route for the older shared-Trip links |
+| `APP_VARIANT` | `integration` adds the staging website to the associated domains |
 
-To learn more about developing your project with Expo, look at the following resources:
+## Commands
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+| Command | Use |
+|---|---|
+| `npx expo start` | Metro and development server |
+| `npx tsc --noEmit` | Type check |
+| `npx expo lint` | Lint |
+| `node --loader ./scripts/test-loader.mjs --test <files>` | Run tests (plain Node tests; quote globs) |
+| `npm run validate:release -- --profile <name> --remote --live` | Release configuration preflight |
+| `npm run verify:bundle -- --variant integration --ipa <file>` | Verify a finished build's endpoints |
 
-## Join the community
+`npm run ios`/`android` (`expo run:*`) create native projects locally; releases are built with EAS in the cloud only.
 
-Join our community of developers creating universal apps.
+## Layout
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+`app/` Expo Router screens · `components/` shared and feature components (primitives in `components/ui/`) · `constants/design.ts` tokens · feature modules (`auth/`, `saved/`, `trips/`, `shared-trips/`, `personal-place-cards/`, `photo-uploads/`, `location/`, …) each with API client, provider, storage and tests · `sanity/` editorial client and queries · `config/` release endpoints and feature flags · `scripts/` test loader and release validation · `docs/` documentation. Notebooks and Diaries exist in code but are switched off (`config/personal-content-features.ts`).

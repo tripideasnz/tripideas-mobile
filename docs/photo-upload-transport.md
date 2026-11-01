@@ -1,7 +1,13 @@
 # Mobile photo upload transport
 
-Status: development-only foundation
-Target: staging Photo Upload API
+Status (updated 2026-11-01): **the transport engine is in production use** by Personal Places
+(`personal-place-cards/photos.ts` calls `photo-uploads/service`); only the "Photo transport test" route
+(`app/photo-upload-dev.tsx`, redirected away unless `__DEV__`) is development-only. The text below was
+written for the original development milestone and its staging verification (2026-07-28) and is kept as
+the design record. How photos are read, cached and retried, and the Personal Place records they belong to:
+[architecture.md](architecture.md) section 8. Environment: uploads go to whichever API the build targets
+(integration for TestFlight builds 25 to 28); production storage is not verified.
+Original target: staging Photo Upload API
 
 This module transports a selected private image into an owner-scoped
 `PhotoAsset`. It does not render Photo Blocks or attach assets to Notebooks.

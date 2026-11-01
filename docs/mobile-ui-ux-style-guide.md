@@ -12,6 +12,12 @@ the referenced implementation before inventing a new treatment. Where prose
 and code diverge, inspect the reference code and resolve the discrepancy rather
 than silently creating another pattern.
 
+Related: [architecture](architecture.md) · [development guidelines](development-guidelines.md) ·
+[release configuration](release-configuration.md). Sections 18 to 20 (buttons and
+Dynamic Type, photos and Place cards, approved designs) were added after the
+TestFlight builds 25 to 28 and record what was verified on device and in the
+Simulator; sections 1 to 17 are unchanged.
+
 ## Governance
 
 ### TRIPIDEAS MOBILE UI/UX CANON
@@ -500,6 +506,69 @@ a competing pattern.
 | Notebook adjacent-page navigation | `app/notebooks/[notebookId].tsx`, `notebooks/model.ts`, `content-blocks/pages.ts` |
 | Destructive Trip-entry action | `components/trip-entry-card.tsx` |
 | Card surface | `components/ui/card-surface.tsx` |
+| Buttons (primary, secondary, danger; default and compact) | `components/ui/app-button.tsx` |
+| Paired buttons | `components/ui/button-row.tsx` |
+| Chips and segmented control | `components/ui/app-chip.tsx`, `components/ui/segmented-control.tsx` |
+| Text-size limit for controls | `CONTROL_MAX_FONT_SCALE` in `constants/design.ts` |
+| Personal Place photo loading | `personal-place-cards/use-personal-photos.ts`, `photo-loader.ts`, `photo-authorizer.ts` |
+| Trip membership (`Added` / `Add to Trip`) | `app/personal-place-cards/[cardId].tsx` (`TRIP_ACTION_WIDTH`) |
+
+## 18. Buttons, controls and Dynamic Type
+
+Verified at `d7bef7d` against the code and on device and Simulator. The goal is consistency **within each family**, not one size for the whole app.
+
+### Button families
+
+| Family | Component and settings | Where |
+|---|---|---|
+| Primary (black, white label) | `AppButton variant="primary"` | The main action of a row or screen |
+| Secondary (white, 1 pt border, dark label) | `AppButton variant="secondary"` | The alternative action |
+| Danger (red outline and label) | `AppButton variant="danger"` | Rare, confirmed, never dominant (section 12) |
+| Default size | `size="default"`: minimum height 46, padding 16 / 12, border 0 on primary and 1 pt on others | Paired rows, stand-alone calls to action, modals |
+| Compact | `size="compact"`: minimum height 44, padding 12 / 8, 1 pt border on all | Inline or follow-up actions, action clusters, `Try again`, Trip membership |
+| Segmented control | `SegmentedControl` (compact, minimum height 32, hit area extended to 44) | Switching a view: My Trips / Shared With Me |
+| Chip | `AppChip` | Active filters and quick filters on the Map |
+| Icon action | `IconAction` (44, or 36 compact) | Header and title-row actions, delete (section 12) |
+
+**Compact versus default changes padding and border only.** Both use the same label: `bodyStrong`, 16 pt bold. A compact button is never "smaller type"; if a button label looks smaller, it is a hand-built button and should be replaced. Radius is `Radius.control` (10) for all of them. Disabled is 40 % opacity at the same geometry; pressed is about 68 %.
+
+### Pairs and rows: `ButtonRow`
+
+- Two or more buttons that share a row use **`ButtonRow`** (never a hand-built `flexDirection: 'row'`): equal slots, equal heights, an 8 pt gap, always side by side, at every text size.
+- **Primary on the left, outlined on the right** (Location: `Locate now` / `Locate on map`; Photos: `Main photo` / `Body photos`; Trip name: `Save` / `Cancel`). Where the two are alternatives or a source choice, the selected one is primary (`Favourites` / `Search TripIdeas`).
+- Give every `AppButton` in a pair **`fitLabel`**: one line, shrinking up to 20 % rather than wrapping or changing the row's shape. Keep labels short enough to fit at the default size; at accessibility sizes they shrink.
+- **Stacked full-width default buttons are for actions that each need an explanation or have long labels** (shared Trip preview's `Join Trip` and `Save a Copy` with captions; map destination buttons on Place pages; modal confirmations). Do not stack a pair that is a pair elsewhere.
+- **Unlike actions** (for example `Save a Copy`, `Share link`, `Stop sharing`) form an action cluster: compact buttons that wrap as a group. They are not a pair and need not be equal.
+- **Trip membership** (`Added` / `Add to Trip`): a compact secondary `AppButton` of fixed width (`TRIP_ACTION_WIDTH`, about 120 pt) beside the Trip name, label fitted, long names wrap. Never stacked, never full width.
+- Cancel-then-confirm dialogs may keep Cancel on the left (the map location picker does; recorded in the inconsistencies below).
+
+### Dynamic Type
+
+- **Body text follows the system text size without a cap.**
+- **Controls are capped at 1.4×** (`CONTROL_MAX_FONT_SCALE`): button, chip and segmented-control labels, the filter-sheet header and the Saved header title. This keeps them inside their slots; it is not a general typography cap. Do not add a global cap or change type tokens to solve a control problem.
+- Approach in order: let the control grow in height (minimum height, never fixed height) → `fitLabel` for paired labels → shorten the label. **Do not stack paired buttons at large sizes**: that was tried (TestFlight build 26) and rejected; approved side-by-side layouts are preserved at every size.
+- `lib/text-scale.ts`, `hooks/use-stacked-rows.ts` and `STACK_ROWS_AT_FONT_SCALE` are leftovers of the rejected approach: do not use them.
+- Known residual: at the largest accessibility size a long single word in body text can wrap inside a narrow card or row.
+- When touching text or controls, check normal, one enlarged and one accessibility size on a narrow and a wide device (see [development guidelines](development-guidelines.md) section 6).
+
+## 19. Photos and Place cards
+
+- **Layouts:** list cards use the 112 × 92 `TripImageCollage` montage (section 8); finished editorial and Personal Place pages use a full-width 16:9 hero (`PlaceDetailContent`) and the one-to-four image `PlacePhotoGrid` (section 11); the Personal Place editor uses a 16:9 main-photo tile with a circled remove control and a two-column body-photo grid with circled remove controls (section 10).
+- **A photo that is available is shown at once.** Revisiting a Personal Place must not show an empty hero, a placeholder or "Loading…" text while a valid authorisation exists. Loading, retry and failed states appear only for photos that really are loading or failed (`Try again` is a compact secondary button).
+- **No fade for private photos.** Personal Place photos render with `transition={0}`, chosen per image by `isPersonalPhotoCacheKey(cacheKey)` in `trip-image-collage.tsx`, `place-photo-grid.tsx` and `place-detail-content.tsx`; the editor tile is `0`. Editorial and other images keep the 150 ms fade. Do not widen or remove this distinction without a before/after check.
+- **Stable identity:** photo views are keyed by the stable cache key (user plus asset), never by the signed URL, and always read photos through `usePersonalPhotos`. A new or replaced photo is a new asset id and loads normally.
+- Details of authorisation, caching and retry: [architecture](architecture.md) section 8.
+
+## 20. Approved designs: do not change without approval
+
+These were reviewed by the product owner on device; treat them as frozen. A task that must touch one needs explicit approval and a before/after comparison.
+
+- Personal Place **Location** row (`Locate now` / `Locate on map`) and **Photos** row (`Main photo` / `Body photos`): `ButtonRow`, identical in create and edit.
+- **Trip membership** buttons beside the Trip name.
+- **Regions** and **Activities** filter sheets (section 11 convention) and the Map's two-stage pin and thumbnail selection.
+- **My Trips / Shared With Me** segmented control.
+- **Trip card** delete control (section 12).
+- `Favourites` / `Search TripIdeas` in Add places to Trip, and `Save` / `Cancel` for the Trip name: `ButtonRow` of `fitLabel` buttons (added in build 28; pending device confirmation at the time of writing).
 
 ## Recorded implementation inconsistencies
 
@@ -514,6 +583,13 @@ These are current facts, not invitations to spread the variance:
 4. The Saved filter sheet (Favourites and Trips on the Map) predates the
    filter-sheet header convention: it keeps its older header and applies as soon
    as a row is chosen. It should adopt the convention when it is next changed.
+5. The map location picker's `Cancel` / `Save` row (`components/map/saved-location-picker.tsx`) is a
+   hand-built row with a 12 pt gap and Cancel on the left, not a `ButtonRow`.
+6. The Trips import prompt (`Import Trips` / `Not now`, `app/trips/index.tsx`) is a hand-built row whose
+   buttons are only as wide as their labels, not equal slots.
+7. `Show on Google Maps` / `Show on TripIdeas.nz Map` on the Personal Place page are stacked full-width
+   default buttons, like editorial Place pages (item 2), while the editor's Location row is side by side.
+   Intentional: long labels.
 
 Do not fix recorded inconsistencies as incidental work. A task that changes
 canon should update this document only when explicitly authorised.

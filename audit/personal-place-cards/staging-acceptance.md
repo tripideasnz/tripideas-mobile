@@ -1,5 +1,7 @@
 # Personal Place Cards — authenticated staging acceptance
 
+> **Historical audit, not current guidance.** Written against an earlier branch and baseline. Personal Places and photo infrastructure as built today: [architecture.md](../../docs/architecture.md) sections 6 and 8.
+
 Date: 2026-08-03
 
 Mobile baseline: `cc01d8ba2f85dd2e0c4dad8a676e984f79164b79`

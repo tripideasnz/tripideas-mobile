@@ -1,5 +1,7 @@
 # Targeted mobile reuse audit — Personal Place Cards
 
+> **Historical audit, not current guidance.** Written against an earlier branch and baseline. Personal Places and photo infrastructure as built today: [architecture.md](../../docs/architecture.md) sections 6 and 8.
+
 ## 1. Baseline and repository status
 
 - Repository: `tripideas-mobile`

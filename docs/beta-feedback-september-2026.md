@@ -1,5 +1,7 @@
 # September 2026 mobile beta feedback — final consolidation
 
+> **Historical (September 2026).** "Authoritative" below means for that period only. Since then the app gained live Trip sharing, Shared With Me, Universal Links, release validation and many UI corrections. For the current state read [architecture.md](architecture.md), [release-configuration.md](release-configuration.md) and [mobile-web-api-handover.md](mobile-web-api-handover.md).
+
 This is the authoritative report for the final September beta implementation. Superseded intermediate reports have been removed. The final consolidation makes no new product changes.
 
 ## Preflight and scope
