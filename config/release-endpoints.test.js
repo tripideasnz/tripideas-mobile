@@ -257,22 +257,45 @@ test('validate-release-config --effective passes the corrected worker environmen
   assert.equal(run('validate-release-config.js', ['--effective'], { ...worker, EAS_BUILD_PROFILE: 'qa-nightly' }).status, 1);
 });
 
-test('the cloud gate does not apply to production builds until it is separately approved', () => {
-  // Through the hook (no flag) a production build passes through unchecked, even a wrong one.
-  for (const env of [productionEnv, { ...productionEnv, EXPO_PUBLIC_API_URL: STAGING_API }, {}]) {
-    const result = run('validate-release-config.js', ['--effective'], { EAS_BUILD_PROFILE: 'production', ...env });
-    assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, /not enforced for the "production" build/);
-  }
-  // No profile and no integration variant is treated the same way; an unknown profile too.
-  assert.equal(run('validate-release-config.js', ['--effective'], productionEnv).status, 0);
-  assert.equal(run('validate-release-config.js', ['--effective'], { EAS_BUILD_PROFILE: 'qa-nightly' }).status, 0);
+test('the cloud gate covers production builds too: the same checks as testflight-staging', () => {
+  const production = { EAS_BUILD_PROFILE: 'production', ...productionEnv };
+  const effective = (env, runner = run) => runner('validate-release-config.js', ['--effective'], env);
+  const good = effective(production);
+  assert.equal(good.status, 0, good.stderr);
+  assert.match(good.stdout, /profile "production" builds the production variant/);
+  assert.match(good.stdout, new RegExp(`key length 20, fingerprint ${TEST_KEY_SHA256.slice(0, 8)}, approved`));
+  assert.doesNotMatch(good.stdout, /not enforced/);
 
-  // The production rules still exist and can be run by hand.
-  const flag = ['--effective', '--enforce-production'];
-  assert.equal(run('validate-release-config.js', flag, { EAS_BUILD_PROFILE: 'production', ...productionEnv }).status, 0);
-  assert.equal(run('validate-release-config.js', flag, { EAS_BUILD_PROFILE: 'production', ...productionEnv, APP_VARIANT: 'integration' }).status, 1);
-  assert.equal(run('validate-release-config.js', flag, { EAS_BUILD_PROFILE: 'production', ...productionEnv, EXPO_PUBLIC_TRIP_SHARE_API_URL: STAGING_SHARE }).status, 1);
+  // Wrong or missing values fail the production build.
+  const wrong = [
+    { ...production, EXPO_PUBLIC_API_URL: STAGING_API },
+    { ...production, EXPO_PUBLIC_TRIP_SHARE_API_URL: STAGING_SHARE },
+    { ...production, APP_VARIANT: 'integration' },
+    { ...production, EXPO_PUBLIC_MAP_STYLE_URL: 'https://api.maptiler.com/maps/streets-v2/style.json?key=ABCDEFGHIJKLMNOPQRST' },
+  ];
+  for (const env of wrong) assert.equal(effective(env).status, 1, JSON.stringify(Object.keys(env)));
+  for (const key of ['EXPO_PUBLIC_API_URL', 'EXPO_PUBLIC_TRIP_SHARE_API_URL', 'EXPO_PUBLIC_MAP_STYLE_URL']) {
+    const { [key]: removed, ...rest } = production;
+    const result = effective(rest);
+    assert.equal(result.status, 1, key);
+    assert.match(result.stderr, new RegExp(`${key} is not set by any source`));
+  }
+  assert.equal(effective({ EAS_BUILD_PROFILE: 'production' }).status, 1, 'an empty production environment fails');
+
+  // The real approved fingerprints reject the made-up key, so a stand-in cannot pass the gate.
+  const real = effective(production, runReal);
+  assert.equal(real.status, 1);
+  assert.match(real.stderr, /the map key in EXPO_PUBLIC_MAP_STYLE_URL has fingerprint [0-9a-f]{8}, which is not approved/);
+  for (const output of [good, real].flatMap((r) => [r.stdout, r.stderr])) assert.ok(!output.includes(TEST_KEY.slice(0, 12)), 'the key is never printed');
+
+  // No profile name: validated as production (or integration with APP_VARIANT), never skipped.
+  assert.equal(effective(productionEnv).status, 0);
+  assert.equal(effective({}).status, 1);
+  // An unregistered profile no longer passes unchecked, whatever it builds.
+  assert.equal(effective({ EAS_BUILD_PROFILE: 'qa-nightly', ...productionEnv }).status, 1);
+  assert.match(effective({ EAS_BUILD_PROFILE: 'qa-nightly', ...productionEnv }).stderr, /Unknown build profile "qa-nightly"/);
+  // The old opt-in flag is gone: nothing is opt-in any more.
+  assert.equal(run('validate-release-config.js', ['--effective', '--enforce-production'], production).status, 1);
 });
 
 test('the worker hook cannot be switched off from the build environment', () => {
@@ -425,11 +448,10 @@ test('validate-release-config: store profiles fail on an unapproved key, interna
   assert.equal(internal.status, 0, internal.stderr);
   assert.match(internal.stderr, /WARNING: .*which is not approved/);
   for (const output of [store, internal].flatMap((r) => [r.stdout, r.stderr])) assert.ok(!output.includes(TEST_KEY.slice(0, 12)));
-  // The production gate stays off until separately approved, and applies the same key rule when run by hand.
+  // The production gate applies the same key rule (its own test above covers the rest).
   const production = { EAS_BUILD_PROFILE: 'production', ...productionEnv };
-  assert.equal(runReal('validate-release-config.js', ['--effective'], production).status, 0);
-  assert.equal(runReal('validate-release-config.js', ['--effective', '--enforce-production'], production).status, 1);
-  assert.equal(run('validate-release-config.js', ['--effective', '--enforce-production'], production).status, 0);
+  assert.equal(runReal('validate-release-config.js', ['--effective'], production).status, 1);
+  assert.equal(run('validate-release-config.js', ['--effective'], production).status, 0);
 });
 
 test('the approved list can be replaced for tests only, never on the EAS build worker', () => {

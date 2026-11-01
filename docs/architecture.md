@@ -136,7 +136,7 @@ History worth knowing: photo flicker was first fixed in `4acff79` (stable keys, 
 ## 10. Known gaps (as of `d7bef7d`)
 
 - Sign-out is local-only and there is no account switching (section 5).
-- The map falls back to a placeholder key when its style is missing (blank maps, no data risk); production builds are not yet gated on the EAS worker, so a production build lacking its variables would stop at launch (section 4; [release configuration](release-configuration.md) section 12).
+- The map falls back to a placeholder key when its style is missing (blank maps, no data risk); the EAS worker validates production builds too, so one missing a variable fails the build (section 4; [release configuration](release-configuration.md) section 12).
 - No in-app account deletion or Terms of Use ([release issue register](release-issue-register.md), P0-10, historical but still relevant).
 - Older public snapshot sharing includes Trip and Place notes (register P0-04/P0-14a, owner decision needed); live sharing is the supported path.
 - The map's name pop-up is not exposed to VoiceOver (iOS MapLibre limitation); the selected thumbnail offers the same action.

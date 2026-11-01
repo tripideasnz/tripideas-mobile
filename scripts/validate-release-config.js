@@ -6,8 +6,8 @@
 //   --effective            Validate the environment THIS process will build with. This is what
 //                          runs on the EAS worker (package.json "eas-build-post-install"), where
 //                          it sees the real, final variables. Reads EAS_BUILD_PROFILE.
-//                          Enforced for integration/TestFlight builds only; production builds
-//                          pass through unchecked unless --enforce-production is given.
+//                          Enforced for EVERY profile, production included: a missing or wrong
+//                          value, or an unapproved map key, fails the build before it compiles.
 //   --profile <name>       Workstation preflight of an eas.json profile. Add --remote to also
 //                          read the profile's EAS environment (needs `eas login`). Which source
 //                          wins when both define a variable is undocumented, so every defined
@@ -151,11 +151,10 @@ function mapNote(styleUrl, approvedHashes) {
 }
 
 function parseArguments(argv) {
-  const options = { effective: false, enforceProduction: false, live: false, profile: undefined, remote: false };
+  const options = { effective: false, live: false, profile: undefined, remote: false };
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
     if (argument === '--effective') options.effective = true;
-    else if (argument === '--enforce-production') options.enforceProduction = true;
     else if (argument === '--live') options.live = true;
     else if (argument === '--remote') options.remote = true;
     else if (argument === '--profile') options.profile = argv[(index += 1)];
@@ -183,14 +182,8 @@ async function main() {
       profile = process.env.APP_VARIANT === 'integration' ? 'testflight-staging' : 'production';
       warnings.push(`EAS_BUILD_PROFILE is not set; validating as "${profile}".`);
     }
-    // The cloud gate covers integration and TestFlight builds only. Production builds are not
-    // gated until that has been separately approved; --enforce-production checks one by hand.
-    const known = PROFILES[profile];
-    const gated = known ? known.variant === 'integration' : process.env.APP_VARIANT === 'integration';
-    if (!gated && !options.enforceProduction) {
-      console.log(`Release configuration is not enforced for the "${profile}" build (production gate not enabled).`);
-      return;
-    }
+    // Every build is checked, production included (the production gate was enabled with the
+    // approval of 2026-11-02). A profile that is not registered in PROFILES fails here too.
     sources = [{ name: 'build environment', env: process.env }];
     appVariant = process.env.APP_VARIANT;
   } else {
