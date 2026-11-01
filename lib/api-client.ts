@@ -1,9 +1,13 @@
+import { requireHttpUrlEnv } from '@/config/required-env';
+
 export function normalizeApiBaseUrl(value: string): string {
   return value.replace(/\/+$/, '');
 }
 
+// Required: there is no default. A missing EXPO_PUBLIC_API_URL stops the app with a clear error
+// instead of quietly using the production API (config/required-env.ts).
 export const API_BASE_URL = normalizeApiBaseUrl(
-  process.env.EXPO_PUBLIC_API_URL ?? 'https://api.tripideas.nz'
+  requireHttpUrlEnv('EXPO_PUBLIC_API_URL', process.env.EXPO_PUBLIC_API_URL)
 );
 
 // Set by AuthProvider when a token is acquired or cleared.

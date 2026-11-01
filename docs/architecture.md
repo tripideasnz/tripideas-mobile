@@ -60,7 +60,7 @@ The API (`EXPO_PUBLIC_API_URL`, see [release configuration](release-configuratio
 - **Routes used by mobile** (from the client code, not from API source): `/favourite`; `/itinerary` (+ `/entries`, `/entry`, `/import`, `/{id}/share`) for Trips; `/shared-trips`, `/favourites-collection/*`, `/collection-comments`, `/collection-item-comments`, `/collections/{id}/preview` for sharing; `/personal-place-cards` (+ `/media`); `/photo-assets/upload-intents`, `/upload-completion`, `/read-authorization`; `/auth/mobile/{authorize,exchange,refresh}`; `/version` for compatibility.
 - **Compatibility:** `lib/api-compatibility.ts` reads `/version` (build, environment, capabilities). Per the shared contract a bare route `404` means "this environment lacks the capability", never "your content was deleted"; unreachable is not incompatible, and offline caches are kept.
 - **Server data is authoritative** for Trips (capability `trip-api-authority`). Older device-only Trips are imported once through `/itinerary/import` (`trips/migration.ts`), with a journal so a retry never duplicates.
-- **Defaults to know about:** if `EXPO_PUBLIC_API_URL` is missing, `lib/api-client.ts` silently targets production (`https://api.tripideas.nz`); a missing `EXPO_PUBLIC_MAP_STYLE_URL` yields `key=MISSING_KEY` (blank maps). EAS builds are protected by `validate:release`; a local `expo start` without `.env.local` is not. See [release configuration](release-configuration.md) section 3.
+- **No defaults:** `EXPO_PUBLIC_API_URL` and `EXPO_PUBLIC_TRIP_SHARE_API_URL` are required (`config/required-env.ts`); if one is missing the app stops at startup with an error naming it, and it never falls back to production. The public-sharing gate opens only for the exact production API URL. The one soft spot is the map: a missing `EXPO_PUBLIC_MAP_STYLE_URL` yields `key=MISSING_KEY` (blank maps), and release builds are checked for the approved key. Variables per environment: [release configuration](release-configuration.md) section 12.
 
 ## 5. Authentication and sessions
 
@@ -136,7 +136,7 @@ History worth knowing: photo flicker was first fixed in `4acff79` (stable keys, 
 ## 10. Known gaps (as of `d7bef7d`)
 
 - Sign-out is local-only and there is no account switching (section 5).
-- Silent production defaults in `lib/api-client.ts`, `trips/shared-trip.ts`, `trips/public-sharing.ts`, `constants/map.ts` (section 4).
+- The map falls back to a placeholder key when its style is missing (blank maps, no data risk); production builds are not yet gated on the EAS worker, so a production build lacking its variables would stop at launch (section 4; [release configuration](release-configuration.md) section 12).
 - No in-app account deletion or Terms of Use ([release issue register](release-issue-register.md), P0-10, historical but still relevant).
 - Older public snapshot sharing includes Trip and Place notes (register P0-04/P0-14a, owner decision needed); live sharing is the supported path.
 - The map's name pop-up is not exposed to VoiceOver (iOS MapLibre limitation); the selected thumbnail offers the same action.

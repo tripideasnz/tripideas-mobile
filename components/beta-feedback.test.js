@@ -54,8 +54,9 @@ assert.match(frame, /<HeaderAction label="Cancel" onPress=\{onCancel\} \/>/);
 assert.match(trips, /isCreatingTrip \? <View accessibilityLabel="Creating Trip"/);
 assert.match(trips, /<ActivityIndicator color=\{Palette.trip\}/);
 assert.doesNotMatch(trips, /<StatusText>Creating trip/);
-assert.match(picker, /<AppButton style=\{\{ flex: 1 \}\} label="Favourites"/);
-assert.match(picker, /<AppButton style=\{\{ flex: 1 \}\} label="Search TripIdeas"/);
+// Two equal, fitted buttons in a ButtonRow (components/trip-button-pairs.test.js covers the detail).
+assert.match(picker, /<ButtonRow>[\s\S]*<AppButton fitLabel label="Favourites"/);
+assert.match(picker, /<AppButton fitLabel label="Search TripIdeas"[\s\S]*<\/ButtonRow>/);
 assert.doesNotMatch(picker, /added to Trip\./);
 const config = JSON.parse(configText).expo;
 assert.ok(config.ios.infoPlist.NSLocationWhenInUseUsageDescription);

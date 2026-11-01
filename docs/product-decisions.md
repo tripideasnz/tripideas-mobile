@@ -20,4 +20,4 @@ These are decisions taken by the product owner that the code reflects. Record ch
 - **Personal Place photos appear immediately and without a fade**; other images keep their 150 ms fade.
 - **Notebooks and Diaries are switched off** for this release (`config/personal-content-features.ts`).
 - **Release gating:** physical-device acceptance by the owner is required before production deployment, the final handover or any external TestFlight; every build, submission and push needs explicit approval.
-
+- **Required configuration has no defaults (2026-11-02).** A missing API or share URL stops the app at startup with an error naming the variable; it never falls back to production. Public Trip sharing is enabled only for the exact production API URL. Release builds (TestFlight and App Store) must carry the approved MapTiler key, checked by fingerprint; the live MapTiler probe is diagnostic only. Details: [release configuration](release-configuration.md) sections 9 and 12.

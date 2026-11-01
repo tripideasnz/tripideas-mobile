@@ -1,20 +1,29 @@
+import { requireHttpUrlEnv } from '@/config/required-env';
 import type { MyTrip } from '@/trips/types';
 import type { PlaceCardData } from '@/types/content';
 
 // www is the canonical host: the apex redirects to it, and Universal Links are associated with it.
 const PUBLIC_TRIP_BASE_URL = 'https://www.tripideas.nz/trip';
-const PUBLIC_TRIP_SHARE_API_URL =
-  process.env.EXPO_PUBLIC_TRIP_SHARE_API_URL ??
-  'https://www.tripideas.nz/api/trips/share';
-const PRODUCTION_API_URL = 'https://api.tripideas.nz';
+// The production API: the one value public Trip links are allowed to be created for. The configured
+// API URL is compared with it; it is never a default for a missing one. It is a pattern, not the URL
+// as one string, on purpose: scripts/verify-bundle-endpoints.js proves a production build was given
+// EXPO_PUBLIC_API_URL by finding that exact URL in the bundle, which must therefore come only from
+// the configuration (config/required-env.test.js guards this).
+const PRODUCTION_API_URL = /^https:\/\/api\.tripideas\.nz$/i;
+
+// Required, and read only once the gate above has opened: there is no default.
+const publicTripShareApiUrl = () =>
+  requireHttpUrlEnv('EXPO_PUBLIC_TRIP_SHARE_API_URL', process.env.EXPO_PUBLIC_TRIP_SHARE_API_URL);
 
 // Public Trip links write permanent documents to the production Sanity dataset. Only builds
 // that talk to the production API may create them; internal and integration builds fall back
-// to text-only sharing.
+// to text-only sharing. A missing or blank API URL never enables them: only the exact production
+// URL does.
 export function isPublicTripSharingEnabled(
-  apiUrl: string = process.env.EXPO_PUBLIC_API_URL ?? PRODUCTION_API_URL
+  apiUrl: string | undefined = process.env.EXPO_PUBLIC_API_URL
 ): boolean {
-  return apiUrl.trim().replace(/\/+$/, '') === PRODUCTION_API_URL;
+  if (!apiUrl?.trim()) return false;
+  return PRODUCTION_API_URL.test(apiUrl.trim().replace(/\/+$/, ''));
 }
 
 export type PublicTripPlaceSnapshot = {
@@ -135,8 +144,10 @@ export async function createPublicTripShare(
   if (!isPublicTripSharingEnabled()) {
     return { reason: 'disabled', status: 'unavailable' };
   }
+  // Outside the try: a configuration error must surface, not be reported as a network failure.
+  const shareApiUrl = publicTripShareApiUrl();
   try {
-    const response = await fetch(PUBLIC_TRIP_SHARE_API_URL, {
+    const response = await fetch(shareApiUrl, {
       body: JSON.stringify(snapshot),
       headers: { 'Content-Type': 'application/json' },
       method: 'POST',

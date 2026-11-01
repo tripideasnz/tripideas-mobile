@@ -41,12 +41,13 @@ Related: [architecture](architecture.md) · [UI/UX style guide](mobile-ui-ux-sty
 - **Preserve approved designs.** Treat anything the product owner has approved on a device (Personal Place Location/Photos rows, Trip membership buttons, Regions/Activities filters, the Trips segmented control, Trip card delete) as frozen. A change that touches one needs explicit approval and a before/after check.
 - Do not add dependencies, delete files, or change build settings, bundle identifiers, signing or associated domains without being asked. Ask before deleting files.
 - Do not change typography globally. Dynamic Type is handled per control (see the style guide section 18); body text scales fully.
-- Silent fallbacks are bugs: when you add configuration, prefer failing loudly to defaulting to production.
+- Silent fallbacks are bugs. Required configuration has no default: read it with `requireHttpUrlEnv` (`config/required-env.ts`) so a missing value stops the app with a message naming the variable, and never default to production. A feature gate must stay closed when its configuration is missing. Required variables, environments and the release checks: [release configuration](release-configuration.md) section 12.
 
 ## 5. Test scope
 
 - Run **targeted** tests for what you touched, plus `npx tsc --noEmit`. Add a regression test for each defect you fix, next to the feature (`<feature>/*.test.js`, `components/*.test.js`).
 - Command: `node --loader ./scripts/test-loader.mjs --test <file> [<file> …]` (quote globs in zsh). `npx expo lint` for lint. `npm run validate:release -- --profile <name> --remote --live` before any build ([release configuration](release-configuration.md)).
+- Tests run without an Expo environment; the test loader supplies fake `EXPO_PUBLIC_*` values (release configuration section 12). A test that needs them absent runs a child process with `TRIPIDEAS_TEST_NO_ENV_DEFAULTS=1`.
 - Many tests assert on source text or use the render harness. They prove wiring and logic, not appearance. When a change is visual, say how it was looked at.
 - Run the whole suite only when a release or shared-infrastructure change calls for it; do not repeat unrelated testing to look thorough.
 
@@ -58,7 +59,7 @@ The iOS Simulator is good for layout, navigation, state and flows. It **cannot**
 - release-build performance (a debug build against Metro is much slower; do not judge flicker, frame rate or memory from it);
 - real network and API latency.
 
-Say which of these a report did *not* cover. Physical-device acceptance by the owner is the gate for release; "passed in the Simulator" is not acceptance. Run Metro with the same `EXPO_PUBLIC_*` values a build would use, or maps will be blank (`MISSING_KEY`).
+Say which of these a report did *not* cover. Physical-device acceptance by the owner is the gate for release; "passed in the Simulator" is not acceptance. Run Metro with the `EXPO_PUBLIC_*` values from `.env.local` (copy `.env.example`), and restart it with `--clear` after changing them: Metro caches the old values. Without the map style, maps are blank (`MISSING_KEY`).
 
 Check Dynamic Type at normal, an enlarged size and an accessibility size on at least one narrow and one wide device when touching text or controls.
 
@@ -67,7 +68,7 @@ Check Dynamic Type at normal, an enlarged size and an accessibility size on at l
 - Never change authentication, token storage, account isolation, photo authorisation or sharing behaviour as a side effect. These have race-condition tests; keep them green and extend them.
 - Keep offline, user-scoped caches working when the API is unreachable or incompatible.
 - A route `404` is an environment problem, not "your content was deleted" (shared contract, rule 8).
-- Never print, log or commit secrets. The MapTiler key ships in the app but is still never written into reports; verify it by **fingerprint** (section 8 of [release configuration](release-configuration.md)).
+- Never print, log or commit secrets. The MapTiler key ships in the app but is still never written into reports; verify it by **fingerprint**: the release scripts do this for you (section 9 of [release configuration](release-configuration.md), which also covers key rotation).
 
 ## 8. Approvals
 

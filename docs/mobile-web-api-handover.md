@@ -59,7 +59,7 @@ The Planner (services and its own database) is **not** part of this release **[R
 
 ## 3. How mobile integrates with the API
 
-- **[V]** Base URL from `EXPO_PUBLIC_API_URL`. If it is missing, `lib/api-client.ts` **silently falls back to `https://api.tripideas.nz`** (production). EAS builds are guarded by `validate:release`; a local run without `.env.local` is not.
+- **[V]** Base URL from `EXPO_PUBLIC_API_URL`, **required: no default.** If it is missing, blank or not an http(s) URL the app stops at startup with an error naming the variable (`config/required-env.ts`); it no longer falls back to production. The same holds for `EXPO_PUBLIC_TRIP_SHARE_API_URL`. Per-environment values: [release configuration](release-configuration.md) section 12.
 - **[V]** Signed-in calls use a bearer access token (kept in memory), refresh once on `401` and replay once, then end the session.
 - **[V]** Routes the mobile client calls (read from the client code, so they are the routes production must serve):
   - Accounts and saved: `/auth/mobile/authorize`, `/auth/mobile/exchange`, `/auth/mobile/refresh`, `/favourite`
@@ -139,8 +139,8 @@ The integration API must never be reconnected to production or legacy-staging da
 6. **Unauthenticated admin write routes [R]:** `/admin/bookit/*` and `/admin/sanity/remove-walk-forest-tags` have no authentication. They are disabled by default in the release candidate (`ADMIN_SYNC_ROUTES_ENABLED`), **present and live on legacy staging** (with an Editor token on the production dataset), and must not be enabled in production. Authenticate or remove them.
 7. **Migration ledger [R]:** run the ledger comparison before release; production does not have `20261031000000`, and holds integration-era rows and roles listed in the release plan (a separate reconciliation workstream).
 8. **Place pages returned HTTP 500 on staging [R]** for every Place (ISR plus an uncached fetch); fixed in the web candidate with `dynamic = "force-dynamic"` and needs your review.
-9. **MapTiler key ships in the app [V]:** confirm quota and restrictions. A build without the key has blank maps; verify by fingerprint ([release configuration](release-configuration.md) section 9).
-10. **Silent production defaults in the client [V]:** `lib/api-client.ts`, `trips/shared-trip.ts`, `trips/public-sharing.ts` and `constants/map.ts`. Mobile fails quietly toward production rather than loudly.
+9. **MapTiler key ships in the app [V]:** confirm quota and restrictions. A build without the key has blank maps. `validate:release` and `verify:bundle` now check the key's format and SHA-256 against the approved fingerprint and reject a missing, malformed or unapproved key for TestFlight and App Store builds; the live MapTiler probe is a warning only. Rotation procedure: [release configuration](release-configuration.md) section 9.
+10. **Configuration fails loudly [V], with one gap:** the silent production defaults are removed (API and share URL required; public sharing is enabled only for the exact production API URL). **The EAS worker does not yet gate production builds**, so a production build whose EAS `production` environment lacked a variable would stop at launch; it was verified complete on 2026-11-02 and `--enforce-production` passes against it. Enabling the worker gate is the recommended next step and needs the owner's approval.
 11. **Shared EAS `preview` environment [V]:** other mobile branches' TestFlight profiles use it; the Shared Trips profile no longer defines the share URL there (removed 2026-10-29 with rollback recorded). Do not change it without checking them.
 12. **Submission profile [V]:** `eas.json` has no `submit.testflight-staging` or production App Store Connect app id; submission has needed a temporary configuration (section 8 of the release doc).
 13. **Mobile gaps [V]:** local-only sign-out; no in-app account deletion or Terms of Use; the older snapshot share includes notes; `supportsTablet` is true with no iPad acceptance.
@@ -156,7 +156,7 @@ Nothing here has been done for production.
 - [ ] Migration ledger compared; additive migration applied with `prisma migrate deploy`; production backup and restore position recorded.
 - [ ] Release candidate branches and SHAs recorded for API, web and mobile (integration used API `release/shared-trips-rc2` `7e7df56` and web `release/shared-trips-web-rc2` `0c2d89d` **[R]**); decide how they are merged and pushed (none has been pushed).
 - [ ] Deploy API, then web (association file now 200), in one window, with rollback deployments recorded; smoke-test `/version`, a link preview, sign-in.
-- [ ] Mobile: production EAS environment holds the production API URL, map style and share URL; build with the `production` profile from the approved commit; `--enforce-production` check; IPA verification including the MapTiler fingerprint; submit to App Store Connect.
+- [ ] Mobile: production EAS environment holds the production API URL, map style and share URL; build with the `production` profile from the approved commit; `validate:release --profile production --remote` (and `--enforce-production` by hand); `verify:bundle --variant production --ipa <file>`, which includes the MapTiler fingerprint; submit to App Store Connect.
 - [ ] App Store requirements: Terms of Use, in-app account deletion, privacy answers, screenshots and listing, iPad decision.
 - [ ] Post-release: Universal Link tap test on a phone against production; owner records which build is live.
 - [ ] Rollback plan agreed (release configuration section 11).
@@ -172,7 +172,8 @@ Nothing here has been done for production.
 7. Who sets `APPLE_TEAM_ID` on the production website so the association file is served, and when?
 8. Should the older public snapshot share remain (it includes notes) or be retired in favour of live sharing and copy?
 9. What should sign-out do on production: keep local-only, or add WorkOS logout (API and tenant change) to allow account switching?
-10. What are the MapTiler quota and key restrictions, and when should the key be rotated (it was printed once into a working session on 2026-11-01; recorded in the release notes)?
-11. How are Sanity schema changes coordinated with the mobile queries?
-12. What should happen to a Personal Place's stored photos when the place is deleted, and to unsynced files after sign-out?
-13. What is the plan for production database reconciliation items (relinked accounts, extra role, public proxies, shared cookie password)? They are outside this release but block a clean production gate.
+10. What are the MapTiler quota and key restrictions, who owns the key and its rotation (procedure in release configuration section 9; the website shares the key, so it must rotate with it), and should it be rotated now (it was printed once into a working session on 2026-11-01; recorded in the release notes)?
+11. Should the EAS worker also gate production builds (`eas-build-post-install` today enforces integration and TestFlight only)? It would turn a missing production variable into a build failure instead of a launch-time stop. It passes against the current `production` environment.
+12. How are Sanity schema changes coordinated with the mobile queries?
+13. What should happen to a Personal Place's stored photos when the place is deleted, and to unsynced files after sign-out?
+14. What is the plan for production database reconciliation items (relinked accounts, extra role, public proxies, shared cookie password)? They are outside this release but block a clean production gate.

@@ -2,12 +2,16 @@
 //
 // Snapshots are Sanity `publicTrip` documents with private (dotted) IDs, so the app cannot query
 // them. The web app serves a read-only JSON view at GET /api/trips/share/<shareId>.
+import { requireHttpUrlEnv } from '@/config/required-env';
+
 /** 16 lowercase hex characters, as issued by the web share endpoint. */
 export const SHARE_ID_PATTERN = /^[0-9a-f]{16}$/;
 
-const SNAPSHOT_BASE_URL = (
-  process.env.EXPO_PUBLIC_TRIP_SHARE_API_URL ??
-  'https://www.tripideas.nz/api/trips/share'
+// Required: there is no default (config/required-env.ts). Integration builds read snapshots from
+// the staging website; a missing value must never fall back to the production website.
+const SNAPSHOT_BASE_URL = requireHttpUrlEnv(
+  'EXPO_PUBLIC_TRIP_SHARE_API_URL',
+  process.env.EXPO_PUBLIC_TRIP_SHARE_API_URL
 ).replace(/\/+$/, '');
 
 export type SharedTripPlace = {

@@ -1,6 +1,6 @@
 # Release configuration, validation and build process
 
-**Status, 2026-11-01:** sections 1 to 5 were audited on 2026-10-29 and still describe the code at `release/shared-trips-mobile-rc2` (`d7bef7d`): `eas.json` profiles, the `preview` environment (now holding only the map style URL) and the silent production defaults are unchanged. Section 6 is historical. Sections 8 to 11 are the **current release procedure**, as exercised for TestFlight builds 25 to 28. Related: [architecture](architecture.md) · [development guidelines](development-guidelines.md) · [handover for Anu](mobile-web-api-handover.md).
+**Status, 2026-11-01:** sections 1 to 5 were audited on 2026-10-29 and still describe the code at `release/shared-trips-mobile-rc2` (`d7bef7d`): `eas.json` profiles, the `preview` environment (now holding only the map style URL) and the silent production defaults are unchanged. Section 6 is historical. Sections 8 to 11 are the **current release procedure**, as exercised for TestFlight builds 25 to 28. **Updated 2026-11-02:** the app no longer falls back to production when a configuration value is missing, and MapTiler key verification is automated. Required variables per environment and the fail-fast behaviour are in [section 12](#12-required-configuration-and-fail-fast-behaviour); the key checks and rotation are in [section 9](#9-maptiler-verification). Related: [architecture](architecture.md) · [development guidelines](development-guidelines.md) · [handover for Anu](mobile-web-api-handover.md).
 
 Audited 2026-10-29 against `beta/mobile-testflight-integration-prep` at `ceaab5f` plus the validation added after TestFlight build 20. Values below are non-secret endpoints; the map style URL contains a key and is only ever reported as "set".
 
@@ -34,12 +34,12 @@ Cause: `EXPO_PUBLIC_TRIP_SHARE_API_URL` is defined twice, in `eas.json` (staging
 | `testflight-staging` | store / `preview` | `preview` | `APP_VARIANT`, API, share | map style, **share (production value: conflict, removed by section 4)** |
 | `production` | store / `production` | `production` | nothing | API (`api.tripideas.nz`), map style, share (`www`) |
 
-Local development (`expo start`) reads `.env.local` (untracked; `.env.example` has placeholders).
+Local development (`expo start`) reads `.env.local` (untracked). `.env.example` holds the **integration** values and a map key placeholder; all three variables are required (section 12).
 
 ### Findings
 
 1. **Conflict:** `EXPO_PUBLIC_TRIP_SHARE_API_URL` differs between `eas.json` and the `preview` environment (cause of build 20).
-2. **Silent defaults to production** when a variable is missing: `lib/api-client.ts` (API), `trips/shared-trip.ts` and `trips/public-sharing.ts` (share), `trips/public-sharing.ts` gate (API), and `constants/map.ts` (`key=MISSING_KEY`). A missing variable never fails; it points the build at production or breaks the map. This also means a local run without `.env.local` talks to the production API.
+2. **Silent defaults to production (resolved 2026-11-02).** `lib/api-client.ts` (API), `trips/shared-trip.ts` and `trips/public-sharing.ts` (share) and the public-sharing gate used to fall back to production when a variable was missing, so a local run without `.env.local` (or with stale Metro values) talked to the production API and could publish public Trip snapshots. They now require the variable and stop with an error naming it; the gate is disabled unless the configured API URL is exactly the production API (section 12). `constants/map.ts` still uses the `MISSING_KEY` placeholder when the map style is absent (blank maps, no data risk); release builds are protected by the key checks in section 9.
 3. **Other consumers of the `preview` environment:** `testflight-staging` in `beta/mobile-mvp` and `feature/itinerary-planner-mobile` also set `environment: "preview"`. They define only `EXPO_PUBLIC_API_URL` (`https://integration-api-integration.up.railway.app`) in `eas.json`. They read the share URL only in `trips/public-sharing.ts`, whose code default is the production `www` URL, so they are unaffected by the removal in section 4.
 4. **EAS environments:** `preview` holds map style and share; `production` holds API, map style and share; `development` is empty. Custom environments need an Enterprise or Production Expo plan (per Expo's documentation; the plan was not checked).
 5. **Update channels:** `preview` and `production` exist; no EAS Update has been published to `preview`. Builds check for updates on launch, so a published update would reach every build on its channel.
@@ -64,13 +64,13 @@ Rollback of option A: re-create the variable in `preview` with the same value an
 |---|---|---|
 | Unit tests | `node --loader ./scripts/test-loader.mjs --test config/release-endpoints.test.js` | The rules themselves, including the build 20 conditions, in either precedence order. |
 | Preflight | `npm run validate:release -- --profile <name> --remote --live` | `eas.json` is consistent; every value defined by `eas.json` or the EAS environment is approved (precedence-independent); the API, import route, WorkOS client and callback, snapshot route (JSON 404, not an HTML 404) and Universal Link file are live. |
-| Effective, on the build worker | `eas-build-post-install` in `package.json` runs `validate-release-config.js --effective` | The variables the worker really uses are approved, before anything compiles. A wrong or missing value fails the build early. **Enforced for integration and TestFlight profiles only.** Production builds pass through unchecked until that gate is separately approved (`--enforce-production` runs it by hand). |
-| Built app | `npm run verify:bundle -- --variant <v> --ipa <file>` (or `--export` before building) | The JavaScript bundle contains the approved API and snapshot URLs, references no other tripideas.nz or railway.app host, and the shipped Expo config and signed entitlements match. |
+| Effective, on the build worker | `eas-build-post-install` in `package.json` runs `validate-release-config.js --effective` | The variables the worker really uses are approved, and the map key is the approved key (store profiles), before anything compiles. A wrong or missing value fails the build early. **Enforced for integration and TestFlight profiles only.** Production builds pass through unchecked until that gate is separately approved (`--enforce-production` runs it by hand). |
+| Built app | `npm run verify:bundle -- --variant <v> --ipa <file>` (or `--export` before building) | The JavaScript bundle contains the approved API and snapshot URLs and exactly one MapTiler key, which is the approved key (length, format, SHA-256), references no other tripideas.nz or railway.app host, and the shipped Expo config and signed entitlements match. |
 
 Notes:
-- Legitimate production references in an integration bundle (`www` link base and Universal Link domain, `api.tripideas.nz` gate constant, the production share default) are allowed. The snapshot check is a positive one: the staging URL must be present. A production bundle may not reference staging or Railway hosts.
+- Legitimate production references in an integration bundle (the `www` link base and Universal Link domain, the `api.tripideas.nz` host in the allowed list) are allowed. The approved API and share URLs appear in application code nowhere, so finding one in a bundle proves it was supplied as configuration (guarded by `config/required-env.test.js`). The snapshot check is a positive one: the staging URL must be present. A production bundle may not reference staging or Railway hosts.
 - `--export` clears Metro's cache (`--clear`). Without it Metro replays the endpoints of an earlier environment, which was observed while building these checks.
-- Nothing prints secrets. The map style is checked by shape only.
+- Nothing prints secrets. The map style is checked by shape, and its key by length, format and SHA-256; reports show only the key's length and the first 8 characters of its SHA-256.
 
 ## 6. Creating and verifying build 21 (historical: superseded by section 8)
 
@@ -120,10 +120,10 @@ Run from a clean worktree at the approved commit on the release branch. Each of 
 |---|---|---|
 | 1. Preflight | `git status` clean; `git rev-parse --short HEAD` equals the approved SHA; expected commits present (`git merge-base --is-ancestor <sha> HEAD`); no unrelated diff since the previous build (`git diff --stat <prev> HEAD`) | Matches the approval |
 | 2. Checks | `npx tsc --noEmit`; targeted tests for the changes | No errors |
-| 3. Environment | Check the map key held by the EAS `preview` environment by fingerprint only (section 9) | Length 20, approved fingerprint |
+| 3. Environment | `npm run validate:release -- --profile testflight-staging --remote` (reads the EAS environment; add `--live` to probe the deployed API; it also reports the map key's length and fingerprint) | Valid, key `approved` |
 | 4. Build | `npx --yes eas-cli@27.2.0 build --platform ios --profile testflight-staging --non-interactive --no-wait --json` | A build id; `gitCommitHash` equals the approved commit; build number auto-increments (`appVersionSource: remote`) |
 | 5. Wait | Poll `eas build:view <id> --json` until `FINISHED` | `FINISHED`, no error. The worker also runs `eas-build-post-install`, which fails the build early if the effective endpoints are wrong |
-| 6. Inspect the IPA | Download `artifacts.buildUrl`, unzip. Check `Info.plist` (bundle id `nz.tripideas.app`, version, build number), signed entitlements (`codesign -d --entitlements :-`: associated domains `www.tripideas.nz` and `staging.tripideas.nz`, team id), `npm run verify:bundle -- --variant integration --ipa <file>`, and the MapTiler check (section 9). Confirm that the changes of this release are present in the bundle (search for new strings) and that no production or other-staging host appears | All pass. **If any check fails, do not submit and do not rebuild without approval** |
+| 6. Inspect the IPA | Download `artifacts.buildUrl` (use `curl -L`). Run `npm run verify:bundle -- --variant integration --ipa <file>`: it checks `Info.plist` (bundle id, version, build number), the signed entitlements, the embedded endpoints, no production or other-staging host, and the **MapTiler key** (section 9). Confirm that this release's changes are in the bundle (search for new strings). Add `--live-map` for the optional MapTiler diagnostic | All checks pass. **If any fails, do not submit and do not rebuild without approval** |
 | 7. Submit | See below | Submission `FINISHED` |
 | 8. Record | Build id, number, commit, submission id, check results (in the release records, with no secret values) | Written down |
 
@@ -142,13 +142,36 @@ Never use EAS Update for this release: builds check for updates on launch and an
 
 ## 9. MapTiler verification
 
-The map style key travels in `EXPO_PUBLIC_MAP_STYLE_URL` and is embedded in the bundle. A build with the wrong or missing key has blank maps (`MISSING_KEY` yields HTTP 403). Verify **before** building (the EAS environment) and **after** (the IPA), by fingerprint, never by printing the key.
+The map style key travels in `EXPO_PUBLIC_MAP_STYLE_URL` and is embedded in the bundle. A build with a wrong or missing key has blank maps (`MISSING_KEY` yields HTTP 403) and nothing else fails, so the key is verified by the scripts, before and after the build, by fingerprint. The key itself is never printed or stored in the repository.
 
-- **Approved fingerprint:** `7f01cd44`. This is the first 8 hex characters of the SHA-256 of the 20-character key. If the key is ever rotated, update this value in the same change.
-- **EAS environment check:** run a small script inside the environment that prints only the key's length and fingerprint, for example `npx --yes eas-cli@27.2.0 env:exec preview "python3 -I check.py" --non-interactive`, where `check.py` reads `EXPO_PUBLIC_MAP_STYLE_URL`, extracts `key=([A-Za-z0-9_]+)`, and prints `len(key)` and `sha256(key[:20]).hexdigest()[:8]`. Expect length 20 and `7f01cd44`.
-- **IPA check:** unzip the IPA and search `Payload/*.app/main.jsbundle` for `api.maptiler.com/maps/<style>/style.json?key=<key>`. **Take exactly the first 20 characters of the captured key.** The compiled bundle packs adjacent strings together, so a greedy pattern also captures following letters; this produced a false "rejected key" report for builds 22 to 24, which were in fact correct. Require exactly one distinct key, the approved fingerprint, no `MISSING_KEY`, and HTTP 200 from both `maps/streets-v2/style.json` and `maps/satellite/style.json` using that key.
-- **Do not submit an IPA that fails.** Stop and report.
-- The key is public in every shipped build, so protect it at MapTiler (quota, restrictions) rather than by secrecy. Local Metro runs need the same value in `.env.local`/the Metro environment, otherwise maps are blank.
+**The approved fingerprint lives in one place:** `MAP_KEY.approvedSha256` in [`config/release-endpoints.js`](../config/release-endpoints.js). Each entry is the full 64-character SHA-256 of the 20-character key (UTF-8 bytes, no newline, lowercase hex). Reports and this document quote only its first 8 characters, **`7f01cd44`**; a prefix is a label, every check compares all 64. Verified 2026-11-02 from three independent sources, which agree: the EAS `preview` environment, the EAS `production` environment, and the key embedded in TestFlight build 28; MapTiler answered HTTP 200 for its streets and satellite styles. (`config/release-endpoints.test.js` checks that the list is well formed and that this document names the same prefixes.)
+
+| Check | Where | Store builds (`testflight-staging`, `production`) | Internal (`development`, `preview`) |
+|---|---|---|---|
+| Map style variable set, `https`, has a `key` | `validate:release`, worker `--effective` | error | error if malformed; warning if missing (blank maps) |
+| Key is 20 letters or digits, not the `MISSING_KEY` placeholder | same | error | warning |
+| Key's SHA-256 is approved | same | error | warning |
+| Embedded key: present, exactly one real key, well formed, approved | `verify:bundle` (IPA, `--export` or `--bundle`) | error | not applicable |
+| MapTiler accepts the key (streets and satellite styles) | `validate:release --live`, `verify:bundle --live-map` | **warning only** | warning only |
+
+- **Extraction.** Hermes packs adjacent string literals together, so a greedy pattern over-captures (71 characters for build 28's 20-character key, which once produced a false "rejected key" report). The scripts take exactly the first 20 characters after `style.json?key=`. A placeholder in the bundle is tolerated only beside an approved key (it is the unused fallback in `constants/map.ts`); alone it fails.
+- **The live check is a diagnostic, never a gate.** A MapTiler outage, timeout or rejection prints a warning and cannot fail a build. The approved key and fingerprint decide.
+- **Failures print** the key's length and the first 8 characters of its SHA-256 and the approved prefixes, never the key. **Do not submit an IPA that fails; stop and report.**
+- **The production gate** still runs only when asked (`--enforce-production`, section 5). Run by hand against the real `production` EAS environment on 2026-11-02 it passed, with the approved key.
+- **Test override.** `TRIPIDEAS_TEST_APPROVED_MAP_KEY_SHA256` (comma-separated SHA-256 hex) replaces the approved list so tests can use a made-up key. The scripts then warn that the run is not a release verification, and they refuse it on the EAS worker (`EAS_BUILD=true`). Never use it for a real release.
+- **Local runs** need the same value in `.env.local` or the Metro environment, or maps are blank.
+- The key ships in every build, so restrict it at MapTiler (quota, restrictions) rather than rely on secrecy.
+
+### Rotating the MapTiler key
+
+Builds already installed carry the old key, so **the old key must keep working until no supported build uses it.**
+
+1. Create the new key at MapTiler with the same restrictions and quota. Keep the old key active.
+2. Fingerprint the new key without printing or saving it: `read -s KEY; printf %s "$KEY" | shasum -a 256; unset KEY` (paste the key, press Return). Confirm the key is 20 letters or digits.
+3. Add the new 64-character hash to `MAP_KEY.approvedSha256` **next to** the old one, add its first 8 characters to this section, and commit. Both keys are now accepted.
+4. With approval, update `EXPO_PUBLIC_MAP_STYLE_URL` in the EAS `preview` and `production` environments (record the previous state and the rollback command outside Git) and in the website if it shares the key. Run `validate:release --profile <p> --remote` (it must report the new fingerprint as approved), build, then `verify:bundle` on the IPA before submitting.
+5. When the last build with the old key is out of use, revoke the old key at MapTiler and remove its hash and prefix. `verify:bundle` then rejects any build that still carries it.
+6. Rollback: restore the old EAS value and rebuild; the old hash stays approved until step 5.
 
 ## 10. App Store and production submission requirements
 
@@ -169,4 +192,25 @@ Needed and **not verified here**:
 - **API and web rollback:** redeploy the previous image or deployment recorded for each service; never re-point a service's `DATABASE_URL` as a rollback. The sharing migration is additive (two nullable columns and an index), so it can stay when code is rolled back.
 - **Remote configuration changes** (EAS environments, secrets) need their own record of the before state and the rollback command, kept outside Git and free of secret values.
 - Keep an owner-visible record of which build is on which environment and commit (section 8 table), and update it with every build.
+
+## 12. Required configuration and fail-fast behaviour
+
+This is the single reference for configuration; other documents link here.
+
+**The app has no default for any of these.** If `EXPO_PUBLIC_API_URL` or `EXPO_PUBLIC_TRIP_SHARE_API_URL` is missing, blank or not an http(s) URL, the app stops at startup with an error that names the variable (never its value) and says where to set it (`config/required-env.ts`). It never falls back to production or to any other environment. The map style is the exception: without it maps are blank, and release builds are caught by the checks in section 9.
+
+| Variable | Used for | Development (`.env.local`) | Integration (`development`, `preview`, `testflight-staging`) | Production (`production`) |
+|---|---|---|---|---|
+| `EXPO_PUBLIC_API_URL` | The TripIdeas API | integration URL (see `.env.example`); a local API may use `http://` | `eas.json` profile `env` | EAS `production` environment: `https://api.tripideas.nz` |
+| `EXPO_PUBLIC_TRIP_SHARE_API_URL` | Shared Trip snapshots and public share creation (website `/api/trips/share`) | staging website (see `.env.example`) | `eas.json` profile `env` | EAS `production` environment: `https://www.tripideas.nz/api/trips/share` |
+| `EXPO_PUBLIC_MAP_STYLE_URL` | MapTiler styles (contains the key) | your own `.env.local` | EAS `preview` environment (`testflight-staging` only; see below) | EAS `production` environment |
+| `APP_VARIANT` | `integration` adds the staging Universal Link domain | not needed | `eas.json` profile `env` (`integration`) | must be unset |
+
+- **Verified 2026-11-02, read-only:** the EAS `production` environment holds all three variables with the approved production API and share URLs and the approved map key; the `preview` environment holds the map style only (the share URL was removed from it on 2026-10-29, section 4).
+- **`development` and `preview` profiles** set no EAS environment, so they get no map style from EAS and show blank maps unless the variable is supplied another way. The validator warns, not fails. To get maps in those builds, supply `EXPO_PUBLIC_MAP_STYLE_URL` through an EAS environment (adding `environment` to the profile is a profile change that needs approval) or build locally from a shell that has it.
+- **Public Trip sharing** (the older snapshot share, which writes to the production dataset) is enabled only when the configured API URL is exactly `https://api.tripideas.nz`. A missing or blank API URL, an integration URL or a local URL never enables it.
+- **Metro caches transformed files without keying on `EXPO_PUBLIC_*` values.** After changing `.env.local`, restart with `npx expo start --clear`; otherwise the old values are replayed. `verify:bundle --export` clears the cache for this reason.
+- **Tests** run without an Expo environment, so the test loader (`scripts/test-loader.mjs`) gives modules under test obviously fake values (`api.test.invalid`, `share.test.invalid`). A test that needs the variables absent sets `TRIPIDEAS_TEST_NO_ENV_DEFAULTS=1` in a child process (`config/required-env.test.js`).
+- **Release gating.** On the EAS worker `eas-build-post-install` fails an integration or TestFlight build whose effective variables are missing or not the approved ones, or whose map key is not approved. **A production build is not gated by the worker** (section 5); until that is separately approved, a production build is checked by hand: `validate:release --profile production --remote`, then `verify:bundle --variant production --ipa <file>` before submitting. Because the app now stops at startup without its variables, a production build lacking them would crash on launch rather than quietly use the production default: the production gate would prevent that and is the recommended next step.
+- **Still the owner's or Anu's:** enabling the production worker gate; supplying `environment` to the `development` and `preview` profiles if maps are wanted there; the MapTiler key's restrictions and rotation (section 9); keeping the `production` EAS environment complete; and the API, website and credentials outside this repository.
 

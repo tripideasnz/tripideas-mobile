@@ -80,17 +80,20 @@ test('the integration profiles can never create public shares (the API is not th
   assert.equal(isPublicTripSharingEnabled('https://api.tripideas.nz'), true);
 });
 
-test('shared Trip snapshots and the share endpoint use one overridable base, defaulting to production www', async () => {
+test('the snapshot, share and API URLs come only from configuration: no profile and no code supplies a default', async () => {
+  // The three variables are required (config/required-env.ts); the profiles and the EAS environments
+  // supply them. Production builds get theirs from the EAS "production" environment, which the
+  // preflight and bundle verification check (docs/release-configuration.md).
   const sharedTrip = await read('trips/shared-trip.ts');
   const publicSharing = await read('trips/public-sharing.ts');
-  for (const source of [sharedTrip, publicSharing]) {
-    assert.match(source, /process\.env\.EXPO_PUBLIC_TRIP_SHARE_API_URL/);
-    assert.match(source, /'https:\/\/www\.tripideas\.nz\/api\/trips\/share'/);
+  const apiClient = await read('lib/api-client.ts');
+  assert.match(sharedTrip, /requireHttpUrlEnv\(\s*'EXPO_PUBLIC_TRIP_SHARE_API_URL',\s*process\.env\.EXPO_PUBLIC_TRIP_SHARE_API_URL/);
+  assert.match(publicSharing, /requireHttpUrlEnv\('EXPO_PUBLIC_TRIP_SHARE_API_URL', process\.env\.EXPO_PUBLIC_TRIP_SHARE_API_URL\)/);
+  assert.match(apiClient, /requireHttpUrlEnv\('EXPO_PUBLIC_API_URL', process\.env\.EXPO_PUBLIC_API_URL\)/);
+  for (const source of [sharedTrip, publicSharing, apiClient]) {
+    assert.doesNotMatch(source, /EXPO_PUBLIC_[A-Z_]+\s*\?\?/);
+    assert.doesNotMatch(source, /https:\/\/api\.tripideas\.nz|tripideas\.nz\/api\/trips\/share/);
   }
-});
-
-test('the API default for production builds stays the production API', async () => {
-  assert.match(await read('lib/api-client.ts'), /process\.env\.EXPO_PUBLIC_API_URL \?\?\s*'https:\/\/api\.tripideas\.nz'/);
 });
 
 let failed = 0;

@@ -36,7 +36,8 @@ test('retrieves the snapshot anonymously from the web endpoint (no credentials s
   const result = await fetchSharedTrip(shareId, fetcher);
   assert.equal(result.status, 'ok');
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].url, `https://www.tripideas.nz/api/trips/share/${shareId}`);
+  // The snapshot host comes from EXPO_PUBLIC_TRIP_SHARE_API_URL only; there is no default.
+  assert.equal(calls[0].url, `${process.env.EXPO_PUBLIC_TRIP_SHARE_API_URL}/${shareId}`);
   assert.equal(calls[0].url, buildSharedTripSnapshotUrl(shareId));
   const headerNames = Object.keys(calls[0].headers).map((name) => name.toLowerCase());
   assert.ok(!headerNames.includes('authorization'));

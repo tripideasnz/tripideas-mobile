@@ -13,8 +13,15 @@ import { fileURLToPath } from 'node:url';
 const require = createRequire(import.meta.url);
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const endpoints = require('./release-endpoints.js');
+const { describeProbe, probeMapStyles } = require('../scripts/map-key-probe.js');
 const {
+  MAP_KEY,
+  approvedMapKeys,
+  extractMapKeys,
+  mapKeyProblems,
+  scanBundleMapKey,
   scanBundleText,
+  sha256Hex,
   validateBuildEnv,
   validateCallbackSource,
   validateEasJson,
@@ -24,7 +31,11 @@ const {
 const STAGING_API = 'https://tripideas-api-integration-staging.up.railway.app';
 const STAGING_SHARE = 'https://staging.tripideas.nz/api/trips/share';
 const PRODUCTION_SHARE = 'https://www.tripideas.nz/api/trips/share';
-const MAP = 'https://api.maptiler.com/maps/streets-v2/style.json?key=SECRETKEY123';
+// A made-up 20-character key: the real one is never in the repository. Tests approve it by its SHA-256,
+// exactly as the real key is approved by MAP_KEY.approvedSha256.
+const TEST_KEY = 'SECRETKEY12345678901';
+const TEST_KEY_SHA256 = sha256Hex(TEST_KEY);
+const MAP = `https://api.maptiler.com/maps/streets-v2/style.json?key=${TEST_KEY}`;
 const integrationEnv = {
   APP_VARIANT: 'integration',
   EXPO_PUBLIC_API_URL: STAGING_API,
@@ -37,7 +48,11 @@ const productionEnv = {
   EXPO_PUBLIC_TRIP_SHARE_API_URL: PRODUCTION_SHARE,
 };
 const check = (profile, ...sources) =>
-  validateBuildEnv({ profile, sources: sources.map((env, index) => ({ env, name: `source${index + 1}` })) });
+  validateBuildEnv({
+    approvedMapKeySha256: [TEST_KEY_SHA256],
+    profile,
+    sources: sources.map((env, index) => ({ env, name: `source${index + 1}` })),
+  });
 
 test('the approved integration and production environments pass', () => {
   assert.deepEqual(check('testflight-staging', integrationEnv).problems, []);
@@ -65,7 +80,7 @@ test('a trailing slash is the same URL', () => {
   assert.deepEqual(check('testflight-staging', { ...integrationEnv, EXPO_PUBLIC_TRIP_SHARE_API_URL: `${STAGING_SHARE}/` }).problems, []);
 });
 
-test('a missing variable is an error for store builds (it would silently fall back to production) and a warning for internal ones', () => {
+test('a missing variable is an error for store builds (the app has no default and would stop at startup) and a warning for internal ones', () => {
   for (const key of ['EXPO_PUBLIC_API_URL', 'EXPO_PUBLIC_TRIP_SHARE_API_URL', 'EXPO_PUBLIC_MAP_STYLE_URL']) {
     const { [key]: removed, ...rest } = integrationEnv;
     assert.match(check('testflight-staging', rest).problems.join('\n'), new RegExp(`${key} is not set by any source`));
@@ -74,6 +89,11 @@ test('a missing variable is an error for store builds (it would silently fall ba
   }
   const { EXPO_PUBLIC_TRIP_SHARE_API_URL, ...rest } = productionEnv;
   assert.match(check('production', rest).problems.join('\n'), /EXPO_PUBLIC_TRIP_SHARE_API_URL is not set/);
+  // The message says what happens: no hidden fall-back to production any more.
+  const { EXPO_PUBLIC_API_URL, ...noApi } = integrationEnv;
+  assert.match(check('testflight-staging', noApi).problems.join('\n'), /would stop at startup \(it has no default\)/);
+  const { EXPO_PUBLIC_MAP_STYLE_URL, ...noMap } = integrationEnv;
+  assert.match(check('testflight-staging', noMap).problems.join('\n'), /every map would be blank/);
 });
 
 test('deferMissing lets a preflight that has not read the EAS environment continue', () => {
@@ -153,8 +173,11 @@ const integrationBundle = bundle(
   'https://www.tripideas.nz/trip', // canonical shared link base: legitimate
   'https://api.tripideas.nz', // gate that blocks public share creation in integration builds: legitimate
   'https://tripideas.nzrgba',
-  PRODUCTION_SHARE // code default: legitimate to be present
+  PRODUCTION_SHARE // an integration bundle may mention the production share endpoint: allowed host
 );
+// The map style literal as Hermes stores it: the key followed by the next literals, run together.
+const mapLiteral = (key) => `https://api.maptiler.com/maps/streets-v2/style.json?key=${key}ackIgnoreMeSomeOtherLiteralFollowingIt`;
+const goodBundle = bundle(integrationBundle, mapLiteral(TEST_KEY));
 
 test('bundle scan: an integration bundle with the approved URLs passes, production references being legitimate', () => {
   const result = scanBundleText(integrationBundle, 'integration');
@@ -186,20 +209,27 @@ test('bundle scan: a production bundle must carry the production URLs and no sta
 });
 
 // The command-line tools, end to end.
-const run = (script, args, env = {}) =>
+// `run` approves the made-up TEST_KEY (and says so loudly); `runReal` uses the real approved fingerprints.
+const runReal = (script, args, env = {}) =>
   spawnSync(process.execPath, [path.join(root, 'scripts', script), ...args], {
     encoding: 'utf8',
     env: { PATH: process.env.PATH, ...env },
   });
+const run = (script, args, env = {}) =>
+  runReal(script, args, { TRIPIDEAS_TEST_APPROVED_MAP_KEY_SHA256: TEST_KEY_SHA256, ...env });
 
 test('verify-bundle-endpoints exits 0 for a good bundle and 1 for build 20, never printing secrets', () => {
   const directory = mkdtempSync(path.join(os.tmpdir(), 'bundle-test-'));
   try {
     const good = path.join(directory, 'good.bundle');
     const bad = path.join(directory, 'bad.bundle');
-    writeFileSync(good, integrationBundle);
-    writeFileSync(bad, bundle(STAGING_API, PRODUCTION_SHARE));
-    assert.equal(run('verify-bundle-endpoints.js', ['--variant', 'integration', '--bundle', good]).status, 0);
+    writeFileSync(good, goodBundle);
+    writeFileSync(bad, bundle(STAGING_API, PRODUCTION_SHARE, mapLiteral(TEST_KEY)));
+    const passed = run('verify-bundle-endpoints.js', ['--variant', 'integration', '--bundle', good]);
+    assert.equal(passed.status, 0, passed.stderr);
+    assert.match(passed.stdout, new RegExp(`MapTiler key: length 20, fingerprint ${TEST_KEY_SHA256.slice(0, 8)} \\(approved\\)`));
+    assert.match(passed.stderr, /NOT a release verification/, 'a replaced approved list is flagged loudly');
+    for (const output of [passed.stdout, passed.stderr]) assert.ok(!output.includes(TEST_KEY.slice(0, 12)), 'the key is never printed');
     const failed = run('verify-bundle-endpoints.js', ['--variant', 'integration', '--bundle', bad]);
     assert.equal(failed.status, 1);
     assert.match(failed.stderr, /Do not submit it/);
@@ -214,6 +244,7 @@ test('validate-release-config --effective passes the corrected worker environmen
   const good = run('validate-release-config.js', ['--effective'], worker);
   assert.equal(good.status, 0, good.stderr);
   assert.ok(!good.stdout.includes('SECRETKEY123') && !good.stderr.includes('SECRETKEY123'));
+  assert.match(good.stdout, new RegExp(`key length 20, fingerprint ${TEST_KEY_SHA256.slice(0, 8)}, approved`));
 
   const build20 = run('validate-release-config.js', ['--effective'], { ...worker, EXPO_PUBLIC_TRIP_SHARE_API_URL: PRODUCTION_SHARE });
   assert.equal(build20.status, 1);
@@ -260,3 +291,182 @@ test('the worker runs the validator before building', () => {
   assert.match(scripts['verify:bundle'], /verify-bundle-endpoints\.js/);
   assert.match(scripts['validate:release'], /validate-release-config\.js/);
 });
+
+// ── The MapTiler key ────────────────────────────────────────────────────────────────────────────
+
+test('the approved fingerprint list is one documented place and well formed', () => {
+  assert.ok(MAP_KEY.approvedSha256.length >= 1);
+  for (const hash of MAP_KEY.approvedSha256) assert.match(hash, /^[0-9a-f]{64}$/, 'full SHA-256, never a prefix');
+  assert.equal(new Set(MAP_KEY.approvedSha256).size, MAP_KEY.approvedSha256.length, 'no duplicates');
+  assert.equal(MAP_KEY.length, 20);
+  // The short form used in reports and release notes is the first 8 characters of the full hash; the
+  // documentation must name exactly the approved ones, so a rotation updates both together.
+  const documented = readFileSync(path.join(root, 'docs/release-configuration.md'), 'utf8');
+  const section = documented.slice(documented.indexOf('## 9. MapTiler verification'), documented.indexOf('## 10.'));
+  for (const hash of MAP_KEY.approvedSha256) assert.ok(section.includes(`**\`${hash.slice(0, 8)}\`**`), `docs/release-configuration.md section 9 names ${hash.slice(0, 8)}`);
+  const named = [...section.matchAll(/\*\*`([0-9a-f]{8})`\*\*/g)].map((match) => match[1]);
+  assert.deepEqual(named.sort(), MAP_KEY.approvedSha256.map((hash) => hash.slice(0, 8)).sort(), 'and nothing else');
+  // Nothing else in the repository carries a copy of the fingerprint list: this is the single source.
+  const holders = ['config/release-endpoints.js', 'scripts/validate-release-config.js', 'scripts/verify-bundle-endpoints.js', 'scripts/map-key-probe.js']
+    .filter((file) => readFileSync(path.join(root, file), 'utf8').includes(MAP_KEY.approvedSha256[0]));
+  assert.deepEqual(holders, ['config/release-endpoints.js']);
+});
+
+test('the fingerprint is the SHA-256 of the 20-character key, as lowercase hex', () => {
+  // A known vector pins the calculation: UTF-8 bytes of the key, no newline, no salt.
+  assert.equal(sha256Hex('abc'), 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
+  assert.equal(sha256Hex(TEST_KEY), TEST_KEY_SHA256);
+  assert.equal(TEST_KEY_SHA256.slice(0, 8).length, 8);
+});
+
+test('a map key must be present, 20 letters or digits, and approved; messages never contain the key', () => {
+  const approved = [TEST_KEY_SHA256];
+  assert.deepEqual(mapKeyProblems(TEST_KEY, approved), []);
+  assert.match(mapKeyProblems(undefined, approved)[0], /is missing/);
+  assert.match(mapKeyProblems('', approved)[0], /is missing/);
+  assert.match(mapKeyProblems('MISSING_KEY', approved)[0], /placeholder/);
+  assert.match(mapKeyProblems(TEST_KEY.slice(0, 19), approved)[0], /19 characters, expected 20/);
+  assert.match(mapKeyProblems(`${TEST_KEY}X`, approved)[0], /21 characters, expected 20/);
+  assert.match(mapKeyProblems(`${TEST_KEY.slice(0, 19)}_`, approved)[0], /other than letters and digits/);
+  const wrong = 'ABCDEFGHIJKLMNOPQRST';
+  const mismatch = mapKeyProblems(wrong, approved);
+  assert.match(mismatch[0], /has fingerprint [0-9a-f]{8}, which is not approved/);
+  assert.ok(mismatch[0].includes(TEST_KEY_SHA256.slice(0, 8)), 'lists the approved prefixes');
+  for (const message of [...mismatch, ...mapKeyProblems(TEST_KEY.slice(0, 19), approved), ...mapKeyProblems(`${TEST_KEY.slice(0, 19)}_`, approved)]) {
+    assert.ok(!message.includes(wrong.slice(0, 8)) && !message.includes(TEST_KEY.slice(0, 8)), 'no part of a key in a message');
+  }
+  // The real approved list rejects the made-up key: a stand-in cannot pass by accident.
+  assert.match(mapKeyProblems(TEST_KEY)[0], /not approved/);
+});
+
+test('store builds reject a wrong, malformed or placeholder map key; internal builds only warn', () => {
+  for (const key of ['ABCDEFGHIJKLMNOPQRST', TEST_KEY.slice(0, 19), `${TEST_KEY}X`]) {
+    const env = { ...integrationEnv, EXPO_PUBLIC_MAP_STYLE_URL: `https://api.maptiler.com/maps/streets-v2/style.json?key=${key}` };
+    const store = check('testflight-staging', env);
+    assert.equal(store.problems.length, 1, key);
+    assert.match(store.problems[0], /the map key in EXPO_PUBLIC_MAP_STYLE_URL /);
+    assert.ok(!JSON.stringify(store).includes(key.slice(0, 8)), 'the key is not reported');
+    const internal = check('preview', env);
+    assert.deepEqual(internal.problems, [], 'development and preview profiles keep working');
+    assert.equal(internal.warnings.length, 1);
+    assert.match(check('production', { ...productionEnv, EXPO_PUBLIC_MAP_STYLE_URL: env.EXPO_PUBLIC_MAP_STYLE_URL }).problems.join(), /map key/);
+  }
+  // The placeholder is rejected everywhere, as before.
+  const placeholder = { ...integrationEnv, EXPO_PUBLIC_MAP_STYLE_URL: 'https://api.maptiler.com/maps/streets-v2/style.json?key=MISSING_KEY' };
+  assert.equal(check('preview', placeholder).problems.length, 1);
+  // Real approved fingerprints: the made-up key is not one.
+  const real = validateBuildEnv({ profile: 'testflight-staging', sources: [{ env: integrationEnv, name: 'worker' }] });
+  assert.match(real.problems.join(), /not approved/);
+});
+
+test('bundle map key: approved key passes, whatever literals Hermes ran after it', () => {
+  const approved = [TEST_KEY_SHA256];
+  const scan = scanBundleMapKey(bundle('x', mapLiteral(TEST_KEY), 'y'), approved);
+  assert.deepEqual(scan.problems, []);
+  assert.equal(scan.approvedPresent, true);
+  assert.deepEqual(scan.facts, [{ fingerprint: TEST_KEY_SHA256.slice(0, 8), length: 20 }]);
+  // A greedy match would have captured far more than the key; exactly 20 characters are the key.
+  assert.equal(extractMapKeys(mapLiteral(TEST_KEY))[0], TEST_KEY);
+  assert.equal(extractMapKeys(mapLiteral(TEST_KEY))[0].length, 20);
+});
+
+test('bundle map key: missing, placeholder, malformed, wrong and multiple keys all fail without printing a key', () => {
+  const approved = [TEST_KEY_SHA256];
+  const wrong = 'ABCDEFGHIJKLMNOPQRST';
+  const cases = {
+    'no style URL at all': [bundle(STAGING_API), /no MapTiler style URL/],
+    'placeholder only (the variable was not supplied)': [mapLiteral('MISSING_KEY'), /only map key is the MISSING_KEY placeholder/],
+    // A short key is only recognisable as short when something that is not a key character follows it;
+    // run together with the next literal it reads as a 20-character key and is rejected as unapproved.
+    'too short': [`https://api.maptiler.com/maps/streets-v2/style.json?key=${TEST_KEY.slice(0, 12)}\nnext`, /12 characters, expected 20/],
+    'short and run together': [mapLiteral(TEST_KEY.slice(0, 12)), /which is not approved/],
+    'wrong key': [mapLiteral(wrong), /has fingerprint [0-9a-f]{8}, which is not approved/],
+    'two different keys': [bundle(mapLiteral(TEST_KEY), mapLiteral(wrong)), /2 different map keys/],
+  };
+  for (const [name, [text, pattern]] of Object.entries(cases)) {
+    const { problems } = scanBundleMapKey(text, approved);
+    assert.match(problems.join('\n'), pattern, name);
+    assert.ok(!problems.join('\n').includes(wrong.slice(0, 8)) && !problems.join('\n').includes(TEST_KEY.slice(0, 8)), `${name}: no key in the report`);
+  }
+  // The unused placeholder fallback in constants/map.ts is tolerated only beside an approved key.
+  const both = scanBundleMapKey(bundle(mapLiteral(TEST_KEY), mapLiteral('MISSING_KEY')), approved);
+  assert.deepEqual(both.problems, []);
+  assert.equal(scanBundleMapKey(mapLiteral('MISSING_KEY'), approved).problems.length >= 1, true);
+});
+
+test('verify-bundle rejects a missing, placeholder or unapproved key and never prints one', () => {
+  const directory = mkdtempSync(path.join(os.tmpdir(), 'bundle-key-test-'));
+  try {
+    const write = (name, text) => { const file = path.join(directory, name); writeFileSync(file, text); return file; };
+    const args = (file) => ['--variant', 'integration', '--bundle', file];
+    const none = run('verify-bundle-endpoints.js', args(write('none', integrationBundle)));
+    assert.equal(none.status, 1);
+    assert.match(none.stderr, /no MapTiler style URL/);
+    const placeholder = run('verify-bundle-endpoints.js', args(write('ph', bundle(integrationBundle, mapLiteral('MISSING_KEY')))));
+    assert.equal(placeholder.status, 1);
+    assert.match(placeholder.stderr, /MISSING_KEY placeholder/);
+    // With the REAL approved fingerprints the made-up key is rejected, so a stand-in cannot pass.
+    const real = runReal('verify-bundle-endpoints.js', args(write('real', goodBundle)));
+    assert.equal(real.status, 1);
+    assert.match(real.stderr, /fingerprint [0-9a-f]{8}, which is not approved/);
+    assert.match(real.stdout, /NOT approved/);
+    for (const output of [none, placeholder, real].flatMap((r) => [r.stdout, r.stderr])) assert.ok(!output.includes(TEST_KEY.slice(0, 12)));
+  } finally {
+    rmSync(directory, { force: true, recursive: true });
+  }
+});
+
+test('validate-release-config: store profiles fail on an unapproved key, internal ones warn, neither prints it', () => {
+  const worker = { EAS_BUILD_PROFILE: 'testflight-staging', ...integrationEnv };
+  const store = runReal('validate-release-config.js', ['--effective'], worker);
+  assert.equal(store.status, 1);
+  assert.match(store.stderr, /the map key in EXPO_PUBLIC_MAP_STYLE_URL has fingerprint [0-9a-f]{8}, which is not approved/);
+  const internal = runReal('validate-release-config.js', ['--effective'], { ...worker, EAS_BUILD_PROFILE: 'preview' });
+  assert.equal(internal.status, 0, internal.stderr);
+  assert.match(internal.stderr, /WARNING: .*which is not approved/);
+  for (const output of [store, internal].flatMap((r) => [r.stdout, r.stderr])) assert.ok(!output.includes(TEST_KEY.slice(0, 12)));
+  // The production gate stays off until separately approved, and applies the same key rule when run by hand.
+  const production = { EAS_BUILD_PROFILE: 'production', ...productionEnv };
+  assert.equal(runReal('validate-release-config.js', ['--effective'], production).status, 0);
+  assert.equal(runReal('validate-release-config.js', ['--effective', '--enforce-production'], production).status, 1);
+  assert.equal(run('validate-release-config.js', ['--effective', '--enforce-production'], production).status, 0);
+});
+
+test('the approved list can be replaced for tests only, never on the EAS build worker', () => {
+  assert.deepEqual(approvedMapKeys({}), { hashes: MAP_KEY.approvedSha256, overridden: false });
+  assert.deepEqual(approvedMapKeys({ TRIPIDEAS_TEST_APPROVED_MAP_KEY_SHA256: TEST_KEY_SHA256 }), { hashes: [TEST_KEY_SHA256], overridden: true });
+  assert.throws(() => approvedMapKeys({ EAS_BUILD: 'true', TRIPIDEAS_TEST_APPROVED_MAP_KEY_SHA256: TEST_KEY_SHA256 }), /must not be set on the EAS build worker/);
+  assert.throws(() => approvedMapKeys({ TRIPIDEAS_TEST_APPROVED_MAP_KEY_SHA256: 'abcd1234' }), /64-character/);
+  assert.throws(() => approvedMapKeys({ TRIPIDEAS_TEST_APPROVED_MAP_KEY_SHA256: '' }), /64-character/);
+  // End to end: on the worker the override makes the script fail instead of waving the build through.
+  const onWorker = run('validate-release-config.js', ['--effective'], { EAS_BUILD: 'true', EAS_BUILD_PROFILE: 'testflight-staging', ...integrationEnv });
+  assert.equal(onWorker.status, 1);
+  assert.match(onWorker.stderr, /must not be set on the EAS build worker/);
+  assert.equal(run('verify-bundle-endpoints.js', ['--variant', 'integration', '--bundle', '/nonexistent'], { EAS_BUILD: 'true' }).status, 1);
+});
+
+test('the MapTiler live diagnostic only ever warns: an outage, a rejection or a timeout cannot fail anything', async () => {
+  const answer = (status) => async () => ({ status });
+  const down = async () => { throw new TypeError('fetch failed for https://api.maptiler.com/maps/x?key=SECRET'); };
+  const ok = describeProbe(await probeMapStyles(TEST_KEY, answer(200)));
+  assert.deepEqual(ok.warnings, []);
+  assert.equal(ok.notes.length, 2);
+  const rejected = describeProbe(await probeMapStyles(TEST_KEY, answer(403)));
+  assert.equal(rejected.warnings.length, 2);
+  assert.match(rejected.warnings[0], /answered HTTP 403 \(diagnostic only: this does not fail the build\)/);
+  const unreachable = describeProbe(await probeMapStyles(TEST_KEY, down));
+  assert.equal(unreachable.warnings.length, 2);
+  assert.match(unreachable.warnings[0], /could not be reached/);
+  const timedOut = describeProbe(await probeMapStyles(TEST_KEY, (url, { signal }) => new Promise((resolve, reject) => signal.addEventListener('abort', () => reject(Object.assign(new Error('x'), { name: 'AbortError' })))), 20));
+  assert.match(timedOut.warnings[0], /timed out/);
+  for (const text of [...ok.notes, ...rejected.warnings, ...unreachable.warnings, ...timedOut.warnings]) {
+    assert.ok(!text.includes(TEST_KEY) && !text.includes('SECRET') && !text.includes('http'), 'no key or URL in diagnostics');
+  }
+  // Neither script treats the probe as a gate: it feeds notes and warnings only.
+  for (const file of ['scripts/validate-release-config.js', 'scripts/verify-bundle-endpoints.js']) {
+    const source = readFileSync(path.join(root, file), 'utf8');
+    assert.match(source, /warnings\.push\(\.\.\.probe\.warnings\)/);
+    assert.doesNotMatch(source, /problems\.push\(\.\.\.probe/);
+  }
+});
+

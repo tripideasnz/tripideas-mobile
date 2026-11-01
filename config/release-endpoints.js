@@ -6,10 +6,13 @@
 //
 // Why this exists: TestFlight build 20 was meant to read shared Trips from staging, but the
 // share URL is defined both in eas.json and in the EAS "preview" environment, and the build
-// baked in the environment's production value. Nothing checked the effective cloud values, and
-// the app silently falls back to production when a variable is missing. These checks fail the
-// build instead. Update the table below only when an endpoint is intentionally moved.
+// baked in the environment's production value. Nothing checked the effective cloud values. These
+// checks fail the build instead. The app itself no longer has a default for a missing API or share
+// URL (config/required-env.ts): it stops at startup. Update the table below only when an endpoint
+// is intentionally moved.
 'use strict';
+
+const { createHash } = require('node:crypto');
 
 const BUNDLE_IDENTIFIER = 'nz.tripideas.app';
 const URL_SCHEME = 'tripideas';
@@ -55,6 +58,64 @@ const PROFILES = {
   production: { variant: 'production', store: true },
 };
 
+// ── The MapTiler key ─────────────────────────────────────────────────────────────────────────────
+// The key travels inside EXPO_PUBLIC_MAP_STYLE_URL and ships in every build (it is restricted at
+// MapTiler, not hidden). A build with a missing, mistyped or stale key has blank maps, and nothing
+// else fails. The key is therefore identified here by the SHA-256 of the key itself, never by the
+// key. THIS IS THE ONE PLACE the approved fingerprint lives; to rotate the key, see "Rotating the
+// MapTiler key" in docs/release-configuration.md.
+//
+//   sha256 = SHA-256 of the 20-character key, as lowercase hex (64 characters).
+//   The short form quoted in reports is its first 8 characters: 7f01cd44. A prefix is only a label;
+//   every check compares the full 64 characters.
+//
+// Verified 2026-11-02: the EAS "preview" and "production" environments and TestFlight build 28's IPA
+// all carry the key with this SHA-256, and MapTiler answered HTTP 200 for its streets and satellite styles.
+const MAP_KEY = {
+  approvedSha256: ['7f01cd442c4bb846e36c8494ac8466666b982b75b0a01344e4f03c00988c8853'],
+  format: /^[A-Za-z0-9]{20}$/,
+  length: 20,
+};
+const PLACEHOLDER_MAP_KEY = 'MISSING_KEY';
+
+const sha256Hex = (text) => createHash('sha256').update(text).digest('hex');
+const fingerprintOf = (key) => sha256Hex(String(key)).slice(0, 8);
+
+/**
+ * The approved key fingerprints for this run. Tests (and a rotation rehearsal) may REPLACE the
+ * approved list with TRIPIDEAS_TEST_APPROVED_MAP_KEY_SHA256 (comma-separated SHA-256 hex); the scripts
+ * then say so loudly and the result is not a release verification. It is refused on the EAS build
+ * worker (EAS_BUILD=true), so a build cannot be waved through with it.
+ */
+function approvedMapKeys(env = process.env) {
+  const override = env.TRIPIDEAS_TEST_APPROVED_MAP_KEY_SHA256;
+  if (override === undefined) return { hashes: MAP_KEY.approvedSha256, overridden: false };
+  if (env.EAS_BUILD === 'true') {
+    throw new Error('TRIPIDEAS_TEST_APPROVED_MAP_KEY_SHA256 must not be set on the EAS build worker.');
+  }
+  const hashes = override.split(',').map((value) => value.trim().toLowerCase()).filter(Boolean);
+  if (hashes.length === 0 || hashes.some((value) => !/^[0-9a-f]{64}$/.test(value))) {
+    throw new Error('TRIPIDEAS_TEST_APPROVED_MAP_KEY_SHA256 must list 64-character SHA-256 hex values.');
+  }
+  return { hashes, overridden: true };
+}
+
+/**
+ * Problems with one map key: a missing, placeholder, wrongly formed or unapproved key. Each message
+ * continues the sentence "the map key ..." and carries only the length or the first 8 characters of the
+ * key's SHA-256, never the key.
+ */
+function mapKeyProblems(key, approved = MAP_KEY.approvedSha256) {
+  if (typeof key !== 'string' || key === '') return ['is missing'];
+  if (key.startsWith(PLACEHOLDER_MAP_KEY)) return [`is the ${PLACEHOLDER_MAP_KEY} placeholder, so every map would be blank`];
+  if (key.length !== MAP_KEY.length) return [`has ${key.length} characters, expected ${MAP_KEY.length}`];
+  if (!MAP_KEY.format.test(key)) return ['contains characters other than letters and digits'];
+  if (!approved.includes(sha256Hex(key))) {
+    return [`has fingerprint ${fingerprintOf(key)}, which is not approved (approved: ${approved.map((hash) => hash.slice(0, 8)).join(', ')}); see config/release-endpoints.js`];
+  }
+  return [];
+}
+
 const URL_KEYS = ['EXPO_PUBLIC_API_URL', 'EXPO_PUBLIC_TRIP_SHARE_API_URL'];
 const REQUIRED_KEYS = [...URL_KEYS, 'EXPO_PUBLIC_MAP_STYLE_URL'];
 
@@ -67,7 +128,17 @@ const approvedFor = (variant) => ({
 // Same rule as app.config.js: only the exact value "integration" selects the integration variant.
 const variantOfEnv = (env) => (env.APP_VARIANT === 'integration' ? 'integration' : 'production');
 
-// The map style URL embeds a key, so it is validated by shape and never echoed.
+// The key embedded in a map style URL, or undefined.
+function mapKeyOfStyleUrl(value) {
+  try {
+    return new URL(String(value)).searchParams.get('key') ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+// The map style URL embeds a key, so it is validated by shape and never echoed. (The key itself is
+// checked against the approved fingerprint by mapKeyProblems.)
 function mapStyleProblem(value) {
   let parsed;
   try {
@@ -88,8 +159,10 @@ function mapStyleProblem(value) {
  * be acceptable: one wrong candidate fails the check, whichever would have won.
  * `deferMissing` turns "not set by any source" into a warning, for a preflight that has not read
  * the EAS environment the missing variables would come from.
+ * The map key must be the approved one (see MAP_KEY): a problem for store builds (TestFlight and
+ * App Store), a warning for internal ones, so development and preview profiles keep working.
  */
-function validateBuildEnv({ profile, sources, deferMissing = false }) {
+function validateBuildEnv({ profile, sources, deferMissing = false, approvedMapKeySha256 = MAP_KEY.approvedSha256 }) {
   const problems = [];
   const warnings = [];
   const known = PROFILES[profile];
@@ -115,10 +188,15 @@ function validateBuildEnv({ profile, sources, deferMissing = false }) {
     problems.push('APP_VARIANT=integration is not set by any source; the staging Universal Link domain would be missing.');
   }
 
-  // Required variables must exist somewhere (otherwise the app silently falls back to a default).
+  // Required variables must exist somewhere. The app has no defaults: without the API or share URL
+  // it stops at startup, and without the map style every map is blank.
   for (const key of REQUIRED_KEYS) {
     if (defined(key).length === 0) {
-      report.push(`${key} is not set by any source, so the app would use its built-in default.`);
+      report.push(
+        key === 'EXPO_PUBLIC_MAP_STYLE_URL'
+          ? `${key} is not set by any source, so every map would be blank.`
+          : `${key} is not set by any source, so the app would stop at startup (it has no default).`
+      );
     }
   }
 
@@ -130,9 +208,16 @@ function validateBuildEnv({ profile, sources, deferMissing = false }) {
       }
     }
   }
+  const keyReport = known.store ? problems : warnings;
   for (const { name, env } of defined('EXPO_PUBLIC_MAP_STYLE_URL')) {
     const problem = mapStyleProblem(env.EXPO_PUBLIC_MAP_STYLE_URL);
-    if (problem) problems.push(`${name}: ${problem}.`);
+    if (problem) {
+      problems.push(`${name}: ${problem}.`);
+      continue;
+    }
+    for (const message of mapKeyProblems(mapKeyOfStyleUrl(env.EXPO_PUBLIC_MAP_STYLE_URL), approvedMapKeySha256)) {
+      keyReport.push(`${name}: the map key in EXPO_PUBLIC_MAP_STYLE_URL ${message}.`);
+    }
   }
   return { problems, warnings };
 }
@@ -195,8 +280,8 @@ const OWN_HOST = /https?:\/\/((?:[a-z0-9-]+\.)*(?:tripideas\.nz|up\.railway\.app
 /**
  * Checks text extracted from a built app's JavaScript bundle. The approved API and share URLs
  * must be present, and no tripideas.nz or railway.app host outside the variant's allowed list
- * may appear. (The production share URL is also a code default, so it can legitimately appear
- * in an integration bundle; its presence alone proves nothing, the approved URL's presence does.)
+ * may appear. The approved URLs appear in application code nowhere (config/required-env.test.js),
+ * so finding one in a bundle proves it was supplied as configuration.
  */
 function scanBundleText(text, variant) {
   const problems = [];
@@ -211,16 +296,66 @@ function scanBundleText(text, variant) {
   return { problems, hosts: [...hosts].sort() };
 }
 
+// "style.json?key=<key>" as it appears in a MapTiler style URL inside the bundle.
+const STYLE_KEY = /style\.json\?key=([A-Za-z0-9_-]+)/g;
+
+/**
+ * The map keys embedded in a built app's JavaScript bundle text. Hermes packs neighbouring string
+ * literals together, so a greedy match runs on well past the key (71 characters were captured for a
+ * 20-character key in build 28). A key is therefore its first MAP_KEY.length characters, and a
+ * shorter capture is kept as is so that it is reported as malformed.
+ */
+function extractMapKeys(text) {
+  return [...text.matchAll(STYLE_KEY)].map((match) => match[1].slice(0, MAP_KEY.length));
+}
+
+/**
+ * The embedded map key must be present, well formed and approved. A MISSING_KEY placeholder is
+ * tolerated only when an approved key is also present (it is then the unused fallback in
+ * constants/map.ts); on its own it means the build had no map configuration. Reports lengths and the
+ * first 8 characters of each key's SHA-256, never a key.
+ */
+function scanBundleMapKey(text, approved = MAP_KEY.approvedSha256) {
+  const problems = [];
+  const keys = [...new Set(extractMapKeys(text))];
+  const placeholders = keys.filter((key) => key.startsWith(PLACEHOLDER_MAP_KEY));
+  const real = keys.filter((key) => !key.startsWith(PLACEHOLDER_MAP_KEY));
+  const approvedPresent = real.some((key) => mapKeyProblems(key, approved).length === 0);
+  if (keys.length === 0) {
+    problems.push('The bundle contains no MapTiler style URL with a key, so every map would be blank.');
+  }
+  if (real.length === 0 && placeholders.length > 0) {
+    problems.push(`The bundle's only map key is the ${PLACEHOLDER_MAP_KEY} placeholder: EXPO_PUBLIC_MAP_STYLE_URL was not supplied, so every map would be blank.`);
+  }
+  for (const key of real) {
+    for (const message of mapKeyProblems(key, approved)) problems.push(`The bundle's map key ${message}.`);
+  }
+  if (real.length > 1) problems.push(`The bundle contains ${real.length} different map keys, expected exactly one.`);
+  return {
+    approvedPresent,
+    facts: real.map((key) => ({ fingerprint: fingerprintOf(key), length: key.length })),
+    problems,
+  };
+}
+
 module.exports = {
   APPLE_APP_ID,
   BUNDLE_IDENTIFIER,
+  MAP_KEY,
   MOBILE_CALLBACK,
   PROFILES,
   REQUIRED_KEYS,
   URL_SCHEME,
   VARIANTS,
+  approvedMapKeys,
+  extractMapKeys,
+  fingerprintOf,
+  mapKeyOfStyleUrl,
+  mapKeyProblems,
   normalizeUrl,
+  scanBundleMapKey,
   scanBundleText,
+  sha256Hex,
   validateBuildEnv,
   validateCallbackSource,
   validateEasJson,

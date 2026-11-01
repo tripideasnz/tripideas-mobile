@@ -4,12 +4,20 @@
 // Build 20 shipped the wrong Shared Trip URL while every pre-build check passed; run this on the
 // finished build before submitting it. Never prints bundle contents beyond own-domain hosts.
 //
+// It also checks the MapTiler key the build really embeds: present, 20 letters or digits, and its
+// SHA-256 one of the approved fingerprints in config/release-endpoints.js. A missing, malformed,
+// placeholder or unapproved key fails the check. Only the key's length and the first 8 characters of
+// its SHA-256 are printed.
+//
 //   --variant integration|production   what the build is meant to be (required)
 //   --ipa <file>                       a finished iOS build (download with `eas build:view`)
 //   --export                           bundle the app now with the current environment
 //                                      (`expo export`), e.g. in CI or before a build
 //   --bundle <file>                    scan one bundle/text file (used by the tests)
+//   --live-map                         also ask MapTiler whether it accepts the embedded key: an
+//                                      optional diagnostic, warnings only; an outage never fails this
 //
+
 //   node scripts/verify-bundle-endpoints.js --variant integration --ipa build.ipa
 'use strict';
 
@@ -22,9 +30,14 @@ const {
   APPLE_APP_ID,
   BUNDLE_IDENTIFIER,
   VARIANTS,
+  approvedMapKeys,
+  extractMapKeys,
+  mapKeyProblems,
+  scanBundleMapKey,
   scanBundleText,
   validateExpoConfig,
 } = require('../config/release-endpoints.js');
+const { describeProbe, probeMapStyles } = require('./map-key-probe.js');
 
 const root = path.resolve(path.dirname(process.argv[1]), '..');
 
@@ -32,10 +45,11 @@ const root = path.resolve(path.dirname(process.argv[1]), '..');
 const printableText = (buffer) => buffer.toString('latin1').replace(/[^\x20-\x7e]+/g, '\n');
 
 function parseArguments(argv) {
-  const options = { bundle: undefined, export: false, ipa: undefined, variant: undefined };
+  const options = { bundle: undefined, export: false, ipa: undefined, liveMap: false, variant: undefined };
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
     if (argument === '--export') options.export = true;
+    else if (argument === '--live-map') options.liveMap = true;
     else if (['--bundle', '--ipa', '--variant'].includes(argument)) options[argument.slice(2)] = argv[(index += 1)];
     else throw new Error(`Unknown argument: ${argument}`);
   }
@@ -98,8 +112,9 @@ function exportBundle() {
   }
 }
 
-function main() {
+async function main() {
   const options = parseArguments(process.argv.slice(2));
+  const approved = approvedMapKeys(process.env);
   const problems = [];
   const warnings = [];
   const notes = [];
@@ -118,6 +133,27 @@ function main() {
   problems.push(...scan.problems);
   notes.push(`own-domain hosts in the bundle: ${scan.hosts.join(', ') || 'none'}`);
 
+  const text = printableText(bundle);
+  const mapScan = scanBundleMapKey(text, approved.hashes);
+  problems.push(...mapScan.problems);
+  for (const { fingerprint, length } of mapScan.facts) {
+    notes.push(`MapTiler key: length ${length}, fingerprint ${fingerprint}${mapScan.approvedPresent ? ' (approved)' : ' (NOT approved)'}`);
+  }
+  if (approved.overridden) {
+    warnings.push('TRIPIDEAS_TEST_APPROVED_MAP_KEY_SHA256 replaces the approved MapTiler fingerprints: this run is NOT a release verification.');
+  }
+  if (options.liveMap) {
+    // Optional diagnostic on the approved embedded key only; its outcome never fails the check.
+    const key = extractMapKeys(text).find((candidate) => mapKeyProblems(candidate, approved.hashes).length === 0);
+    if (key) {
+      const probe = describeProbe(await probeMapStyles(key));
+      notes.push(...probe.notes);
+      warnings.push(...probe.warnings);
+    } else {
+      warnings.push('MapTiler live diagnostic skipped: no approved key in the bundle.');
+    }
+  }
+
   for (const note of notes) console.log(`  ${note}`);
   for (const warning of warnings) console.warn(`WARNING: ${warning}`);
   if (problems.length > 0) {
@@ -125,12 +161,10 @@ function main() {
     console.error(`\nThe ${options.variant} build is NOT valid (${problems.length} problem${problems.length === 1 ? '' : 's'}). Do not submit it.`);
     process.exit(1);
   }
-  console.log(`\nThe ${options.variant} build contains the approved endpoints and nothing prohibited.`);
+  console.log(`\nThe ${options.variant} build contains the approved endpoints and map key and nothing prohibited.`);
 }
 
-try {
-  main();
-} catch (error) {
+main().catch((error) => {
   console.error(`ERROR: ${error.message}`);
   process.exit(1);
-}
+});

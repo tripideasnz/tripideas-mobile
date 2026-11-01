@@ -26,7 +26,7 @@ cp .env.example .env.local   # then fill in the three EXPO_PUBLIC_* values
 npx expo start               # open in the iOS Simulator, or a development build
 ```
 
-Set all three `EXPO_PUBLIC_*` variables in `.env.local`. **If `EXPO_PUBLIC_API_URL` is missing the app silently talks to the production API, and without `EXPO_PUBLIC_MAP_STYLE_URL` every map is blank.** Use the integration values (see [release configuration](docs/release-configuration.md) section 2), never production credentials, for development. Never commit `.env.local` or print the map key.
+Set all three `EXPO_PUBLIC_*` variables in `.env.local`; `.env.example` holds the integration values to start from, and only the map key needs filling in. **The app has no defaults: a missing API or share URL stops it at startup with an error naming the variable, and without the map style every map is blank.** After editing `.env.local` restart with `npx expo start --clear`. Use integration values, never production, for development. Never commit `.env.local` or print the map key. What each environment needs: [release configuration](docs/release-configuration.md) section 12.
 
 | Variable | Purpose |
 |---|---|

@@ -12,7 +12,13 @@
 //                          read the profile's EAS environment (needs `eas login`). Which source
 //                          wins when both define a variable is undocumented, so every defined
 //                          value must be approved.
-//   --live                 Also probe the deployed API, share route and Universal Link file.
+//   --live                 Also probe the deployed API, share route and Universal Link file, and ask
+//                          MapTiler whether it accepts the map key (a diagnostic: warnings only, an
+//                          outage never fails the check).
+//
+// The MapTiler key must be the approved one for store builds (testflight-staging, production): its
+// length, format and SHA-256 are checked against config/release-endpoints.js, and the key is never
+// printed. Internal profiles (development, preview) get warnings instead of errors.
 //
 //   node scripts/validate-release-config.js --profile testflight-staging --remote --live
 'use strict';
@@ -22,6 +28,7 @@ const { readFileSync } = require('node:fs');
 const path = require('node:path');
 
 const releaseEndpoints = require('../config/release-endpoints.js');
+const { describeProbe, probeMapStyles } = require('./map-key-probe.js');
 
 const {
   APPLE_APP_ID,
@@ -29,6 +36,10 @@ const {
   PROFILES,
   REQUIRED_KEYS,
   VARIANTS,
+  approvedMapKeys,
+  fingerprintOf,
+  mapKeyOfStyleUrl,
+  mapKeyProblems,
   normalizeUrl,
   validateBuildEnv,
   validateCallbackSource,
@@ -131,6 +142,14 @@ async function liveChecks(variant) {
   return { problems, notes };
 }
 
+// How the map key looks in the report: length and the first 8 characters of its SHA-256, never the key.
+function mapNote(styleUrl, approvedHashes) {
+  const key = mapKeyOfStyleUrl(styleUrl);
+  if (!key) return 'MAP_STYLE_URL=set (no readable key)';
+  const approved = mapKeyProblems(key, approvedHashes).length === 0;
+  return `MAP_STYLE_URL=set (key length ${key.length}, fingerprint ${fingerprintOf(key)}, ${approved ? 'approved' : 'NOT approved'})`;
+}
+
 function parseArguments(argv) {
   const options = { effective: false, enforceProduction: false, live: false, profile: undefined, remote: false };
   for (let index = 0; index < argv.length; index += 1) {
@@ -193,7 +212,16 @@ async function main() {
   }
 
   const known = PROFILES[profile];
-  const result = validateBuildEnv({ deferMissing: !options.effective && !options.remote, profile, sources });
+  const approvedKeys = approvedMapKeys(process.env);
+  if (approvedKeys.overridden) {
+    warnings.push('TRIPIDEAS_TEST_APPROVED_MAP_KEY_SHA256 replaces the approved MapTiler fingerprints: this run is NOT a release verification.');
+  }
+  const result = validateBuildEnv({
+    approvedMapKeySha256: approvedKeys.hashes,
+    deferMissing: !options.effective && !options.remote,
+    profile,
+    sources,
+  });
   problems.push(...result.problems);
   warnings.push(...result.warnings);
   if (!options.effective && !options.remote) {
@@ -208,13 +236,21 @@ async function main() {
       const shown = ['EXPO_PUBLIC_API_URL', 'EXPO_PUBLIC_TRIP_SHARE_API_URL']
         .filter((key) => env[key])
         .map((key) => `${key.replace('EXPO_PUBLIC_', '')}=${normalizeUrl(env[key])}`);
-      const map = env.EXPO_PUBLIC_MAP_STYLE_URL ? 'MAP_STYLE_URL=set (value hidden)' : null;
+      const map = env.EXPO_PUBLIC_MAP_STYLE_URL ? mapNote(env.EXPO_PUBLIC_MAP_STYLE_URL, approvedKeys.hashes) : null;
       notes.push(`${name}: ${[...shown, map].filter(Boolean).join(', ') || 'no endpoint variables'}`);
     }
     if (options.live) {
       const live = await liveChecks(known.variant);
       problems.push(...live.problems);
       notes.push(...live.notes);
+      // Optional MapTiler diagnostic: an answer other than 200, or no answer at all, is only a warning.
+      const style = sources.map(({ env }) => env.EXPO_PUBLIC_MAP_STYLE_URL).find(Boolean);
+      const key = style ? mapKeyOfStyleUrl(style) : undefined;
+      if (key && mapKeyProblems(key, approvedKeys.hashes).length === 0) {
+        const probe = describeProbe(await probeMapStyles(key));
+        notes.push(...probe.notes);
+        warnings.push(...probe.warnings);
+      }
     }
   }
 
